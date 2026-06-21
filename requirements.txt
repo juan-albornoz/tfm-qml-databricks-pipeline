@@ -1,0 +1,39 @@
+# ============================================================
+# requirements.txt — tfm-qml-databricks-pipeline
+# Entorno: Databricks Community Edition (Serverless)
+# ============================================================
+
+# Data processing
+pandas==1.5.3
+numpy==1.23.5
+pyarrow>=10.0.0
+
+# Machine Learning clásico
+scikit-learn>=1.3.0
+lightgbm>=4.0.0
+shap>=0.42.0
+joblib>=1.3.0
+
+# Quantum Machine Learning
+qiskit>=2.0.0
+qiskit-machine-learning>=0.9.0
+qiskit-algorithms>=0.3.0
+pylatexenc>=2.10
+
+# ONNX serialización
+onnx>=1.14.0
+onnxruntime>=1.16.0
+skl2onnx>=1.15.0
+onnxmltools>=1.11.0
+
+# Visualización
+matplotlib>=3.7.0
+
+# AWS S3
+boto3>=1.26.0
+
+# Validación calidad del dato
+dataframe-expectations==0.7.0
+
+# Streamlit
+streamlit>=1.28.0

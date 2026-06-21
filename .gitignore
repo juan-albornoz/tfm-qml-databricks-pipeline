@@ -1,0 +1,40 @@
+# ============================================================
+# .gitignore — tfm-qml-databricks-pipeline
+# ============================================================
+
+# Datos — nunca subir datos NHANES (licencia CDC)
+*.xpt
+*.parquet
+*.csv
+
+# Modelos entrenados — archivos pesados
+*.pkl
+*.onnx
+*.npy
+
+# Figuras generadas — se regeneran desde los notebooks
+*.png
+*.jpg
+*.jpeg
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+.venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+
+# Databricks
+.databricks/
+
+# OS
+.DS_Store
+Thumbs.db
