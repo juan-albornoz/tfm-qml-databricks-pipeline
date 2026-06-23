@@ -13,7 +13,7 @@
 *.npy
 
 # Figuras generadas — se regeneran desde los notebooks
-*.png
+# *.png — ver excepcion abajo
 *.jpg
 *.jpeg
 
@@ -38,3 +38,5 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Figuras del proyecto — incluir carpeta figures/
