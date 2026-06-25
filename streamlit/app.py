@@ -154,7 +154,7 @@ with st.sidebar:
     page = st.radio(
         "Navigate",
         ["🏠 Overview", "📊 Results", "🔍 SHAP Analysis",
-         "⚛️ Quantum Circuit", "🩺 Live Predictor"],
+         "⚛️ Quantum Circuit", "🌐 Bloch Sphere", "🩺 Live Predictor"],
         label_visibility="collapsed"
     )
 
@@ -519,7 +519,246 @@ elif page == "⚛️ Quantum Circuit":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — LIVE PREDICTOR
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🩺 Live Predictor":
+elif page == "🌐 Bloch Sphere":
+
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+
+    st.markdown(f'<h1 style="color:{DARK};">🌐 Bloch Sphere Emulator</h1>',
+                unsafe_allow_html=True)
+    st.markdown("""
+    The **Bloch sphere** is the geometric representation of the quantum state space of a
+    single qubit. This emulator shows how the **ZZFeatureMap** encodes a clinical variable
+    as a rotation angle, transforming classical data into a quantum state.
+    """)
+
+    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([2, 3])
+
+    with col1:
+        st.subheader("⚙️ Qubit Configuration")
+
+        feature = st.selectbox(
+            "Select clinical feature (qubit)",
+            options=[
+                "LBXGH — HbA1c (%)",
+                "LBXGLU — Fasting Glucose (mg/dL)",
+                "LBDLDL — LDL Cholesterol (mg/dL)",
+                "RIDAGEYR — Age (years)",
+                "BMXWAIST — Waist Circumference (cm)",
+                "LBXIN — Serum Insulin (µU/mL)",
+                "BMXBMI — BMI (kg/m²)",
+                "BMXLEG — Leg Length (cm)",
+            ]
+        )
+
+        ranges = {
+            "LBXGH — HbA1c (%)":                  (3.0,  20.0, 5.5,  "%"),
+            "LBXGLU — Fasting Glucose (mg/dL)":    (50,   400,  95,   "mg/dL"),
+            "LBDLDL — LDL Cholesterol (mg/dL)":    (30,   300,  110,  "mg/dL"),
+            "RIDAGEYR — Age (years)":               (18,   80,   45,   "years"),
+            "BMXWAIST — Waist Circumference (cm)":  (50,   160,  88,   "cm"),
+            "LBXIN — Serum Insulin (µU/mL)":        (1,    200,  12,   "µU/mL"),
+            "BMXBMI — BMI (kg/m²)":                (15,   70,   27,   "kg/m²"),
+            "BMXLEG — Leg Length (cm)":             (20,   70,   40,   "cm"),
+        }
+
+        vmin, vmax, vdef, unit = ranges[feature]
+        x_val = st.slider(
+            f"Value ({unit})",
+            min_value=float(vmin), max_value=float(vmax),
+            value=float(vdef), step=float((vmax - vmin) / 200)
+        )
+
+        x_norm   = (x_val - vmin) / (vmax - vmin)
+        theta    = 2 * x_norm * np.pi
+        alpha_v  = np.cos(theta / 2)
+        beta_v   = np.sin(theta / 2)
+        qubit_idx = list(ranges.keys()).index(feature)
+
+        st.markdown(f"""
+        <div class="info-box" style="margin-top:1rem;">
+        <b style="color:{DARK};">Encoding formula</b><br><br>
+        <b>Step 1 — Hadamard gate H:</b><br>
+        <span style="font-family:monospace;">H|0⟩ → (|0⟩ + |1⟩)/√2</span><br>
+        Places the qubit on the equator (superposition).<br><br>
+        <b>Step 2 — Phase gate P(2·x):</b><br>
+        <span style="font-family:monospace;">θ = 2 · x_norm · π</span><br>
+        Encodes the clinical value as a rotation angle.<br><br>
+        <b>Qubit index:</b> q{qubit_idx}<br>
+        <b>Raw value:</b> {x_val:.3f} {unit}<br>
+        <b>Normalised x_norm:</b> {x_norm:.4f}<br>
+        <b>Rotation angle θ:</b> {np.degrees(theta):.1f}°
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.subheader("🌐 Bloch Sphere Visualisation")
+
+        bx = np.sin(theta)
+        by = 0.0
+        bz = np.cos(theta)
+
+        fig = plt.figure(figsize=(7, 7))
+        fig.patch.set_facecolor("white")
+        ax  = fig.add_subplot(111, projection="3d")
+        ax.set_facecolor("white")
+
+        # Sphere surface
+        u_s = np.linspace(0, 2*np.pi, 60)
+        v_s = np.linspace(0, np.pi, 60)
+        xs  = np.outer(np.cos(u_s), np.sin(v_s))
+        ys  = np.outer(np.sin(u_s), np.sin(v_s))
+        zs  = np.outer(np.ones(np.size(u_s)), np.cos(v_s))
+        ax.plot_surface(xs, ys, zs, alpha=0.08, color="#AEC5D2", linewidth=0)
+
+        # Circles
+        phi_c = np.linspace(0, 2*np.pi, 100)
+        ax.plot(np.cos(phi_c), np.sin(phi_c), 0,
+                color="#AEC5D2", lw=0.8, alpha=0.6)
+        ax.plot(np.cos(phi_c), np.zeros(100), np.sin(phi_c),
+                color="#AEC5D2", lw=0.8, alpha=0.4)
+        ax.plot(np.zeros(100), np.cos(phi_c), np.sin(phi_c),
+                color="#AEC5D2", lw=0.8, alpha=0.4)
+
+        # Axes
+        ax.quiver(0,0,-1.3, 0,0,2.8, color="#CCCCCC",
+                  arrow_length_ratio=0.05, lw=0.8)
+        ax.quiver(-1.3,0,0, 2.8,0,0, color="#CCCCCC",
+                  arrow_length_ratio=0.05, lw=0.8)
+
+        # Pole labels
+        ax.text(0, 0,  1.38, "|0⟩", fontsize=13, ha="center",
+                color="#3D6C87", fontweight="bold")
+        ax.text(0, 0, -1.38, "|1⟩", fontsize=13, ha="center",
+                color="#3D6C87", fontweight="bold")
+
+        # State vector
+        ax.quiver(0, 0, 0, bx, by, bz,
+                  color="#5D8BA6", arrow_length_ratio=0.15,
+                  linewidth=3, zorder=10)
+
+        # State point
+        ax.scatter([bx], [by], [bz],
+                   color="#D94F4F", s=140, zorder=11, depthshade=False)
+
+        # Projection lines
+        ax.plot([bx, bx], [by, by], [0, bz],
+                color="#86A8BC", lw=1.2, linestyle="--", alpha=0.7)
+        ax.plot([0, bx], [0, by], [0, 0],
+                color="#86A8BC", lw=1.2, linestyle="--", alpha=0.7)
+
+        # Pole points
+        ax.scatter([0], [0], [ 1], color="#2E7D32", s=60, zorder=11, depthshade=False)
+        ax.scatter([0], [0], [-1], color="#C62828", s=60, zorder=11, depthshade=False)
+
+        # θ arc
+        t_arc = np.linspace(0, theta, 40)
+        r_arc = 0.45
+        ax.plot(r_arc*np.sin(t_arc), np.zeros(40), r_arc*np.cos(t_arc),
+                color="#D94F4F", lw=1.8, alpha=0.8)
+        ax.text(0.12, 0.0, 0.5, f"θ={np.degrees(theta):.0f}°",
+                color="#D94F4F", fontsize=9)
+
+        ax.set_xlim([-1.5, 1.5])
+        ax.set_ylim([-1.5, 1.5])
+        ax.set_zlim([-1.5, 1.5])
+        ax.set_box_aspect([1, 1, 1])
+        ax.axis("off")
+        feat_short = feature.split("—")[0].strip()
+        ax.set_title(f"{feat_short} = {x_val:.2f} {unit}  →  θ = {np.degrees(theta):.1f}°",
+                     fontsize=11, color="#3D6C87", pad=10)
+
+        legend_elements = [
+            Line2D([0],[0], color="#5D8BA6", lw=2.5,
+                   label=f"|ψ⟩  current state"),
+            Line2D([0],[0], color="#2E7D32", marker="o",
+                   lw=0, markersize=7, label="|0⟩ ground state"),
+            Line2D([0],[0], color="#C62828", marker="o",
+                   lw=0, markersize=7, label="|1⟩ excited state"),
+            Patch(facecolor="#D94F4F", alpha=0.7,
+                  label=f"θ = {np.degrees(theta):.1f}°"),
+        ]
+        ax.legend(handles=legend_elements, loc="upper left",
+                  fontsize=8, framealpha=0.9, bbox_to_anchor=(-0.05, 1.02))
+
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+
+    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+
+    # Quantum state
+    st.subheader("📐 Quantum State Vector")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="mdl">α coefficient</div>
+            <div class="val">{alpha_v:.4f}</div>
+            <div class="lbl">cos(θ/2) · weight of |0⟩</div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="mdl">β coefficient</div>
+            <div class="val">{beta_v:.4f}</div>
+            <div class="lbl">sin(θ/2) · weight of |1⟩</div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="mdl">|α|² probability</div>
+            <div class="val">{alpha_v**2:.4f}</div>
+            <div class="lbl">P(measuring |0⟩)</div>
+        </div>""", unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="mdl">|β|² probability</div>
+            <div class="val">{beta_v**2:.4f}</div>
+            <div class="lbl">P(measuring |1⟩)</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="info-box" style="margin-top:1rem;">
+    <b style="color:{DARK};">Quantum state equation</b><br><br>
+    <span style="font-size:1.1rem; font-family:monospace;">
+    |ψ⟩ = {alpha_v:.4f} |0⟩ + {beta_v:.4f} |1⟩
+    </span><br><br>
+    Normalisation check: |α|² + |β|² = {alpha_v**2 + beta_v**2:.6f} ✅<br><br>
+    A value near the <b>north pole</b> (θ ≈ 0°) means the qubit is mostly in |0⟩.
+    Near the <b>south pole</b> (θ ≈ 180°) it is mostly in |1⟩.
+    The <b>equator</b> (θ = 90°) represents maximum superposition.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+
+    st.subheader("🔗 Connection to the QSVM kernel")
+    st.markdown(f"""
+    <div class="info-box">
+    When the ZZFeatureMap processes a full patient record with <b>8 clinical variables</b>,
+    it applies this encoding to each of the 8 qubits simultaneously, then adds
+    <b>entanglement gates</b> between adjacent qubits — encoding pairwise correlations
+    between clinical variables (e.g. the joint signal from HbA1c AND fasting glucose together).<br><br>
+    The resulting 8-qubit state |ψ(x)⟩ lives in a
+    <b>2⁸ = 256-dimensional Hilbert space</b>.
+    The FidelityQuantumKernel measures similarity between two patients as:<br><br>
+    <span style="font-family:monospace; font-size:1.05rem;">K(x, y) = |⟨ψ(x)|ψ(y)⟩|²</span><br><br>
+    This single-qubit Bloch sphere shows <b>one dimension</b> of that 256-dimensional space.
+    The full quantum state is the tensor product of all 8 qubits plus their entanglement correlations.
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+
 
     st.markdown(f'<h1 style="color:{DARK};">🩺 Live Diabetes Risk Predictor</h1>',
                 unsafe_allow_html=True)
