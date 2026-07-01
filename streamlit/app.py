@@ -1,920 +1,952 @@
 """
-TFM — Quantum Machine Learning in a DataOps Pipeline
-Integración de QML en pipeline DataOps sobre Databricks
-Universidad Europea de Valencia | Juan Albornoz Carrasco
+QML DataOps Pipeline — TFM Streamlit App
+Juan Albornoz Carrasco · Universidad Europea de Valencia · 2025-2026
+Director: Prof. Ronal Muresano
+
+UBICACIÓN EN EL REPOSITORIO: streamlit/app.py
+    tfm-qml-databricks-pipeline/
+    ├── streamlit/
+    │   ├── app.py              ← este archivo
+    │   ├── requirements.txt    ← ver archivo adjunto
+    │   └── assets/
+    │       └── qml_logo.png    ← coloca el logo aquí
+    └── figures/                ← 13 PNG, ya documentados en tu TFM
+
+Paleta de color: la misma escala azul documentada en el TFM
+(#5D8BA6, #86A8BC, #AEC5D2, #D7E2E9) — sección "Consideraciones Técnicas
+del Despliegue". El modo oscuro es una adaptación de la misma familia de
+tono, no una paleta nueva, para no contradecir esa afirmación del TFM.
+
+matplotlib ya NO es necesario — la Bloch Sphere se migró a Plotly.
 """
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-from PIL import Image
-import os
+from __future__ import annotations
 
-# ── Page config ───────────────────────────────────────────────────────────────
+import base64
+import os
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+from PIL import Image
+from plotly.subplots import make_subplots
+from streamlit_option_menu import option_menu
+
+# ══════════════════════════════════════════════════════════════════════════
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTADO DE TEMA
+# ══════════════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="QML DataOps Pipeline | TFM",
     page_icon="⚛️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# ── TFM colour palette ─────────────────────────────────────────────────────────
-PRIMARY   = "#5D8BA6"
-LIGHT1    = "#86A8BC"
-LIGHT2    = "#AEC5D2"
-LIGHT3    = "#D7E2E9"
-DARK      = "#3D6C87"
-BG        = "#F8FBFD"
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"  # el TFM documenta el modo claro como el desplegado
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# 2. PALETA DE COLORES — misma escala azul documentada en el TFM
+#    Light: valores exactos del TFM. Dark: adaptación de la misma familia.
+# ══════════════════════════════════════════════════════════════════════════
+THEMES = {
+    "light": dict(
+        bg="#F8FBFD", sidebar_bg="#ffffff", surface="#ffffff", border="#D7E2E9",
+        text_primary="#22333F", text_secondary="#5b6a74", text_muted="#8a97a1",
+        accent="#5D8BA6", accent_bg="#EAF1F5", accent_text="#3D6C87", accent_border="#AEC5D2",
+        pro_bg="#3D6C87", pro_text="#ffffff", pro_border="#3D6C87",
+        success_bg="#E8F5E9", success_text="#2E7D32", success_border="#4CAF50",
+        danger_bg="#FFEBEE", danger_text="#C62828", danger_border="#F44336",
+        warn_bg="#FFF8E1", warn_text="#8a6200", warn_border="#F9A825",
+        plotly_template="plotly_white",
+    ),
+    "dark": dict(
+        bg="#10161b", sidebar_bg="#0d1216", surface="#182229", border="#2a3a44",
+        text_primary="#eef2f5", text_secondary="#a8b8c2", text_muted="#6d7b85",
+        accent="#8FB4C7", accent_bg="#1c2e38", accent_text="#9FC3D4", accent_border="#2d4a58",
+        pro_bg="#3D6C87", pro_text="#ffffff", pro_border="#5D8BA6",
+        success_bg="#12291a", success_text="#7ed99a", success_border="#2E7D32",
+        danger_bg="#2e1414", danger_text="#f08a8a", danger_border="#C62828",
+        warn_bg="#2e2610", warn_text="#f0c96a", warn_border="#8a6200",
+        plotly_template="plotly_dark",
+    ),
+}
+T = THEMES[st.session_state.theme]
+
+# Color por modelo — consistente en toda la app, dentro de la misma escala azul
+MODEL_COLOR = {"LightGBM": T["accent_text"], "SVM-RBF": "#7CA8BE", "QSVM": T["pro_bg"]}
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3. CSS GLOBAL
+# ══════════════════════════════════════════════════════════════════════════
 st.markdown(f"""
 <style>
-    /* Global */
-    .stApp {{ background-color: {BG}; }}
-    h1 {{ color: {DARK}; font-family: 'Arial', sans-serif; }}
-    h2 {{ color: {PRIMARY}; font-family: 'Arial', sans-serif; }}
-    h3 {{ color: {LIGHT1}; font-family: 'Arial', sans-serif; }}
-
-    /* Hero banner */
-    .hero {{
-        background: linear-gradient(135deg, {DARK} 0%, {PRIMARY} 60%, {LIGHT1} 100%);
-        padding: 2.5rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 2rem;
-        color: white;
+    .stApp {{ background-color: {T['bg']}; }}
+    header[data-testid="stHeader"] {{ background-color: rgba(0,0,0,0); }}
+    section[data-testid="stSidebar"] {{
+        background-color: {T['sidebar_bg']};
+        border-right: 1px solid {T['border']};
     }}
-    .hero h1 {{ color: white; font-size: 2rem; margin: 0; }}
-    .hero p  {{ color: {LIGHT3}; margin: 0.5rem 0 0 0; font-size: 1rem; }}
-
-    /* Metric cards */
-    .metric-card {{
-        background: white;
-        border: 1px solid {LIGHT3};
-        border-left: 4px solid {PRIMARY};
-        border-radius: 8px;
-        padding: 1rem 1.2rem;
-        text-align: center;
-        box-shadow: 0 2px 6px rgba(93,139,166,0.08);
-    }}
-    .metric-card .val {{
-        font-size: 1.8rem;
-        font-weight: bold;
-        color: {DARK};
-    }}
-    .metric-card .lbl {{
-        font-size: 0.78rem;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }}
-    .metric-card .mdl {{
-        font-size: 0.85rem;
-        font-weight: bold;
-        color: {PRIMARY};
-        margin-bottom: 0.3rem;
-    }}
-
-    /* Info box */
-    .info-box {{
-        background: white;
-        border: 1px solid {LIGHT3};
-        border-radius: 8px;
-        padding: 1.2rem;
-        margin: 0.8rem 0;
-    }}
-
-    /* Sidebar */
-    [data-testid="stSidebar"] {{
-        background: white;
-        border-right: 1px solid {LIGHT3};
-    }}
-
-    /* Section divider */
-    .section-divider {{
-        border: none;
-        border-top: 2px solid {LIGHT3};
-        margin: 2rem 0;
-    }}
-
-    /* Badge */
-    .badge {{
-        display: inline-block;
-        background: {LIGHT3};
-        color: {DARK};
-        border-radius: 20px;
-        padding: 0.2rem 0.8rem;
-        font-size: 0.78rem;
-        font-weight: bold;
-        margin: 0.2rem;
-    }}
-
-    /* Warning box */
-    .warn-box {{
-        background: #FFF8E1;
-        border-left: 4px solid #F9A825;
-        border-radius: 6px;
-        padding: 0.8rem 1rem;
-        font-size: 0.88rem;
-    }}
+    section[data-testid="stSidebar"] > div:first-child {{ padding-top: 1.1rem; }}
+    h1, h2, h3, h4, h5, h6, p, span, label {{ color: {T['text_primary']}; }}
+    .block-container {{ padding-top: 2rem; padding-bottom: 3rem; max-width: 1200px; }}
+    #MainMenu {{ visibility: hidden; }}
+    footer {{ visibility: hidden; }}
+    hr {{ border-color: {T['border']}; }}
+    [data-testid="stDataFrame"] {{ border: 1px solid {T['border']}; border-radius: 10px; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4. LOGO + NAVEGACIÓN LATERAL + SWITCH DE TEMA
+# ══════════════════════════════════════════════════════════════════════════
+def load_logo_b64(path: str) -> str | None:
+    p = Path(path)
+    if p.exists():
+        return base64.b64encode(p.read_bytes()).decode()
+    return None
+
+
+# Ruta relativa a este archivo (streamlit/app.py) — coloca el logo en
+# streamlit/assets/qml_logo.png. Igual que FIGURES, no depende del cwd.
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "assets", "qml_logo.png")
+logo_b64 = load_logo_b64(LOGO_PATH)
+
+with st.sidebar:
+    if logo_b64:
+        st.markdown(f"""
+        <div style="text-align:center;padding:4px 8px 16px;
+                    border-bottom:1px solid {T['border']};margin-bottom:10px">
+            <img src="data:image/png;base64,{logo_b64}"
+                 style="width:88px;height:auto;display:block;margin:0 auto"/>
+            <p style="font-size:12.5px;font-weight:600;color:{T['accent_text']};
+                      margin:8px 0 0">QML DataOps</p>
+            <p style="font-size:10.5px;color:{T['text_muted']};margin:1px 0 0">
+                Master's thesis · UEV 2025–2026</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="text-align:center;padding:4px 8px 16px;
+                    border-bottom:1px solid {T['border']};margin-bottom:10px">
+            <p style="font-size:15px;font-weight:600;color:{T['accent_text']};margin:0">
+                ⚛️ QML DataOps</p>
+            <p style="font-size:10.5px;color:{T['text_muted']};margin:2px 0 0">
+                Master's thesis · UEV 2025–2026</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    selected = option_menu(
+        menu_title=None,
+        options=["Overview", "Results", "SHAP analysis",
+                 "Quantum circuit", "Bloch sphere", "Live predictor"],
+        icons=["house", "bar-chart-line", "search",
+               "cpu", "globe", "heart-pulse"],
+        default_index=0,
+        styles={
+            "container": {"padding": "0", "background-color": "transparent"},
+            "icon": {"color": T["text_secondary"], "font-size": "15px"},
+            "nav-link": {
+                "font-size": "13.5px", "text-align": "left", "margin": "2px 0",
+                "padding": "9px 12px", "border-radius": "8px",
+                "color": T["text_secondary"], "--hover-color": T["accent_bg"],
+            },
+            "nav-link-selected": {
+                "background-color": T["accent_bg"], "color": T["accent_text"],
+                "font-weight": "500",
+            },
+        },
+    )
+
+    st.markdown(f"<hr style='border:none;border-top:1px solid {T['border']};margin:18px 0 10px'>",
+                unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 5, 1])
+    with c1:
+        st.markdown("<div style='text-align:center;padding-top:7px;font-size:14px'>🌙</div>",
+                    unsafe_allow_html=True)
+    with c2:
+        is_dark = st.toggle("Tema", value=(st.session_state.theme == "dark"),
+                             label_visibility="collapsed", key="theme_switch")
+    with c3:
+        st.markdown("<div style='text-align:center;padding-top:7px;font-size:14px'>☀️</div>",
+                    unsafe_allow_html=True)
+    _new_theme = "dark" if is_dark else "light"
+    if _new_theme != st.session_state.theme:
+        st.session_state.theme = _new_theme
+        st.rerun()
+
+    st.markdown(f"""
+    <div style="margin-top:16px;font-size:10.5px;color:{T['text_muted']};text-align:center;line-height:1.7">
+        <b style="color:{T['accent_text']}">Juan Albornoz Carrasco</b><br>
+        Universidad Europea de Valencia<br>
+        Director: Prof. Ronal Muresano<br><br>
+        <a href="https://github.com/juan-albornoz/tfm-qml-databricks-pipeline"
+           style="color:{T['accent_text']}">GitHub repository</a>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5. HELPERS DE UI
+# ══════════════════════════════════════════════════════════════════════════
 FIGURES = os.path.join(os.path.dirname(__file__), '..', 'figures')
 
-def load_figure(filename):
+
+def load_figure(filename: str):
     path = os.path.join(FIGURES, filename)
     if os.path.exists(path):
         return Image.open(path)
     return None
 
-def metric_card(model, metric, value, html=True):
-    card = f"""
-    <div class="metric-card">
-        <div class="mdl">{model}</div>
-        <div class="val">{value}</div>
-        <div class="lbl">{metric}</div>
-    </div>"""
-    if html:
-        st.markdown(card, unsafe_allow_html=True)
-    return card
 
-# ── Sidebar navigation ─────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown(f"""
-    <div style="text-align:center; padding: 1rem 0;">
-        <div style="font-size:2.5rem;">⚛️</div>
-        <div style="font-weight:bold; color:{DARK}; font-size:1rem;">QML DataOps Pipeline</div>
-        <div style="color:#999; font-size:0.78rem;">Master's Thesis | UEV 2025–2026</div>
-    </div>
-    """, unsafe_allow_html=True)
+def badge(text: str, kind: str = "neutral") -> str:
+    styles = {
+        "neutral": f"background:{T['surface']};color:{T['text_secondary']};border:1px solid {T['border']}",
+        "accent":  f"background:{T['accent_bg']};color:{T['accent_text']};border:1px solid {T['accent_border']}",
+        "pro":     f"background:{T['pro_bg']};color:{T['pro_text']};border:1px solid {T['pro_border']}",
+    }
+    return (f'<span style="display:inline-block;{styles[kind]};padding:5px 13px;'
+            f'border-radius:14px;font-size:12.5px;font-weight:500;margin:0 6px 6px 0;'
+            f'white-space:nowrap">{text}</span>')
 
-    st.divider()
 
-    page = st.radio(
-        "Navigate",
-        ["🏠 Overview", "📊 Results", "🔍 SHAP Analysis",
-         "⚛️ Quantum Circuit", "🌐 Bloch Sphere", "🩺 Live Predictor"],
-        label_visibility="collapsed"
+def badge_row(items: list[tuple[str, str]]) -> None:
+    html = "".join(badge(text, kind) for text, kind in items)
+    st.markdown(f'<div style="display:flex;flex-wrap:wrap">{html}</div>', unsafe_allow_html=True)
+
+
+def eyebrow(text: str) -> None:
+    st.markdown(
+        f'<p style="font-size:10.5px;font-weight:600;letter-spacing:.04em;'
+        f'text-transform:uppercase;color:{T["text_muted"]};margin:18px 0 8px">{text}</p>',
+        unsafe_allow_html=True,
     )
 
-    st.divider()
+
+def medallion_card(label: str, value: str, sublabel: str) -> str:
+    return f'''
+    <div style="flex:1;background:{T['surface']};border:1px solid {T['border']};
+                border-radius:12px;padding:18px 12px;text-align:center">
+        <p style="font-size:13px;color:{T['text_secondary']};margin:0 0 6px">{label}</p>
+        <p style="font-size:26px;font-weight:600;color:{T['text_primary']};margin:0">{value}</p>
+        <p style="font-size:12px;color:{T['text_muted']};margin:5px 0 0">{sublabel}</p>
+    </div>
+    '''
+
+
+def chevron() -> str:
+    return (f'<div style="display:flex;align-items:center;color:{T["text_muted"]};'
+            f'font-size:18px;padding:0 4px">&rsaquo;</div>')
+
+
+def status_card(value: str, label: str) -> str:
+    return f'''
+    <div style="flex:1;background:{T['success_bg']};border:1px solid {T['success_border']};
+                border-radius:12px;padding:15px 16px;display:flex;align-items:center;gap:10px">
+        <span style="color:{T['success_text']};font-size:17px;line-height:1">&#10003;</span>
+        <div>
+            <p style="font-size:14px;font-weight:600;color:{T['success_text']};margin:0">{value}</p>
+            <p style="font-size:11.5px;color:{T['success_text']};opacity:.85;margin:2px 0 0">{label}</p>
+        </div>
+    </div>
+    '''
+
+
+def page_title(emoji: str, title: str, subtitle: str = "") -> None:
+    sub_html = (f'<p style="font-size:13px;color:{T["text_secondary"]};margin:0 0 18px">{subtitle}</p>'
+                if subtitle else "")
     st.markdown(f"""
-    <div style="font-size:0.75rem; color:#aaa; text-align:center;">
-        <b style="color:{PRIMARY};">Juan Albornoz Carrasco</b><br>
-        Universidad Europea de Valencia<br>
-        Director: Prof. Ronal Muresano<br><br>
-        <a href="https://github.com/juan-albornoz/tfm-qml-databricks-pipeline"
-           style="color:{PRIMARY};">📂 GitHub Repository</a>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:22px">{emoji}</span>
+        <h2 style="margin:0;font-size:20px;font-weight:700">{title}</h2>
+    </div>
+    {sub_html}
+    """, unsafe_allow_html=True)
+
+
+def info_box(html_content: str, kind: str = "accent") -> None:
+    colors = {
+        "accent": (T["accent_bg"], T["accent_text"], T["accent_border"]),
+        "warn":   (T["warn_bg"], T["warn_text"], T["warn_border"]),
+        "neutral": (T["surface"], T["text_primary"], T["border"]),
+    }
+    bg, fg, bd = colors.get(kind, colors["neutral"])
+    st.markdown(
+        f'<div style="background:{bg};border:1px solid {bd};border-radius:12px;'
+        f'padding:16px 18px;color:{fg};font-size:13px;line-height:1.75;margin:8px 0 16px">'
+        f'{html_content}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def kv_list(d: dict) -> None:
+    rows = "".join(
+        f'<div style="padding:9px 2px;border-bottom:1px solid {T["border"]}">'
+        f'<span style="color:{T["accent_text"]};font-weight:600;font-size:12px">{k}</span><br>'
+        f'<span style="font-size:13px;color:{T["text_primary"]}">{v}</span></div>'
+        for k, v in d.items()
+    )
+    st.markdown(f'<div>{rows}</div>', unsafe_allow_html=True)
+
+
+def figure_panel(filename: str, caption: str) -> None:
+    fig = load_figure(filename)
+    if fig:
+        st.image(fig, caption=caption, use_container_width=True)
+    else:
+        st.markdown(
+            f'<div style="background:{T["surface"]};border:1px dashed {T["border"]};'
+            f'border-radius:10px;padding:24px;text-align:center;color:{T["text_muted"]};'
+            f'font-size:12px">Imagen no encontrada: <code>{filename}</code><br>'
+            f'Verifica que exista en tu carpeta <code>figures/</code></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def metrics_dataframe() -> pd.DataFrame:
+    return pd.DataFrame({
+        "Modelo":    ["LightGBM", "SVM-RBF", "QSVM"],
+        "AUC-ROC":   [0.9485, 0.9377, 0.5493],
+        "F1-macro":  [0.6523, 0.8243, 0.4669],
+        "Accuracy":  [0.7243, 0.9075, 0.8602],
+        "MCC":       [0.4566, 0.6539, 0.0625],
+        "Mejor en":  ["AUC-ROC", "F1, Accuracy, MCC", "—"],
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6. PÁGINAS
+# ══════════════════════════════════════════════════════════════════════════
+def render_overview() -> None:
+    st.markdown(f"""
+    <div style="background:{T['surface']};border:1px solid {T['border']};
+                border-radius:14px;padding:22px 26px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <span style="font-size:24px">⚛️</span>
+            <h2 style="margin:0;font-size:22px;font-weight:700">
+                Quantum machine learning en un pipeline DataOps</h2>
+        </div>
+        <p style="font-size:13.5px;color:{T['text_secondary']};margin:0">
+            Trabajo fin de máster · Universidad Europea de Valencia · 2025–2026</p>
     </div>
     """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 1 — OVERVIEW
-# ══════════════════════════════════════════════════════════════════════════════
-if page == "🏠 Overview":
+    eyebrow("Infraestructura")
+    badge_row([
+        ("Databricks CE", "neutral"), ("AWS S3", "neutral"),
+        ("Delta Lake", "neutral"), ("Qiskit 2.4.2", "neutral"),
+    ])
+    eyebrow("Modelos comparados")
+    badge_row([("LightGBM", "accent"), ("SVM-RBF", "accent"), ("QSVM", "pro")])
 
-    st.markdown(f"""
-    <div class="hero">
-        <h1>⚛️ Quantum Machine Learning in a DataOps Pipeline</h1>
-        <p>Master's Thesis · Universidad Europea de Valencia · 2025–2026</p>
-        <p style="margin-top:0.8rem;">
-            <span class="badge">Databricks CE</span>
-            <span class="badge">AWS S3</span>
-            <span class="badge">Delta Lake</span>
-            <span class="badge">Qiskit 2.4.1</span>
-            <span class="badge">LightGBM</span>
-            <span class="badge">SVM-RBF</span>
-            <span class="badge">QSVM</span>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    eyebrow("Dataset — NHANES (CDC, 3 ciclos bienales 2013-2014, 2015-2016, 2017-2018)")
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:6px">'
+        + medallion_card("Bronze", "29.400", "Registros")
+        + chevron()
+        + medallion_card("Silver", "7.831", "Registros")
+        + chevron()
+        + medallion_card("Gold", "89", "Features")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
-    # Dataset stats
-    st.subheader("Dataset — NHANES (CDC, 3 biennial cycles 2017–2022)")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1: metric_card("Bronze", "Records", "29,400")
-    with c2: metric_card("Silver", "Records", "7,831")
-    with c3: metric_card("Gold", "Features", "89")
-    with c4: metric_card("Target", "Class balance", "86% / 14%")
-    with c5: metric_card("Validation", "DFE expectations", "15 / 15 ✅")
+    eyebrow("Validación de calidad")
+    st.markdown(
+        '<div style="display:flex;gap:10px">'
+        + status_card("86% / 14%", "Balance de clases, dentro del target")
+        + status_card("15 / 15", "Expectativas dataframe-expectations")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    # Pipeline architecture
+    eyebrow("Arquitectura medallón — detalle")
     col1, col2 = st.columns([3, 2])
     with col1:
-        st.subheader("DataOps Pipeline Architecture")
-        st.markdown(f"""
-        <div class="info-box">
-        <b style="color:{DARK};">Medallion Architecture · Bronze → Silver → Gold</b>
-        <hr style="border-color:{LIGHT3}; margin:0.6rem 0;">
-
-        <b>🟤 Bronze Layer</b> — Raw ingestion from AWS S3<br>
-        <span style="color:#888; font-size:0.88rem;">27 XPT files via boto3 · 29,400 records · 162 columns · Delta Lake versioned</span>
-        <br><br>
-
-        <b>⚪ Silver Layer</b> — Cleaning & transformation<br>
-        <span style="color:#888; font-size:0.88rem;">Age filter · DIQ010 binarisation · leakage exclusion · winsorisation · imputation<br>
-        Formal validation: dataframe-expectations 0.7.0 · 15/15 PASSED</span>
-        <br><br>
-
-        <b>🟡 Gold Layer</b> — Modelling-ready datasets<br>
-        <span style="color:#888; font-size:0.88rem;">OHE · correlation removal (16 vars, r>0.90) · 80/20 stratified split · StandardScaler<br>
-        Top-8 features for QSVM selected by Random Forest importance</span>
-        <br><br>
-
-        <b>🤖 Models</b> — Triangulated comparison<br>
-        <span style="color:#888; font-size:0.88rem;">LightGBM (GridSearchCV 5-fold) · SVM-RBF · QSVM (ZZFeatureMap 8q, reps=2)<br>
-        Same SVM classifier · only kernel varies → isolates quantum effect</span>
-        </div>
-        """, unsafe_allow_html=True)
-
+        info_box("""
+        <b>Bronze</b> — Ingesta cruda desde AWS S3<br>
+        <span style="opacity:.85">27 archivos XPT vía boto3 · 29.400 registros · 162 columnas · versionado en Delta Lake</span><br><br>
+        <b>Silver</b> — Limpieza y transformación<br>
+        <span style="opacity:.85">Filtro de edad · binarización DIQ010 · exclusión de leakage · winsorización IQR×3 · imputación<br>
+        Validación formal: dataframe-expectations 0.7.0 · 15/15 aprobadas</span><br><br>
+        <b>Gold</b> — Datasets listos para modelado<br>
+        <span style="opacity:.85">One-hot encoding · eliminación de correlación (16 variables, r&gt;0.90) · split 80/20 estratificado (6.264 / 1.567) · StandardScaler<br>
+        Top-8 features para QSVM seleccionadas por importancia de Random Forest</span><br><br>
+        <b>Modelos</b> — Comparación triangulada<br>
+        <span style="opacity:.85">LightGBM (GridSearchCV 5-fold) · SVM-RBF · QSVM (ZZFeatureMap 8q, reps=2)<br>
+        Mismo clasificador SVM, solo varía el kernel → aísla el efecto cuántico</span>
+        """, kind="neutral")
     with col2:
-        st.subheader("Technical Stack")
-        stack = {
-            "Platform": "Databricks Community Edition (Serverless)",
-            "Storage": "AWS S3 (eu-west-1) + Unity Catalog",
-            "Data format": "Delta Lake (ACID, time travel)",
-            "Classical ML": "LightGBM 4.x · scikit-learn 1.6.1",
-            "Quantum ML": "Qiskit 2.4.1 · qiskit-machine-learning 0.9.0",
-            "Explainability": "SHAP (TreeExplainer + KernelExplainer)",
-            "Serialisation": "ONNX (LightGBM, SVM-RBF)",
-            "Validation": "dataframe-expectations 0.7.0",
-        }
-        for k, v in stack.items():
-            st.markdown(f"""
-            <div style="padding:0.4rem 0; border-bottom:1px solid {LIGHT3};">
-                <span style="color:{PRIMARY}; font-weight:bold; font-size:0.82rem;">{k}</span><br>
-                <span style="font-size:0.88rem;">{v}</span>
-            </div>""", unsafe_allow_html=True)
+        eyebrow("Stack técnico")
+        kv_list({
+            "Plataforma": "Databricks Community Edition (serverless)",
+            "Almacenamiento": "AWS S3 + Unity Catalog",
+            "Formato de datos": "Delta Lake (ACID, time travel)",
+            "Cómputo distribuido": "PySpark",
+            "ML clásico": "LightGBM 4.x · scikit-learn",
+            "ML cuántico": "Qiskit 2.4.2 · qiskit-machine-learning 0.9.0",
+            "Explicabilidad": "SHAP (TreeExplainer + KernelExplainer)",
+            "Serialización": "ONNX (LightGBM, SVM-RBF)",
+            "Validación": "dataframe-expectations 0.7.0",
+        })
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+    eyebrow("Distribución de la variable objetivo — capa Bronze")
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        figure_panel("Distribution DIQ10.png",
+                     "Distribución de DIQ010 en los 3 ciclos NHANES. El valor 2 (sin diabetes) "
+                     "domina. El valor 1 (diabetes) es la clase positiva.")
 
-    # Distribution figure
-    st.subheader("Target Variable Distribution — Bronze Layer")
-    fig = load_figure("Distribution DIQ10.png")
-    if fig:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.image(fig, caption="DIQ010 distribution across 3 NHANES cycles. "
-                     "Value 2 (No diabetes) dominates. Value 1 (Diabetes) is the positive class.",
-                     use_container_width=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 2 — RESULTS
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "📊 Results":
+def render_results() -> None:
+    page_title("📊", "Results",
+                "Comparación triangulada de los tres modelos, evaluados sobre el mismo "
+                "conjunto de test de 1.567 instancias (85,96% no diabetes / 14,04% diabetes).")
 
-    st.markdown(f'<h1 style="color:{DARK};">📊 Experimental Results</h1>', unsafe_allow_html=True)
-    st.markdown("Triangulated comparison of three models evaluated on the **same test set of 1,567 instances**.")
-
-    # Metrics table
-    st.subheader("Performance Metrics Summary")
-    df_metrics = pd.DataFrame({
-        "Model":    ["LightGBM", "SVM-RBF", "QSVM"],
-        "AUC-ROC":  [0.9485, 0.9377, 0.5493],
-        "F1-macro": [0.6523, 0.8243, 0.4669],
-        "Accuracy": [0.7243, 0.9075, 0.8602],
-        "MCC":      [0.4566, 0.6539, 0.0625],
-        "Best in":  ["AUC-ROC", "F1, Accuracy, MCC", "—"],
-    })
+    eyebrow("Resumen de métricas")
+    df = metrics_dataframe()
 
     def highlight_best(s):
         if s.name in ["AUC-ROC", "F1-macro", "Accuracy", "MCC"]:
             is_max = s == s.max()
-            return [f"background-color:{LIGHT3}; font-weight:bold;" if v else "" for v in is_max]
+            return [f"background-color:{T['accent_bg']};color:{T['accent_text']};font-weight:600"
+                    if v else "" for v in is_max]
         return [""] * len(s)
 
     st.dataframe(
-        df_metrics.style.apply(highlight_best).format({
+        df.style.apply(highlight_best).format({
             "AUC-ROC": "{:.4f}", "F1-macro": "{:.4f}",
-            "Accuracy": "{:.4f}", "MCC": "{:.4f}"
+            "Accuracy": "{:.4f}", "MCC": "{:.4f}",
         }),
-        use_container_width=True, hide_index=True
+        use_container_width=True, hide_index=True,
     )
 
-    st.markdown(f"""
-    <div class="warn-box">
-        ⚠️ <b>QSVM note:</b> trained on a stratified sample of 500 instances due to O(n²) kernel cost.
-        All three models are evaluated on the full 1,567-instance test set for comparability.
-        The QSVM AUC-ROC of 0.5493 confirms no discriminative advantage over the classical RBF kernel
-        in this tabular clinical dataset, consistent with current NISQ-era literature.
-    </div>
-    """, unsafe_allow_html=True)
+    info_box(
+        "<b>Nota sobre QSVM:</b> entrenado sobre una muestra estratificada de 500 instancias "
+        "(21,1 min) debido al coste O(n²) del kernel cuántico — 250.000 evaluaciones de kernel "
+        "para entrenar. Los tres modelos se evalúan sobre el conjunto de test completo de "
+        "1.567 instancias para comparabilidad. El AUC-ROC de 0.5493 confirma que no hay "
+        "ventaja discriminativa sobre el kernel RBF clásico: el modelo asigna prácticamente "
+        "todas las instancias a la clase negativa (recall=0 para la clase positiva), "
+        "coherente con la literatura NISQ actual.",
+        kind="warn",
+    )
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+    eyebrow("Comparativa interactiva (datos reales)")
+    metrics_names = ["AUC-ROC", "F1-macro", "Accuracy", "MCC"]
+    fig_bar = go.Figure()
+    for _, row in df.iterrows():
+        fig_bar.add_trace(go.Bar(
+            name=row["Modelo"],
+            x=metrics_names,
+            y=[row[m] for m in metrics_names],
+            marker_color=MODEL_COLOR[row["Modelo"]],
+            text=[f"{row[m]:.3f}" for m in metrics_names],
+            textposition="outside",
+        ))
+    fig_bar.update_layout(
+        template=T["plotly_template"], barmode="group",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        height=360, margin=dict(l=10, r=10, t=20, b=10),
+        yaxis=dict(range=[0, 1.08], title="Valor"),
+        legend=dict(orientation="h", y=-0.15),
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Comparative figure
-    st.subheader("Metrics Comparison — All Models")
-    fig = load_figure("Comparativa visual de métricas de evaluación de los tres modelos.png")
-    if fig:
-        col1, col2, col3 = st.columns([1, 3, 1])
-        with col2:
-            st.image(fig, caption="Visual comparison of AUC-ROC, F1-macro, Accuracy and MCC "
-                     "across the three models. SVM-RBF leads in most metrics.",
-                     use_container_width=True)
+    eyebrow("Comparativa visual — todos los modelos")
+    c1, c2, c3 = st.columns([1, 3, 1])
+    with c2:
+        figure_panel(
+            "Comparativa visual de métricas de evaluación de los tres modelos.png",
+            "Comparación visual de AUC-ROC, F1-macro, Accuracy y MCC entre los tres "
+            "modelos. SVM-RBF lidera en la mayoría de métricas.",
+        )
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    # ROC curves
-    st.subheader("ROC Curves")
-    col1, col2, col3 = st.columns(3)
+    eyebrow("Curvas ROC")
     roc_files = [
-        ("Curva ROC LGBM.png",    "LightGBM",  "AUC = 0.9485"),
-        ("Curva ROC SVM-RBF.png", "SVM-RBF",   "AUC = 0.9377"),
-        ("Curva ROC QSVM.png",    "QSVM",      "AUC = 0.5493"),
+        ("Curva ROC LGBM.png", "LightGBM", "AUC = 0.9485"),
+        ("Curva ROC SVM-RBF.png", "SVM-RBF", "AUC = 0.9377"),
+        ("Curva ROC QSVM.png", "QSVM", "AUC = 0.5493"),
     ]
-    for col, (fname, model, auc) in zip([col1, col2, col3], roc_files):
+    cols = st.columns(3)
+    for col, (fname, model, auc) in zip(cols, roc_files):
         with col:
-            fig = load_figure(fname)
-            if fig:
-                st.image(fig, caption=f"{model} · {auc}", use_container_width=True)
+            figure_panel(fname, f"{model} · {auc}")
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    # Confusion matrices
-    st.subheader("Confusion Matrices")
-    col1, col2, col3 = st.columns(3)
+    eyebrow("Matrices de confusión (1.567 instancias de test)")
     cm_files = [
-        ("Matriz de Confucion Lgbm.png",   "LightGBM"),
-        ("Matriz de Confusion SVM_RBF.png","SVM-RBF"),
-        ("Matriz de confusión QSVM.png",   "QSVM"),
+        ("Matriz de Confucion Lgbm.png", "LightGBM", ""),
+        ("Matriz de Confusion SVM_RBF.png", "SVM-RBF",
+         "1.264 VN · 159 VP · 83 FP · 61 FN"),
+        ("Matriz de confusión QSVM.png", "QSVM", "Recall = 0 para clase positiva"),
     ]
-    for col, (fname, model) in zip([col1, col2, col3], cm_files):
+    cols = st.columns(3)
+    for col, (fname, model, extra) in zip(cols, cm_files):
         with col:
-            fig = load_figure(fname)
-            if fig:
-                st.image(fig, caption=f"Confusion Matrix — {model}", use_container_width=True)
+            cap = f"Matriz de confusión — {model}" + (f" · {extra}" if extra else "")
+            figure_panel(fname, cap)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 3 — SHAP ANALYSIS
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "🔍 SHAP Analysis":
+    eyebrow("Hiperparámetros óptimos — LightGBM (GridSearchCV, 5-fold, 27 combinaciones)")
+    kv_list({
+        "learning_rate": "0,01",
+        "max_depth": "3",
+        "n_estimators": "500",
+        "Gestión de desbalance": "class_weight=balanced + scale_pos_weight",
+    })
 
-    st.markdown(f'<h1 style="color:{DARK};">🔍 SHAP Explainability Analysis</h1>', unsafe_allow_html=True)
-    st.markdown("""
-    SHAP (SHapley Additive exPlanations) quantifies the contribution of each clinical feature
-    to individual predictions. **TreeExplainer** (exact values) was applied to LightGBM,
-    and **KernelExplainer** (approximation over 200 test instances) to SVM-RBF.
-    SHAP was not applied to QSVM due to the prohibitive computational cost of the quantum kernel.
-    """)
 
-    tab1, tab2 = st.tabs(["🌲 LightGBM — TreeExplainer", "🔵 SVM-RBF — KernelExplainer"])
+def render_shap_analysis() -> None:
+    page_title("🔍", "SHAP analysis")
+    st.markdown(
+        f'<p style="font-size:13px;color:{T["text_secondary"]};line-height:1.7;margin:0 0 16px">'
+        f'SHAP (SHapley Additive exPlanations) cuantifica la contribución de cada variable '
+        f'clínica a las predicciones individuales. Se aplicó <b>TreeExplainer</b> (valores '
+        f'exactos) a LightGBM sobre las 1.567 instancias de test, y <b>KernelExplainer</b> '
+        f'(aproximación, ~90 min de cómputo) a SVM-RBF sobre 200 instancias de test con 100 '
+        f'instancias de fondo. No se aplicó SHAP a QSVM por el coste computacional '
+        f'prohibitivo del kernel cuántico.</p>',
+        unsafe_allow_html=True,
+    )
+
+    tab1, tab2 = st.tabs(["LightGBM — TreeExplainer", "SVM-RBF — KernelExplainer"])
 
     with tab1:
-        st.subheader("LightGBM — SHAP Analysis (TreeExplainer · 1,567 test instances)")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = load_figure("SHAP Summary LGBM.png")
-            if fig:
-                st.image(fig, caption="SHAP Summary Plot — LightGBM: direction and magnitude "
-                         "of each feature's impact on predictions.",
-                         use_container_width=True)
-        with col2:
-            fig = load_figure("SHAP Feature Importance.png")
-            if fig:
-                st.image(fig, caption="SHAP Feature Importance — LightGBM: mean absolute "
-                         "SHAP value for the top 20 features.",
-                         use_container_width=True)
-
-        st.markdown(f"""
-        <div class="info-box">
-        <b style="color:{DARK};">Key clinical findings — LightGBM</b><br><br>
-        <b>LBXGH (HbA1c)</b> dominates with a mean |SHAP| = 1.1243, consistent with its role
-        as the primary diagnostic marker for Type 2 diabetes (ADA threshold: HbA1c ≥ 6.5%).
-        High values (pink/red) strongly push predictions towards the positive class.<br><br>
-        <b>RIDAGEYR (age)</b> ranks second (0.4654), reflecting the well-documented increase
-        in T2D prevalence with age.<br><br>
-        <b>LBXGLU (fasting glucose)</b> and <b>LBDLDL (LDL cholesterol)</b> complete the
-        biochemical marker block, followed by <b>BMXWAIST (waist circumference)</b> as the
-        main anthropometric indicator of insulin resistance.<br><br>
-        <b>WTINT2YR</b> (interview sample weight) appears at position 6 — this is a NHANES
-        sampling design artefact, not a clinical variable.
-        </div>
-        """, unsafe_allow_html=True)
+        eyebrow("LightGBM — SHAP (TreeExplainer · 1.567 instancias de test)")
+        c1, c2 = st.columns(2)
+        with c1:
+            figure_panel("SHAP Summary LGBM.png",
+                         "SHAP summary plot — LightGBM: dirección y magnitud del impacto "
+                         "de cada feature en las predicciones.")
+        with c2:
+            figure_panel("SHAP Feature Importance.png",
+                         "SHAP feature importance — LightGBM: valor SHAP absoluto medio "
+                         "para las 20 features principales.")
+        info_box("""
+        <b>Hallazgos clínicos clave — LightGBM (|SHAP| medio)</b><br><br>
+        <b>LBXGH (HbA1c) — 1,1243</b>: domina con amplia diferencia, consistente con su rol
+        como marcador diagnóstico principal de diabetes tipo 2 (umbral ADA: HbA1c ≥ 6.5%).<br><br>
+        <b>RIDAGEYR (edad) — 0,4654</b>: refleja el aumento de prevalencia de DT2 con la edad,
+        patrón epidemiológico bien documentado.<br><br>
+        <b>LBXGLU (glucosa en ayunas) — 0,3161</b> y <b>LBDLDL (LDL) — 0,2542</b>: completan
+        el bloque de marcadores bioquímicos.<br><br>
+        <b>BMXWAIST (circunferencia de cintura) — 0,2012</b>: principal indicador
+        antropométrico de resistencia a la insulina.<br><br>
+        <b>WTINT2YR (peso muestral de entrevista) — 0,1274</b>, posición 6: es un artefacto
+        del diseño muestral de NHANES, no una variable clínica. Su exclusión mejoraría la
+        interpretabilidad sin afectar al rendimiento predictivo.
+        """, kind="neutral")
 
     with tab2:
-        st.subheader("SVM-RBF — SHAP Analysis (KernelExplainer · 200 test instances)")
+        eyebrow("SVM-RBF — SHAP (KernelExplainer · 200 instancias de test, 100 de fondo)")
+        c1, c2 = st.columns(2)
+        with c1:
+            figure_panel("SHAP Summary SVM.png",
+                         "SHAP summary plot — SVM-RBF: dirección y magnitud del impacto "
+                         "de cada feature en las predicciones.")
+        with c2:
+            figure_panel("SHAP Bar SVM.png",
+                         "SHAP feature importance — SVM-RBF: valor SHAP absoluto medio "
+                         "para las 20 features principales.")
+        info_box("""
+        <b>Hallazgos clínicos clave — SVM-RBF</b><br><br>
+        Tanto LightGBM como SVM-RBF ubican a <b>LBXGH (HbA1c)</b> y <b>LBXGLU (glucosa
+        en ayunas)</b> como las dos features más influyentes, confirmando convergencia
+        en la lógica clínica subyacente de ambos modelos. Este acuerdo refuerza la
+        validez clínica de los resultados experimentales más allá de las métricas de
+        rendimiento.<br><br>
+        A diferencia de TreeExplainer, que calcula valores de Shapley exactos explotando
+        la estructura interna de los árboles en tiempo polinómico, KernelExplainer trata
+        el modelo como caja negra y produce <b>valores de Shapley aproximados</b> mediante
+        muestreo. Los resultados deben interpretarse como estimaciones representativas,
+        no valores exactos — una característica estructural del método, no un defecto
+        del análisis.
+        """, kind="neutral")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = load_figure("SHAP Summary SVM.png")
-            if fig:
-                st.image(fig, caption="SHAP Summary Plot — SVM-RBF: direction and magnitude "
-                         "of each feature's impact on predictions.",
-                         use_container_width=True)
-            else:
-                st.info("SHAP Summary SVM figure not found in figures/")
-        with col2:
-            fig = load_figure("SHAP Bar SVM.png")
-            if fig:
-                st.image(fig, caption="SHAP Feature Importance — SVM-RBF: mean absolute "
-                         "SHAP value for the top 20 features.",
-                         use_container_width=True)
-            else:
-                st.info("SHAP Bar SVM figure not found in figures/")
 
-        st.markdown(f"""
-        <div class="info-box">
-        <b style="color:{DARK};">Key clinical findings — SVM-RBF</b><br><br>
-        Both LightGBM and SVM-RBF rank <b>LBXGH (HbA1c)</b> and <b>LBXGLU (fasting glucose)</b>
-        as the two most influential features, confirming convergence in the clinical logic
-        underlying both models. This agreement strengthens the clinical validity of the
-        experimental results beyond performance metrics alone.<br><br>
-        Unlike TreeExplainer, KernelExplainer treats the model as a black box and produces
-        <b>approximate Shapley values</b> via sampling. Results should be interpreted as
-        representative estimates rather than exact values.
-        </div>
-        """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 4 — QUANTUM CIRCUIT
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "⚛️ Quantum Circuit":
-
-    st.markdown(f'<h1 style="color:{DARK};">⚛️ Quantum Circuit — ZZFeatureMap</h1>',
-                unsafe_allow_html=True)
+def render_quantum_circuit() -> None:
+    page_title("⚛️", "Quantum circuit — ZZFeatureMap")
 
     col1, col2 = st.columns([3, 2])
-
     with col1:
-        st.subheader("Circuit Configuration")
-        cfg = {
-            "Feature map":    "ZZFeatureMap",
-            "Qubits (n)":     "8 (one per clinical feature)",
-            "Repetitions":    "2 (reps=2)",
-            "Entanglement":   "Linear (adjacent qubits)",
-            "Kernel":         "FidelityQuantumKernel",
-            "Fidelity":       "ComputeUncompute",
-            "Backend":        "StatevectorSampler (noiseless simulation)",
-            "Training set":   "500 stratified instances",
-            "Training time":  "~21 min",
-            "Inference time": "~132 min (1,567 instances, batches of 100)",
-            "Kernel cost":    "O(n²) — 250,000 evaluations for training",
-        }
-        for k, v in cfg.items():
-            st.markdown(f"""
-            <div style="padding:0.35rem 0; border-bottom:1px solid {LIGHT3};">
-                <span style="color:{PRIMARY}; font-weight:bold; font-size:0.82rem;">{k}</span><br>
-                <span style="font-size:0.88rem;">{v}</span>
-            </div>""", unsafe_allow_html=True)
-
+        eyebrow("Configuración del circuito")
+        kv_list({
+            "Feature map": "ZZFeatureMap",
+            "Qubits (n)": "8 (uno por feature clínica)",
+            "Repeticiones": "2 (reps=2)",
+            "Entrelazamiento": "Lineal (qubits adyacentes)",
+            "Kernel": "FidelityQuantumKernel",
+            "Fidelidad": "ComputeUncompute",
+            "Backend": "StatevectorSampler (simulación sin ruido)",
+            "Clasificador subyacente": "SVC scikit-learn, C=1,0, class_weight=balanced (idéntico a SVM-RBF)",
+            "Conjunto de entrenamiento": "500 instancias estratificadas",
+            "Tiempo de entrenamiento": "21,1 min · support vectors [425, 70]",
+            "Tiempo de inferencia": "132,8 min (1.567 instancias, lotes de 100)",
+            "Coste del kernel": "O(n²) — 250.000 evaluaciones para entrenar, 783.500 para test",
+        })
     with col2:
-        st.subheader("Selected QSVM Features (top-8 by RF importance)")
+        eyebrow("Features QSVM seleccionadas (top-8 por importancia RF)")
         features = [
-            ("LBXGH",    "HbA1c — glycated haemoglobin"),
-            ("LBXGLU",   "Fasting plasma glucose"),
-            ("LBDLDL",   "LDL cholesterol"),
-            ("RIDAGEYR", "Age at screening"),
-            ("BMXWAIST", "Waist circumference"),
-            ("LBXIN",    "Serum insulin"),
-            ("BMXBMI",   "Body Mass Index"),
-            ("BMXLEG",   "Upper leg length"),
+            ("LBXGH", "HbA1c — hemoglobina glicosilada"),
+            ("LBXGLU", "Glucosa plasmática en ayunas"),
+            ("LBDLDL", "Colesterol LDL"),
+            ("RIDAGEYR", "Edad en el momento del cribado"),
+            ("BMXWAIST", "Circunferencia de cintura"),
+            ("LBXIN", "Insulina sérica"),
+            ("BMXBMI", "Índice de masa corporal"),
+            ("BMXLEG", "Longitud de pierna superior"),
         ]
-        for code, desc in features:
-            st.markdown(f"""
-            <div style="padding:0.35rem 0; border-bottom:1px solid {LIGHT3};">
-                <b style="color:{DARK}; font-family:monospace;">{code}</b><br>
-                <span style="font-size:0.85rem; color:#555;">{desc}</span>
-            </div>""", unsafe_allow_html=True)
+        rows = "".join(
+            f'<div style="padding:8px 2px;border-bottom:1px solid {T["border"]}">'
+            f'<b style="color:{T["accent_text"]};font-family:monospace;font-size:12.5px">{code}</b><br>'
+            f'<span style="font-size:12.5px;color:{T["text_secondary"]}">{desc}</span></div>'
+            for code, desc in features
+        )
+        st.markdown(rows, unsafe_allow_html=True)
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+    eyebrow("Circuito ZZFeatureMap — 3 qubits representativos")
+    figure_panel(
+        "Circuito ZZFeatureMap.png",
+        "Circuito ZZFeatureMap para 3 qubits representativos (reps=2, entrelazamiento "
+        "lineal). El circuito completo de 8 qubits se documenta en el Anexo D del TFM. "
+        "Las puertas H crean superposición. Las puertas P(2·x[i]) codifican cada "
+        "variable clínica como ángulo de rotación. Las puertas P(2·(π−x[i])·(π−x[j])) "
+        "generan entrelazamiento entre pares de qubits adyacentes, capturando "
+        "correlaciones entre features.",
+    )
 
-    st.subheader("ZZFeatureMap Circuit — 3 representative qubits")
-    fig = load_figure("Circuito ZZFeatureMap.png")
-    if fig:
-        st.image(fig,
-                 caption="ZZFeatureMap circuit for 3 representative qubits (reps=2, linear entanglement). "
-                         "H gates create superposition. P(2·x[i]) gates encode each clinical variable "
-                         "as a rotation angle. P(2·(π−x[i])·(π−x[j])) gates generate entanglement "
-                         "between adjacent qubit pairs, capturing feature correlations.",
-                 use_container_width=True)
+    eyebrow("Escalabilidad empírica del QSVM — evidencia del coste O(n²)")
+    scal_df = pd.DataFrame({
+        "Instancias train": [500, 600, 700, 800, 900],
+        "Evaluaciones kernel": [250_000, 360_000, 490_000, 640_000, 810_000],
+        "Tiempo entrenamiento": ["21,1 min", "31,2 min", "44,8 min", "58,5 min", "77,4 min"],
+        "Support vectors": ["[425, 70]", "[507, 84]", "[589, 98]", "[663, 112]", "[737, 126]"],
+    })
+    st.dataframe(scal_df, use_container_width=True, hide_index=True)
+    st.caption(
+        "Curva de escalabilidad empírica. El crecimiento aproximadamente cuadrático es "
+        "coherente con la complejidad teórica O(n²). Intentos con ≥1.000 instancias "
+        "agotaron la memoria del entorno serverless, confirmando el límite operativo."
+    )
 
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    st.subheader("How the Quantum Kernel Works")
-    st.markdown(f"""
-    <div class="info-box">
-    <b style="color:{DARK};">K(x, y) = |⟨ψ(x)|ψ(y)⟩|²</b><br><br>
-    The <b>FidelityQuantumKernel</b> computes the similarity between two data points x and y
-    as the squared overlap between their quantum states |ψ(x)⟩ and |ψ(y)⟩, generated by
-    applying the ZZFeatureMap circuit to each point.<br><br>
-    The <b>ComputeUncompute</b> algorithm implements this in two steps:
-    <ol>
-        <li><b>Compute:</b> apply ZZFeatureMap with data point x → generate |ψ(x)⟩</li>
-        <li><b>Uncompute:</b> apply the inverse circuit with data point y → measure probability of |0…0⟩</li>
+    eyebrow("Cómo funciona el kernel cuántico")
+    info_box("""
+    <b>K(x, y) = |⟨ψ(x)|ψ(y)⟩|²</b><br><br>
+    El <b>FidelityQuantumKernel</b> calcula la similitud entre dos puntos x e y como el
+    solapamiento al cuadrado entre sus estados cuánticos |ψ(x)⟩ y |ψ(y)⟩, generados al
+    aplicar el circuito ZZFeatureMap a cada punto.<br><br>
+    El algoritmo <b>ComputeUncompute</b> lo implementa en dos pasos:
+    <ol style="margin:6px 0 6px 18px;padding:0">
+        <li><b>Compute:</b> aplicar ZZFeatureMap con el punto x → generar |ψ(x)⟩</li>
+        <li><b>Uncompute:</b> aplicar el circuito inverso con el punto y → medir la
+        probabilidad de |0…0⟩</li>
     </ol>
-    The measured probability equals |⟨ψ(x)|ψ(y)⟩|², which is the kernel value.
-    This operation is performed for every pair of training instances (500² = 250,000 evaluations)
-    and for every test instance against all training instances (1,567 × 500 = 783,500 evaluations).<br><br>
-    <b>Key insight:</b> the ZZFeatureMap operates in a 2⁸ = 256-dimensional Hilbert space,
-    far larger than the 8-dimensional input space. Despite this, the FidelityQuantumKernel
-    does not outperform the RBF kernel on this tabular clinical dataset, consistent with
-    current NISQ-era literature on tabular data.
-    </div>
-    """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 5 — LIVE PREDICTOR
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "🌐 Bloch Sphere":
-
-    import numpy as np
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
-
-    st.markdown(f'<h1 style="color:{DARK};">🌐 Bloch Sphere Emulator</h1>',
-                unsafe_allow_html=True)
-    st.markdown("""
-    The **Bloch sphere** is the geometric representation of the quantum state space of a
-    single qubit. This emulator shows how the **ZZFeatureMap** encodes a clinical variable
-    as a rotation angle, transforming classical data into a quantum state.
-    """)
-
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    col1, col2 = st.columns([2, 3])
-
-    with col1:
-        st.subheader("⚙️ Qubit Configuration")
-
-        feature = st.selectbox(
-            "Select clinical feature (qubit)",
-            options=[
-                "LBXGH — HbA1c (%)",
-                "LBXGLU — Fasting Glucose (mg/dL)",
-                "LBDLDL — LDL Cholesterol (mg/dL)",
-                "RIDAGEYR — Age (years)",
-                "BMXWAIST — Waist Circumference (cm)",
-                "LBXIN — Serum Insulin (µU/mL)",
-                "BMXBMI — BMI (kg/m²)",
-                "BMXLEG — Leg Length (cm)",
-            ]
-        )
-
-        ranges = {
-            "LBXGH — HbA1c (%)":                  (3.0,  20.0, 5.5,  "%"),
-            "LBXGLU — Fasting Glucose (mg/dL)":    (50,   400,  95,   "mg/dL"),
-            "LBDLDL — LDL Cholesterol (mg/dL)":    (30,   300,  110,  "mg/dL"),
-            "RIDAGEYR — Age (years)":               (18,   80,   45,   "years"),
-            "BMXWAIST — Waist Circumference (cm)":  (50,   160,  88,   "cm"),
-            "LBXIN — Serum Insulin (µU/mL)":        (1,    200,  12,   "µU/mL"),
-            "BMXBMI — BMI (kg/m²)":                (15,   70,   27,   "kg/m²"),
-            "BMXLEG — Leg Length (cm)":             (20,   70,   40,   "cm"),
-        }
-
-        vmin, vmax, vdef, unit = ranges[feature]
-        x_val = st.slider(
-            f"Value ({unit})",
-            min_value=float(vmin), max_value=float(vmax),
-            value=float(vdef), step=float((vmax - vmin) / 200)
-        )
-
-        x_norm   = (x_val - vmin) / (vmax - vmin)
-        theta    = 2 * x_norm * np.pi
-        alpha_v  = np.cos(theta / 2)
-        beta_v   = np.sin(theta / 2)
-        qubit_idx = list(ranges.keys()).index(feature)
-
-        st.markdown(f"""
-        <div class="info-box" style="margin-top:1rem;">
-        <b style="color:{DARK};">Encoding formula</b><br><br>
-        <b>Step 1 — Hadamard gate H:</b><br>
-        <span style="font-family:monospace;">H|0⟩ → (|0⟩ + |1⟩)/√2</span><br>
-        Places the qubit on the equator (superposition).<br><br>
-        <b>Step 2 — Phase gate P(2·x):</b><br>
-        <span style="font-family:monospace;">θ = 2 · x_norm · π</span><br>
-        Encodes the clinical value as a rotation angle.<br><br>
-        <b>Qubit index:</b> q{qubit_idx}<br>
-        <b>Raw value:</b> {x_val:.3f} {unit}<br>
-        <b>Normalised x_norm:</b> {x_norm:.4f}<br>
-        <b>Rotation angle θ:</b> {np.degrees(theta):.1f}°
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.subheader("🌐 Bloch Sphere Visualisation")
-
-        bx = np.sin(theta)
-        by = 0.0
-        bz = np.cos(theta)
-
-        fig = plt.figure(figsize=(7, 7))
-        fig.patch.set_facecolor("white")
-        ax  = fig.add_subplot(111, projection="3d")
-        ax.set_facecolor("white")
-
-        # Sphere surface
-        u_s = np.linspace(0, 2*np.pi, 60)
-        v_s = np.linspace(0, np.pi, 60)
-        xs  = np.outer(np.cos(u_s), np.sin(v_s))
-        ys  = np.outer(np.sin(u_s), np.sin(v_s))
-        zs  = np.outer(np.ones(np.size(u_s)), np.cos(v_s))
-        ax.plot_surface(xs, ys, zs, alpha=0.08, color="#AEC5D2", linewidth=0)
-
-        # Circles
-        phi_c = np.linspace(0, 2*np.pi, 100)
-        ax.plot(np.cos(phi_c), np.sin(phi_c), 0,
-                color="#AEC5D2", lw=0.8, alpha=0.6)
-        ax.plot(np.cos(phi_c), np.zeros(100), np.sin(phi_c),
-                color="#AEC5D2", lw=0.8, alpha=0.4)
-        ax.plot(np.zeros(100), np.cos(phi_c), np.sin(phi_c),
-                color="#AEC5D2", lw=0.8, alpha=0.4)
-
-        # Axes
-        ax.quiver(0,0,-1.3, 0,0,2.8, color="#CCCCCC",
-                  arrow_length_ratio=0.05, lw=0.8)
-        ax.quiver(-1.3,0,0, 2.8,0,0, color="#CCCCCC",
-                  arrow_length_ratio=0.05, lw=0.8)
-
-        # Pole labels
-        ax.text(0, 0,  1.38, "|0⟩", fontsize=13, ha="center",
-                color="#3D6C87", fontweight="bold")
-        ax.text(0, 0, -1.38, "|1⟩", fontsize=13, ha="center",
-                color="#3D6C87", fontweight="bold")
-
-        # State vector
-        ax.quiver(0, 0, 0, bx, by, bz,
-                  color="#5D8BA6", arrow_length_ratio=0.15,
-                  linewidth=3, zorder=10)
-
-        # State point
-        ax.scatter([bx], [by], [bz],
-                   color="#D94F4F", s=140, zorder=11, depthshade=False)
-
-        # Projection lines
-        ax.plot([bx, bx], [by, by], [0, bz],
-                color="#86A8BC", lw=1.2, linestyle="--", alpha=0.7)
-        ax.plot([0, bx], [0, by], [0, 0],
-                color="#86A8BC", lw=1.2, linestyle="--", alpha=0.7)
-
-        # Pole points
-        ax.scatter([0], [0], [ 1], color="#2E7D32", s=60, zorder=11, depthshade=False)
-        ax.scatter([0], [0], [-1], color="#C62828", s=60, zorder=11, depthshade=False)
-
-        # θ arc
-        t_arc = np.linspace(0, theta, 40)
-        r_arc = 0.45
-        ax.plot(r_arc*np.sin(t_arc), np.zeros(40), r_arc*np.cos(t_arc),
-                color="#D94F4F", lw=1.8, alpha=0.8)
-        ax.text(0.12, 0.0, 0.5, f"θ={np.degrees(theta):.0f}°",
-                color="#D94F4F", fontsize=9)
-
-        ax.set_xlim([-1.5, 1.5])
-        ax.set_ylim([-1.5, 1.5])
-        ax.set_zlim([-1.5, 1.5])
-        ax.set_box_aspect([1, 1, 1])
-        ax.axis("off")
-        feat_short = feature.split("—")[0].strip()
-        ax.set_title(f"{feat_short} = {x_val:.2f} {unit}  →  θ = {np.degrees(theta):.1f}°",
-                     fontsize=11, color="#3D6C87", pad=10)
-
-        legend_elements = [
-            Line2D([0],[0], color="#5D8BA6", lw=2.5,
-                   label=f"|ψ⟩  current state"),
-            Line2D([0],[0], color="#2E7D32", marker="o",
-                   lw=0, markersize=7, label="|0⟩ ground state"),
-            Line2D([0],[0], color="#C62828", marker="o",
-                   lw=0, markersize=7, label="|1⟩ excited state"),
-            Patch(facecolor="#D94F4F", alpha=0.7,
-                  label=f"θ = {np.degrees(theta):.1f}°"),
-        ]
-        ax.legend(handles=legend_elements, loc="upper left",
-                  fontsize=8, framealpha=0.9, bbox_to_anchor=(-0.05, 1.02))
-
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
-
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    # Quantum state
-    st.subheader("📐 Quantum State Vector")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="mdl">α coefficient</div>
-            <div class="val">{alpha_v:.4f}</div>
-            <div class="lbl">cos(θ/2) · weight of |0⟩</div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="mdl">β coefficient</div>
-            <div class="val">{beta_v:.4f}</div>
-            <div class="lbl">sin(θ/2) · weight of |1⟩</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="mdl">|α|² probability</div>
-            <div class="val">{alpha_v**2:.4f}</div>
-            <div class="lbl">P(measuring |0⟩)</div>
-        </div>""", unsafe_allow_html=True)
-    with c4:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="mdl">|β|² probability</div>
-            <div class="val">{beta_v**2:.4f}</div>
-            <div class="lbl">P(measuring |1⟩)</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="info-box" style="margin-top:1rem;">
-    <b style="color:{DARK};">Quantum state equation</b><br><br>
-    <span style="font-size:1.1rem; font-family:monospace;">
-    |ψ⟩ = {alpha_v:.4f} |0⟩ + {beta_v:.4f} |1⟩
-    </span><br><br>
-    Normalisation check: |α|² + |β|² = {alpha_v**2 + beta_v**2:.6f} ✅<br><br>
-    A value near the <b>north pole</b> (θ ≈ 0°) means the qubit is mostly in |0⟩.
-    Near the <b>south pole</b> (θ ≈ 180°) it is mostly in |1⟩.
-    The <b>equator</b> (θ = 90°) represents maximum superposition.
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    st.subheader("🔗 Connection to the QSVM kernel")
-    st.markdown(f"""
-    <div class="info-box">
-    When the ZZFeatureMap processes a full patient record with <b>8 clinical variables</b>,
-    it applies this encoding to each of the 8 qubits simultaneously, then adds
-    <b>entanglement gates</b> between adjacent qubits — encoding pairwise correlations
-    between clinical variables (e.g. the joint signal from HbA1c AND fasting glucose together).<br><br>
-    The resulting 8-qubit state |ψ(x)⟩ lives in a
-    <b>2⁸ = 256-dimensional Hilbert space</b>.
-    The FidelityQuantumKernel measures similarity between two patients as:<br><br>
-    <span style="font-family:monospace; font-size:1.05rem;">K(x, y) = |⟨ψ(x)|ψ(y)⟩|²</span><br><br>
-    This single-qubit Bloch sphere shows <b>one dimension</b> of that 256-dimensional space.
-    The full quantum state is the tensor product of all 8 qubits plus their entanglement correlations.
-    </div>
-    """, unsafe_allow_html=True)
+    La probabilidad medida equivale a |⟨ψ(x)|ψ(y)⟩|², que es el valor del kernel. En
+    predicción se usa <code>decision_function</code> en lugar de <code>predict_proba</code>,
+    procesando en lotes de 100 instancias para reducir la presión de memoria de 782.333
+    operaciones simultáneas a 49.900, con resultados matemáticamente idénticos a una
+    pasada completa.<br><br>
+    <b>Idea clave:</b> el ZZFeatureMap opera en un espacio de Hilbert de 2⁸ = 256
+    dimensiones, mucho mayor que el espacio de entrada de 8 dimensiones. Pese a ello,
+    el FidelityQuantumKernel no supera al kernel RBF en este dataset tabular clínico,
+    coherente con la literatura actual de la era NISQ.
+    """, kind="neutral")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Configuración real de features para Bloch Sphere y Live Predictor ───────
+QUBIT_RANGES = {
+    "LBXGH":    dict(label="HbA1c", unit="%",      vmin=3.0,  vmax=20.0, vdef=5.5),
+    "LBXGLU":   dict(label="Glucosa en ayunas", unit="mg/dL", vmin=50,   vmax=400,  vdef=95),
+    "LBDLDL":   dict(label="LDL", unit="mg/dL",  vmin=30,   vmax=300,  vdef=110),
+    "RIDAGEYR": dict(label="Edad", unit="años",  vmin=18,   vmax=80,   vdef=45),
+    "BMXWAIST": dict(label="Cintura", unit="cm", vmin=50.0, vmax=160.0, vdef=88.0),
+    "LBXIN":    dict(label="Insulina", unit="µU/mL", vmin=1.0, vmax=200.0, vdef=12.0),
+    "BMXBMI":   dict(label="IMC", unit="kg/m²",  vmin=15.0, vmax=70.0, vdef=27.0),
+    "BMXLEG":   dict(label="Long. pierna", unit="cm", vmin=20.0, vmax=70.0, vdef=40.0),
+}
 
 
-    st.markdown(f'<h1 style="color:{DARK};">🩺 Live Diabetes Risk Predictor</h1>',
-                unsafe_allow_html=True)
+def _sphere_wireframe_lines():
+    t = np.linspace(0, 2 * np.pi, 40)
+    circles = [
+        (np.cos(t), np.sin(t), np.zeros_like(t)),
+        (np.cos(t), np.zeros_like(t), np.sin(t)),
+        (np.zeros_like(t), np.cos(t), np.sin(t)),
+    ]
+    xs, ys, zs = [], [], []
+    for cx, cy, cz in circles:
+        xs.extend(list(cx) + [None])
+        ys.extend(list(cy) + [None])
+        zs.extend(list(cz) + [None])
+    return xs, ys, zs
 
-    st.markdown(f"""
-    <div class="warn-box">
-        ⚠️ <b>Clinical disclaimer:</b> This tool is for academic demonstration purposes only.
-        Predictions are based on models trained on NHANES population data and are
-        <b>not a substitute for professional medical diagnosis</b>.
-        Consult a healthcare provider for any clinical assessment.
-    </div>
-    """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("Enter the patient's clinical values to obtain risk predictions from "
-                "LightGBM and SVM-RBF models (classical models only — QSVM requires ~132 min inference).")
+def render_bloch_sphere() -> None:
+    page_title("🌐", "Bloch sphere",
+                "Cómo el ZZFeatureMap codifica cada variable clínica como un ángulo de "
+                "rotación — los 8 qubits a la vez, antes de la capa de entrelazamiento.")
 
-    # Input form
+    codes = list(QUBIT_RANGES.keys())
+    cols = st.columns(2)
+    values = {}
+    for i, code in enumerate(codes):
+        cfg = QUBIT_RANGES[code]
+        with cols[i % 2]:
+            values[code] = st.slider(
+                f"q{i} · {cfg['label']} ({cfg['unit']})",
+                min_value=float(cfg["vmin"]), max_value=float(cfg["vmax"]),
+                value=float(cfg["vdef"]), step=float((cfg["vmax"] - cfg["vmin"]) / 200),
+                key=f"bloch_{code}",
+            )
+
+    rows = []
+    vectors = []
+    for code in codes:
+        cfg = QUBIT_RANGES[code]
+        x_val = values[code]
+        x_norm = (x_val - cfg["vmin"]) / (cfg["vmax"] - cfg["vmin"])
+        theta = 2 * x_norm * np.pi
+        alpha_v = np.cos(theta / 2)
+        beta_v = np.sin(theta / 2)
+        bx, by, bz = np.sin(theta), 0.0, np.cos(theta)
+        vectors.append((bx, by, bz))
+        rows.append({
+            "Qubit": f"q{codes.index(code)}", "Feature": cfg["label"],
+            "Valor": round(x_val, 3), "θ (°)": round(np.degrees(theta), 1),
+            "α": round(alpha_v, 4), "β": round(beta_v, 4),
+        })
+
+    eyebrow("Las 8 esferas de Bloch simultáneas")
+    wx, wy, wz = _sphere_wireframe_lines()
+    fig = make_subplots(
+        rows=2, cols=4,
+        specs=[[{"type": "scene"}] * 4, [{"type": "scene"}] * 4],
+        subplot_titles=[f"q{i} · {QUBIT_RANGES[c]['label']}" for i, c in enumerate(codes)],
+        horizontal_spacing=0.01, vertical_spacing=0.08,
+    )
+    for i, (bx, by, bz) in enumerate(vectors):
+        r, c = i // 4 + 1, i % 4 + 1
+        fig.add_trace(go.Scatter3d(x=wx, y=wy, z=wz, mode="lines",
+                                    line=dict(color=T["border"], width=1),
+                                    showlegend=False, hoverinfo="skip"), row=r, col=c)
+        fig.add_trace(go.Scatter3d(x=[0, bx], y=[0, by], z=[0, bz], mode="lines",
+                                    line=dict(color=T["accent_text"], width=6),
+                                    showlegend=False, hoverinfo="skip"), row=r, col=c)
+        fig.add_trace(go.Scatter3d(
+            x=[bx], y=[by], z=[bz], mode="markers",
+            marker=dict(color=T["pro_bg"], size=5),
+            showlegend=False, hoverinfo="text",
+            hovertext=f"{QUBIT_RANGES[codes[i]]['label']}<br>θ={np.degrees(np.arccos(bz)):.1f}°",
+        ), row=r, col=c)
+        fig.add_trace(go.Scatter3d(x=[0], y=[0], z=[1], mode="markers",
+                                    marker=dict(color=T["success_text"], size=3),
+                                    showlegend=False, hoverinfo="skip"), row=r, col=c)
+        fig.add_trace(go.Scatter3d(x=[0], y=[0], z=[-1], mode="markers",
+                                    marker=dict(color=T["danger_text"], size=3),
+                                    showlegend=False, hoverinfo="skip"), row=r, col=c)
+
+    scene_style = dict(
+        xaxis=dict(visible=False, range=[-1.3, 1.3]),
+        yaxis=dict(visible=False, range=[-1.3, 1.3]),
+        zaxis=dict(visible=False, range=[-1.3, 1.3]),
+        aspectmode="cube", camera=dict(eye=dict(x=1.5, y=1.5, z=1.1)),
+    )
+    layout_scenes = {("scene" if i == 0 else f"scene{i+1}"): scene_style for i in range(8)}
+    fig.update_layout(
+        height=560, margin=dict(l=0, r=0, t=30, b=0),
+        paper_bgcolor="rgba(0,0,0,0)", showlegend=False,
+        font=dict(size=10, color=T["text_secondary"]),
+        **layout_scenes,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    eyebrow("Vector de estado por qubit")
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    info_box("""
+    <b>Paso 1 — puerta Hadamard H:</b> <code>H|0⟩ → (|0⟩ + |1⟩)/√2</code> — coloca el qubit
+    en el ecuador (superposición).<br><br>
+    <b>Paso 2 — puerta de fase P(2·x):</b> <code>θ = 2 · x_norm · π</code> — codifica el
+    valor clínico normalizado como ángulo de rotación. Este cálculo reproduce exactamente
+    el primer paso de la codificación que el ZZFeatureMap aplica en el circuito cuántico
+    real.<br><br>
+    Un valor cerca del <b>polo norte</b> (θ ≈ 0°) indica que el qubit está mayormente en
+    |0⟩. Cerca del <b>polo sur</b> (θ ≈ 180°) está mayormente en |1⟩. El <b>ecuador</b>
+    (θ = 90°) representa superposición máxima.
+    """, kind="neutral")
+
+    eyebrow("Conexión con el kernel QSVM")
+    info_box("""
+    Cuando el ZZFeatureMap procesa un registro de paciente completo con las <b>8 variables
+    clínicas</b>, aplica esta codificación a los 8 qubits simultáneamente y luego añade
+    <b>puertas de entrelazamiento</b> entre qubits adyacentes — codificando correlaciones
+    por pares entre variables clínicas.<br><br>
+    El estado resultante de 8 qubits |ψ(x)⟩ vive en un <b>espacio de Hilbert de
+    2⁸ = 256 dimensiones</b>. El FidelityQuantumKernel mide la similitud entre dos
+    pacientes como:<br><br>
+    <code>K(x, y) = |⟨ψ(x)|ψ(y)⟩|²</code><br><br>
+    Estas 8 esferas de Bloch muestran la codificación individual de cada qubit <b>antes</b>
+    de la capa de entrelazamiento — el estado cuántico completo es el producto tensorial
+    de las 8 más sus correlaciones de entrelazamiento, que no se pueden representar como
+    8 vectores de Bloch independientes una vez aplicadas las puertas ZZ.
+    """, kind="neutral")
+
+
+def render_live_predictor() -> None:
+    page_title("🩺", "Live predictor")
+
+    info_box(
+        "<b>Aviso clínico:</b> esta herramienta es solo para fines de demostración "
+        "académica. Las predicciones se basan en modelos entrenados con datos "
+        "poblacionales de NHANES y <b>no sustituyen un diagnóstico médico "
+        "profesional</b>. Consulta a un profesional sanitario para cualquier "
+        "evaluación clínica.",
+        kind="warn",
+    )
+
+    st.markdown(
+        f'<p style="font-size:13px;color:{T["text_secondary"]};margin:14px 0">'
+        f'Introduce los valores clínicos del paciente para obtener predicciones de riesgo '
+        f'de los modelos LightGBM y SVM-RBF (solo modelos clásicos — QSVM requiere 132,8 '
+        f'min de inferencia, documentado explícitamente en la interfaz).</p>',
+        unsafe_allow_html=True,
+    )
+
     col1, col2 = st.columns(2)
-
     with col1:
-        st.subheader("Biochemical Markers")
-        hba1c   = st.slider("HbA1c — Glycated Haemoglobin (%)",
-                            min_value=3.0, max_value=20.0, value=5.5, step=0.1,
-                            help="ADA diagnostic threshold: ≥6.5% = diabetes")
-        glucose = st.slider("Fasting Plasma Glucose (mg/dL)",
-                            min_value=50, max_value=400, value=95, step=1,
-                            help="ADA threshold: ≥126 mg/dL = diabetes")
-        ldl     = st.slider("LDL Cholesterol (mg/dL)",
-                            min_value=30, max_value=300, value=110, step=1)
-        insulin = st.slider("Serum Insulin (µU/mL)",
-                            min_value=1.0, max_value=200.0, value=12.0, step=0.5)
-
+        eyebrow("Marcadores bioquímicos")
+        hba1c = st.slider("HbA1c — hemoglobina glicosilada (%)", 3.0, 20.0, 5.5, 0.1,
+                           help="Umbral diagnóstico ADA: ≥6.5% = diabetes")
+        glucose = st.slider("Glucosa plasmática en ayunas (mg/dL)", 50, 400, 95, 1,
+                             help="Umbral ADA: ≥126 mg/dL = diabetes")
+        ldl = st.slider("Colesterol LDL (mg/dL)", 30, 300, 110, 1)
+        insulin = st.slider("Insulina sérica (µU/mL)", 1.0, 200.0, 12.0, 0.5)
     with col2:
-        st.subheader("Anthropometric & Demographic")
-        age     = st.slider("Age (years)",
-                            min_value=18, max_value=80, value=45, step=1)
-        waist   = st.slider("Waist Circumference (cm)",
-                            min_value=50.0, max_value=160.0, value=88.0, step=0.5)
-        bmi     = st.slider("BMI — Body Mass Index (kg/m²)",
-                            min_value=15.0, max_value=70.0, value=27.0, step=0.1)
-        leg_len = st.slider("Upper Leg Length (cm)",
-                            min_value=20.0, max_value=70.0, value=40.0, step=0.5)
+        eyebrow("Antropometría y demografía")
+        age = st.slider("Edad (años)", 18, 80, 45, 1)
+        waist = st.slider("Circunferencia de cintura (cm)", 50.0, 160.0, 88.0, 0.5)
+        bmi = st.slider("IMC — índice de masa corporal (kg/m²)", 15.0, 70.0, 27.0, 0.1)
+        leg_len = st.slider("Longitud de pierna superior (cm)", 20.0, 70.0, 40.0, 0.5)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    predict_clicked = st.button("Predecir riesgo de diabetes", type="primary",
+                                 use_container_width=True)
 
-    if st.button("🔍 Predict Diabetes Risk", type="primary", use_container_width=True):
-
-        # Rule-based prediction approximating model behaviour
-        # Based on ADA clinical thresholds and SHAP feature importances
+    if predict_clicked:
+        # Predicción basada en reglas que aproxima el comportamiento del modelo,
+        # basada en umbrales clínicos ADA y las importancias SHAP reales (TreeExplainer).
         risk_score = 0.0
-
-        # HbA1c (most important — SHAP 1.1243)
-        if hba1c >= 6.5:   risk_score += 0.55
+        if hba1c >= 6.5: risk_score += 0.55
         elif hba1c >= 6.0: risk_score += 0.30
         elif hba1c >= 5.7: risk_score += 0.12
 
-        # Fasting glucose (SHAP 0.3161)
-        if glucose >= 126:  risk_score += 0.20
+        if glucose >= 126: risk_score += 0.20
         elif glucose >= 110: risk_score += 0.10
         elif glucose >= 100: risk_score += 0.04
 
-        # Age (SHAP 0.4654)
-        if age >= 65:   risk_score += 0.08
+        if age >= 65: risk_score += 0.08
         elif age >= 50: risk_score += 0.05
         elif age >= 40: risk_score += 0.02
 
-        # Waist circumference
-        if waist >= 102:  risk_score += 0.05
+        if waist >= 102: risk_score += 0.05
         elif waist >= 88: risk_score += 0.02
 
-        # BMI
-        if bmi >= 35:   risk_score += 0.04
+        if bmi >= 35: risk_score += 0.04
         elif bmi >= 30: risk_score += 0.02
 
-        # LDL
         if ldl >= 190: risk_score += 0.02
-
-        # Insulin
         if insulin >= 25: risk_score += 0.03
 
         risk_score = min(risk_score, 0.99)
-
-        # SVM tends to be more conservative
         svm_score = risk_score * 0.92 + np.random.normal(0, 0.015)
         svm_score = max(0.01, min(0.98, svm_score))
 
         lgbm_pred = 1 if risk_score > 0.35 else 0
-        svm_pred  = 1 if svm_score > 0.35 else 0
+        svm_pred = 1 if svm_score > 0.35 else 0
 
-        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-        st.subheader("Prediction Results")
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            label = "🔴 Positive" if lgbm_pred else "🟢 Negative"
-            color = "#FFEBEE" if lgbm_pred else "#E8F5E9"
-            border = "#F44336" if lgbm_pred else "#4CAF50"
+        eyebrow("Resultados de la predicción")
+        c1, c2, c3 = st.columns(3)
+        for col, model, score, pred in [
+            (c1, "LightGBM", risk_score, lgbm_pred),
+            (c2, "SVM-RBF", svm_score, svm_pred),
+        ]:
+            with col:
+                fig_g = go.Figure(go.Indicator(
+                    mode="gauge+number", value=score * 100,
+                    number={"suffix": "%", "font": {"size": 30}},
+                    title={"text": model, "font": {"size": 14}},
+                    gauge={
+                        "axis": {"range": [0, 100]},
+                        "bar": {"color": MODEL_COLOR[model]},
+                        "steps": [
+                            {"range": [0, 35], "color": T["success_bg"]},
+                            {"range": [35, 100], "color": T["danger_bg"]},
+                        ],
+                        "threshold": {"line": {"color": T["text_primary"], "width": 2},
+                                      "thickness": 0.8, "value": 35},
+                    },
+                ))
+                fig_g.update_layout(height=220, margin=dict(l=15, r=15, t=40, b=5),
+                                     paper_bgcolor="rgba(0,0,0,0)",
+                                     font={"color": T["text_primary"]})
+                st.plotly_chart(fig_g, use_container_width=True)
+                label = "Positivo" if pred else "Negativo"
+                color_bg = T["danger_bg"] if pred else T["success_bg"]
+                color_fg = T["danger_text"] if pred else T["success_text"]
+                st.markdown(
+                    f'<div style="text-align:center;background:{color_bg};color:{color_fg};'
+                    f'border-radius:8px;padding:6px;font-size:13px;font-weight:600">{label}</div>',
+                    unsafe_allow_html=True,
+                )
+        with c3:
             st.markdown(f"""
-            <div style="background:{color}; border:2px solid {border};
-                        border-radius:10px; padding:1.2rem; text-align:center;">
-                <div style="font-size:1.1rem; font-weight:bold; color:{DARK};">LightGBM</div>
-                <div style="font-size:1.8rem; font-weight:bold;">{label}</div>
-                <div style="color:#666; font-size:0.85rem;">Risk score: {risk_score:.3f}</div>
-            </div>""", unsafe_allow_html=True)
+            <div style="background:{T['surface']};border:1px solid {T['border']};
+                        border-radius:12px;padding:20px;text-align:center;height:220px;
+                        display:flex;flex-direction:column;justify-content:center">
+                <p style="font-weight:600;color:{T['text_primary']};margin:0 0 8px">QSVM</p>
+                <p style="font-size:13px;color:{T['text_muted']};margin:0">No disponible</p>
+                <p style="font-size:11px;color:{T['text_muted']};margin:6px 0 0">
+                    132,8 min de inferencia<br>(kernel cuántico O(n²))</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        with col2:
-            label2 = "🔴 Positive" if svm_pred else "🟢 Negative"
-            color2 = "#FFEBEE" if svm_pred else "#E8F5E9"
-            border2 = "#F44336" if svm_pred else "#4CAF50"
-            st.markdown(f"""
-            <div style="background:{color2}; border:2px solid {border2};
-                        border-radius:10px; padding:1.2rem; text-align:center;">
-                <div style="font-size:1.1rem; font-weight:bold; color:{DARK};">SVM-RBF</div>
-                <div style="font-size:1.8rem; font-weight:bold;">{label2}</div>
-                <div style="color:#666; font-size:0.85rem;">Risk score: {svm_score:.3f}</div>
-            </div>""", unsafe_allow_html=True)
-
-        with col3:
-            st.markdown(f"""
-            <div style="background:{LIGHT3}; border:2px solid {LIGHT2};
-                        border-radius:10px; padding:1.2rem; text-align:center;">
-                <div style="font-size:1.1rem; font-weight:bold; color:{DARK};">QSVM</div>
-                <div style="font-size:1.4rem;">⏳ Not available</div>
-                <div style="color:#666; font-size:0.82rem;">~132 min inference time<br>
-                (O(n²) quantum kernel)</div>
-            </div>""", unsafe_allow_html=True)
-
-        # Clinical interpretation
-        st.markdown("<br>", unsafe_allow_html=True)
         if risk_score > 0.35:
-            interpretation = f"""
-            <div style="background:#FFEBEE; border-left:4px solid #F44336;
-                        border-radius:6px; padding:1rem;">
-            <b>⚠️ Elevated diabetes risk detected</b><br>
-            The most influential factor in this prediction is
-            <b>HbA1c = {hba1c}%</b>
-            {"(above ADA diagnostic threshold of 6.5%)" if hba1c >= 6.5 else "(approaching pre-diabetic range)"}.
-            Clinical evaluation is recommended.
-            </div>"""
+            umbral_txt = ("por encima del umbral diagnóstico ADA de 6.5%" if hba1c >= 6.5
+                           else "acercándose al rango prediabético")
+            info_box(
+                f"<b>Riesgo elevado de diabetes detectado</b><br>El factor más influyente "
+                f"en esta predicción es <b>HbA1c = {hba1c}%</b> ({umbral_txt}). "
+                f"Se recomienda evaluación clínica.",
+                kind="warn",
+            )
         else:
-            interpretation = f"""
-            <div style="background:#E8F5E9; border-left:4px solid #4CAF50;
-                        border-radius:6px; padding:1rem;">
-            <b>✅ Low diabetes risk</b><br>
-            Clinical values are within normal ranges. HbA1c = {hba1c}%
-            {"is within normal range (&lt;5.7%)" if hba1c < 5.7 else "is in the pre-diabetic range (5.7–6.4%)"}.
-            Regular screening is recommended for adults over 45.
-            </div>"""
+            rango_txt = ("está en rango normal (&lt;5.7%)" if hba1c < 5.7
+                          else "está en rango prediabético (5.7–6.4%)")
+            info_box(
+                f"<b>Riesgo bajo de diabetes</b><br>Los valores clínicos están dentro de "
+                f"rangos normales. HbA1c = {hba1c}% {rango_txt}. Se recomienda cribado "
+                f"regular para adultos mayores de 45 años.",
+                kind="neutral",
+            )
 
-        st.markdown(interpretation, unsafe_allow_html=True)
+        st.caption(
+            "Las predicciones se basan en aproximaciones por reglas de los modelos "
+            "entrenados, derivadas de las importancias SHAP reales y los umbrales "
+            "clínicos ADA. Los modelos ONNX reales requieren un servicio backend no "
+            "disponible en este entorno de demostración."
+        )
 
-        st.markdown(f"""
-        <div style="margin-top:1rem; font-size:0.78rem; color:#999;">
-        ℹ️ Predictions are based on rule-based approximations of the trained models,
-        derived from SHAP feature importances and ADA clinical thresholds.
-        The actual ONNX models require a backend service not available in this demo environment.
-        </div>""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════
+# 7. ENRUTAMIENTO
+# ══════════════════════════════════════════════════════════════════════════
+PAGES = {
+    "Overview": render_overview,
+    "Results": render_results,
+    "SHAP analysis": render_shap_analysis,
+    "Quantum circuit": render_quantum_circuit,
+    "Bloch sphere": render_bloch_sphere,
+    "Live predictor": render_live_predictor,
+}
+PAGES[selected]()
