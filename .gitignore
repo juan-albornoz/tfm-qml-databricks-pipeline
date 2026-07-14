@@ -40,3 +40,7 @@ venv/
 Thumbs.db
 
 # Figuras del proyecto — incluir carpeta figures/
+
+# Excepción: los modelos ONNX y arrays .npy del Live Predictor SÍ deben subir
+!streamlit/models/*.onnx
+!streamlit/models/*.npy
