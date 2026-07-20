@@ -107,7 +107,7 @@ s3 = boto3.client(
 
 | Librería | Versión utilizada |
 |----------|-------------------|
-| qiskit | 2.4.1 |
+| qiskit | 2.5.0 |
 | qiskit-machine-learning | 0.9.0 |
 | qiskit-algorithms | 0.4.0 |
 

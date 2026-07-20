@@ -12,6 +12,7 @@ en la pagina Results.
 """
 
 import base64
+import io
 import json
 import textwrap
 from pathlib import Path
@@ -19,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
+from PIL import Image
 from streamlit_option_menu import option_menu
 
 try:
@@ -34,6 +36,25 @@ MODELS_DIR = Path(__file__).parent / "models"
 @st.cache_data
 def _b64_image(path: str) -> str:
     return base64.b64encode(Path(path).read_bytes()).decode()
+
+@st.cache_data
+def _b64_image_autocrop(path: str, pad: int = 16) -> str:
+    """Recorta el margen blanco sobrante alrededor del contenido real (p. ej. capturas de
+    diagramas exportadas con aire de más) y devuelve el PNG resultante en base64. Mantiene un
+    margen uniforme pequeño para que no quede pegado al borde de la tarjeta contenedora."""
+    img = Image.open(path).convert("RGB")
+    arr = np.array(img)
+    non_white = np.any(arr < 250, axis=2)
+    rows, cols = np.any(non_white, axis=1), np.any(non_white, axis=0)
+    if not rows.any():
+        return _b64_image(path)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+    box = (max(cmin - pad, 0), max(rmin - pad, 0),
+           min(cmax + pad, img.width), min(rmax + pad, img.height))
+    buf = io.BytesIO()
+    img.crop(box).save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 # initial_sidebar_state="auto": expandida en escritorio, COLAPSADA en móvil. Con "expanded" se quedaba
 # abierta también en el teléfono, comiéndose 270 de los ~390 px de pantalla.
@@ -65,6 +86,22 @@ SIDEBAR_WIDTH = "84px" if narrow else "270px"
 # C_LIGHT fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
 SLIDER_GROOVE = C_LIGHT if st.session_state.theme == "light" else t["surface_alt"]
 
+# ── Tratamiento de las figuras PNG de fondo blanco (beeswarm SHAP, circuito) según tema ──
+# Esas imágenes tienen fondo blanco intrínseco (figuras científicas del TFM). En tema claro se funden
+# con la tarjeta. En oscuro, un bloque blanco a ancho completo sobre fondo casi negro "flota" y rompe
+# la elegancia del dark mode. En vez de regenerar las imágenes (fuera de alcance), las presentamos
+# como "lámina enmarcada": un anillo fino en color de marca (C_MID2) las ata a la paleta, una sombra
+# profunda las asienta, y un filtro casi imperceptible baja el fogonazo del blanco puro. En claro se
+# mantiene el aspecto plano y sobrio de siempre.
+_is_dark = st.session_state.theme == "dark"
+FIG_IMG_FILTER = "brightness(0.965) saturate(1.03)" if _is_dark else "none"
+FIG_CARD_SHADOW = (f"0 0 0 1px {C_MID2}33, 0 12px 34px rgba(0,0,0,0.42)" if _is_dark
+                   else "0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05)")
+FIG_CARD_SHADOW_HOVER = (f"0 0 0 1px {C_PRIMARY}66, 0 16px 42px rgba(0,0,0,0.50)" if _is_dark
+                         else "0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09)")
+# Padding-"passe-partout" algo mayor en oscuro: la lámina blanca respira dentro del marco.
+FIG_CARD_PAD = "14px" if _is_dark else "10px"
+
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -84,8 +121,21 @@ section[data-testid="stSidebar"] {{
     background-color:{t['sidebar_bg']}; border-right:1px solid {t['border']};
     box-shadow: 3px 0 16px rgba(20,30,40,0.07), 1px 0 3px rgba(20,30,40,0.05);
     width:{SIDEBAR_WIDTH} !important; min-width:{SIDEBAR_WIDTH} !important; max-width:{SIDEBAR_WIDTH} !important;
+    /* Colapsar/descolapsar desliza el ancho en vez de saltar de golpe entre 270 y 84px. */
+    transition: width 0.32s cubic-bezier(0.4,0,0.2,1), min-width 0.32s cubic-bezier(0.4,0,0.2,1),
+                max-width 0.32s cubic-bezier(0.4,0,0.2,1) !important;
 }}
 section[data-testid="stSidebar"] > div {{ background-color:{t['sidebar_bg']}; }}
+/* El resize handle NATIVO de Streamlit (arrastrar el borde derecho de la sidebar) deja el ancho en
+   cualquier valor arbitrario, algo que nuestro modo "narrow" (booleano con solo dos anchos fijos,
+   84/270px) no contempla — arrastrándolo, la sidebar queda visualmente angosta pero
+   sidebar_narrow sigue en False, así que el texto de los ítems se sigue dibujando a tamaño completo
+   junto al icono, apretado. Ese handle además se solapa físicamente con nuestro botón circular de
+   colapso (mismo borde) y le bloquea el clic. Lo desactivamos del todo: el ancho lo controla
+   exclusivamente nuestro propio toggle. Sin testid propio, pero el estilo inline con
+   cursor:col-resize es estable entre versiones de Streamlit (a diferencia de sus clases con hash).
+*/
+section[data-testid="stSidebar"] div[style*="cursor: col-resize"] {{ pointer-events:none !important; }}
 /* Ocultamos el botón nativo de colapso de la cabecera: usamos nuestro propio toggle «/» */
 [data-testid="stSidebarCollapseButton"] {{ display:none !important; }}
 /* Colapsamos el espaciador nativo del logo/cabecera (reservado por Streamlit cuando no se usa
@@ -119,6 +169,10 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     background-color:{t['sidebar_bg']} !important; color:{t['text_secondary']} !important;
     box-shadow: 0 1px 4px rgba(20,30,40,0.15), 0 1px 2px rgba(20,30,40,0.10) !important;
     z-index:1000 !important; margin:0 !important;
+    /* Acompaña al borde de la sidebar en el mismo tiempo/curva que su transición de ancho, así el
+       botón viaja pegado al borde en vez de saltar de golpe a su nueva posición. */
+    transition: left 0.32s cubic-bezier(0.4,0,0.2,1), top 0.32s cubic-bezier(0.4,0,0.2,1),
+                color 0.15s ease, border-color 0.15s ease !important;
 }}
 .st-key-toggle_sidebar button:hover {{
     color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
@@ -129,8 +183,9 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 /* Cápsula-interruptor de tema: fija al fondo del viewport (ancho = ancho actual de la sidebar),
    así queda siempre visible sin depender del scroll interno, colapsada o no. */
 .st-key-theme_toggle {{
-    position:fixed !important; bottom:52px; left:0; width:{SIDEBAR_WIDTH};
+    position:fixed !important; bottom:64px; left:0; width:{SIDEBAR_WIDTH};
     display:flex !important; justify-content:center; z-index:999;
+    transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
 .st-key-theme_toggle button {{
     width:30px !important; height:15px !important; min-height:15px !important; padding:0 !important;
@@ -150,9 +205,10 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     padding:8px 6px 10px; text-align:center; box-sizing:border-box;
     border-top:1px solid {t['border']}; background-color:{t['sidebar_bg']};
     color:{t['text_secondary']}; overflow:hidden; z-index:997; line-height:1.35;
+    transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
-.sidebar-footer .footer-name {{ font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
-.sidebar-footer .footer-uni {{ font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.85; }}
+.sidebar-footer .footer-name {{ font-size:14.5px; color:{t['text']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.sidebar-footer .footer-uni {{ font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
 /* El option_menu vive en un iframe con fondo propio: igualarlo al de la sidebar (sin caja/sombra
    propia — ya tiene el mismo fondo, así que se funde visualmente con el resto de la sidebar) */
 section[data-testid="stSidebar"] iframe {{ background-color:{t['sidebar_bg']} !important; }}
@@ -160,7 +216,15 @@ section[data-testid="stSidebar"] div[data-testid="stIFrame"],
 section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
     background-color:{t['sidebar_bg']} !important;
 }}
-.page-title {{ font-size:38px; font-weight:700; color:{t['text']}; margin-bottom:14px; letter-spacing:-0.01em; line-height:1.2; }}
+/* El menú (option_menu) remonta el iframe entero al colapsar/descolapsar (key distinta para narrow
+   vs. ancho — necesario para que reaplique sus estilos, ver comentario junto a esa key), así que el
+   texto no puede "encogerse" con una transición: aparece/desaparece de golpe con el nuevo iframe. Un
+   fundido suave en el propio iframe disimula ese salto, en vez de eliminarlo — reutiliza el mismo
+   keyframe pageFadeIn que ya usan las páginas al navegar. */
+@media (prefers-reduced-motion: no-preference) {{
+    section[data-testid="stSidebar"] iframe {{ animation: pageFadeIn 0.3s ease-out; }}
+}}
+.page-title {{ font-size:38px; font-weight:600; color:{t['text']}; margin-bottom:14px; letter-spacing:-0.02em; line-height:1.2; }}
 .page-subtitle {{ font-size:18px; font-weight:400; color:{t['text_secondary']}; margin-bottom:32px; line-height:1.6; }}
 .kpi-card, .info-card {{
     background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:12px; padding:18px 20px; height:100%;
@@ -177,34 +241,70 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
    misma altura (el estirado es nativo del grid), sin importar cuánto texto envuelva ni el zoom. */
 .compare-grid {{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; align-items:stretch; }}
 .compare-grid .info-card {{ height:100%; box-sizing:border-box; }}
-/* Esfera de Bloch: las dos columnas ya se estiran al mismo alto (flex align-items:stretch), pero
-   Streamlit fija «flex: 0 0 <alto-figura>px» al contenedor de la gráfica, así que el recuadro de la
-   3D no crece y cierra antes que la tarjeta de la izquierda. Le devolvemos la capacidad de crecer
-   para que ambos rectángulos terminen alineados abajo. Sin píxeles fijos: sigue alineado cuando la
-   izquierda crece (p. ej. la nota extra de WTINT2YR) o cambia el zoom. */
-   Nota: los hijos NO pueden llevar margin-top — con height:100% el margen queda fuera del alto de su
-   contenedor y lo desborda, que era justo el desfase. El gap:16px del bloque vertical ya los separa. */
-   Solo estiramos la columna DERECHA: la izquierda (selector + slider + tarjeta) es la que marca el
-   alto de la fila. Si le pusiéramos height:100% también a ella, su alto intrínseco dejaría de contar
-   y la fila se dimensionaría por la gráfica, desbordando la izquierda. */
-.st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] {{ height:100%; }}
-.st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"]:last-child {{
+/* Esfera de Bloch: el alto lo fija la figura Plotly en píxeles (height=BLOCH_H en Python), SIN
+   autosize. Así el tamaño es idéntico en cada rerun y en CUALQUIER navegador (Firefox incluido):
+   no depende de medir el contenedor (lo que con autosize hacía que "volviera a quedar pequeña" al
+   cambiar de variable o mover el slider, con distinto comportamiento entre Firefox y Chrome). Aquí
+   solo centramos el recuadro; no forzamos alturas por CSS para no reintroducir el bucle de medición. */
+.st-key-bloch_row div[data-testid="stPlotlyChart"] {{ display:flex; align-items:center; justify-content:center; }}
+.st-key-bloch_row .info-card {{ height:auto; box-sizing:border-box; }}
+/* Reserva SIEMPRE el hueco de la barra de scroll vertical. Sin esto, cuando la barra aparece/desaparece
+   al re-renderizar (Firefox la reserva de verdad), el ancho del contenido salta ~15 px y la esfera de
+   Bloch —limitada por el ancho de su columna— se redimensionaba al cambiar de variable o mover el slider.
+   El ÚNICO contenedor con scroll en Streamlit es section[data-testid="stMain"] (overflow:auto); aplicarlo
+   ahí basta y evita reservar el hueco por duplicado. En móvil (barras superpuestas) es un no-op. */
+section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
+/* Circuito Cuántico: la tarjeta de KPIs "Entrenamiento y evaluación" (columna derecha) crece para
+   igualar la altura de la tarjeta de la gráfica (columna izquierda) — mismo nivel, sin hueco vacío
+   bajo ella. Es el ÚNICO elemento de esa columna (la nota se renderiza aparte, a ancho completo,
+   debajo de la fila), así se estira limpio. El contenedor exterior sí crece con flex, pero height:100%
+   no se propaga solo a través de los divs intermedios de Streamlit (stMarkdown, su wrapper,
+   stMarkdownContainer — todos con height:auto por defecto): hay que fijarlo en cada nivel de la
+   cadena para que llegue hasta la tarjeta. */
+.st-key-qc_stats_row div[data-testid="stColumn"]:last-of-type div[data-testid="stElementContainer"]:last-child {{
     flex:1 1 auto !important;
 }}
-/* La tarjeta se dimensiona por su CONTENIDO: el height:100% global entra en bucle con el flex-basis
-   de su contenedor y el flex acababa encogiéndola (290 → 274 px), descuadrando la fila. Y los ítems
-   de la izquierda no encogen, para que la columna mida de verdad lo que mide su contenido. */
-.st-key-bloch_row .info-card {{ height:auto; box-sizing:border-box; }}
-.st-key-bloch_row div[data-testid="stColumn"]:first-of-type div[data-testid="stElementContainer"] {{ flex-shrink:0; }}
-/* Streamlit pone margin-bottom:-16px a stMarkdownContainer (compensa el gap del bloque). Eso hacía
-   que la tarjeta sobresaliera 16px por debajo de su propio contenedor, y como la fila se dimensiona
-   por los contenedores, la gráfica se quedaba 16px corta. Aquí la tarjeta es el último elemento de
-   la columna, así que anular ese margen no introduce hueco. */
-.st-key-bloch_row div[data-testid="stColumn"]:first-of-type div[data-testid="stMarkdownContainer"] {{ margin-bottom:0 !important; }}
-.st-key-bloch_row div[data-testid="stFullScreenFrame"] {{ height:100%; }}
-.st-key-bloch_row div[data-testid="stPlotlyChart"] {{
-    height:100%; box-sizing:border-box;
-    display:flex; align-items:center; justify-content:center;
+.st-key-qc_stats_row div[data-testid="stColumn"]:last-of-type div[data-testid="stElementContainer"]:last-child,
+.st-key-qc_stats_row div[data-testid="stColumn"]:last-of-type div[data-testid="stElementContainer"]:last-child div[data-testid="stMarkdown"],
+.st-key-qc_stats_row div[data-testid="stColumn"]:last-of-type div[data-testid="stElementContainer"]:last-child div[data-testid="stMarkdown"] > div,
+.st-key-qc_stats_row div[data-testid="stColumn"]:last-of-type div[data-testid="stElementContainer"]:last-child div[data-testid="stMarkdownContainer"] {{
+    height:100%;
+}}
+/* Dentro de la tarjeta estirada, las 5 filas de KPI se reparten proporcionalmente en todo el alto
+   (space-between) en vez de quedar apiladas arriba con hueco vacío debajo. El margin-top:-8px corrige
+   un espaciado que Streamlit añade distinto según el tipo de widget (st.plotly_chart vs st.markdown):
+   medido en el navegador, el título de esta columna termina exactamente a la misma altura que el de
+   la gráfica, pero esta tarjeta arrancaba 8px más abajo que la suya — con esto ambas tarjetas quedan
+   alineadas arriba Y abajo. */
+.st-key-qc_stats_row .info-card {{
+    height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between;
+    margin-top:-8px;
+}}
+/* Predictor en Vivo: "Score de riesgo" (izquierda) y velocímetro (derecha) fusionados en UNA sola
+   tarjeta. Ahora es el propio contenedor de la fila el que hace de tarjeta (borde, fondo, sombra,
+   padding y hover); los dos hijos —la kpi-card y la gráfica Plotly— pierden su recuadro individual
+   y se funden dentro, separados por una línea vertical fina. Con vertical_alignment="center" en las
+   columnas, ambas mitades quedan centradas entre sí sin necesidad de fijar alturas en px. */
+.st-key-predictor_gauge_row {{
+    background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:14px;
+    padding:18px 26px; box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}}
+.st-key-predictor_gauge_row:hover {{
+    box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09);
+    transform: translateY(-2px);
+}}
+.st-key-predictor_gauge_row .kpi-card, .st-key-predictor_gauge_row .kpi-card:hover {{
+    background:transparent; border:none; box-shadow:none; transform:none; padding:6px 4px; height:auto;
+    box-sizing:border-box; display:flex; flex-direction:column; justify-content:center;
+}}
+.st-key-predictor_gauge_row div[data-testid="stPlotlyChart"],
+.st-key-predictor_gauge_row div[data-testid="stPlotlyChart"]:hover {{
+    background:transparent; border:none; box-shadow:none; padding:0; transform:none;
+}}
+/* Separador vertical entre las dos mitades de la tarjeta unificada */
+.st-key-predictor_gauge_row div[data-testid="stColumn"]:first-of-type {{
+    border-right:1px solid {t['border']};
 }}
 /* Ítem de la arquitectura Medallón como mini-tarjeta con acento lateral por capa */
 .medallion-item {{
@@ -213,15 +313,37 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
     border-radius:10px; box-shadow:0 1px 2px rgba(20,30,40,0.04);
     transition: box-shadow 0.18s ease, transform 0.18s ease;
 }}
-.medallion-item:hover {{ box-shadow:0 4px 12px rgba(20,30,40,0.07); transform:translateY(-1px); }}
-/* Contenedores de gráficas Plotly con la misma profundidad sutil */
+.medallion-item:hover {{ box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09); transform:translateY(-2px); }}
+/* Contenedores de gráficas Plotly con la misma profundidad sutil Y el mismo hover de elevación que
+   las tarjetas .kpi-card / .info-card, para que TODAS las tarjetas reaccionen igual al pasar el ratón. */
 div[data-testid="stPlotlyChart"] {{
     background-color:{t['surface']};
     border:1px solid {t['border']};
     border-radius:12px;
     padding:8px;
     box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
 }}
+div[data-testid="stPlotlyChart"]:hover {{
+    box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09);
+    transform: translateY(-2px);
+}}
+/* Tarjeta contenedora de una figura/imagen (SHAP summary, circuito cuántico): mismo aspecto y mismo
+   hover de elevación que el resto. Fondo blanco fijo porque esas imágenes lo son. En tema oscuro se
+   convierte en "lámina enmarcada" (anillo de marca + sombra profunda + brillo atenuado) para que el
+   bloque blanco no flote sobre el fondo oscuro — ver FIG_CARD_SHADOW / FIG_IMG_FILTER. */
+.fig-card {{
+    background:#FFFFFF; border:1px solid {t['border']}; border-radius:12px; padding:{FIG_CARD_PAD};
+    box-shadow: {FIG_CARD_SHADOW};
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}}
+.fig-card:hover {{
+    box-shadow: {FIG_CARD_SHADOW_HOVER};
+    transform: translateY(-2px);
+}}
+/* Atenúa el fogonazo del blanco puro en oscuro (imperceptible en claro: filter:none). El radio
+   redondea la imagen igual que el inline style, por si algún navegador lo ignorara. */
+.fig-card img {{ filter: {FIG_IMG_FILTER}; }}
 .kpi-model {{ font-size:13px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:7px; }}
 .kpi-dot {{ width:8px; height:8px; border-radius:50%; }}
 .kpi-row {{ display:flex; justify-content:space-between; align-items:baseline; padding:7px 0; border-bottom:1px solid {t['border']}; }}
@@ -238,7 +360,10 @@ div[data-testid="stPlotlyChart"] {{
 .section-sub {{ font-size:14px; color:{t['text_secondary']}; margin-bottom:14px; padding-left:12px; }}
 .badge {{ display:inline-block; font-size:12px; font-weight:600; letter-spacing:0.02em; padding:4px 10px;
     border-radius:20px; background:{C_LIGHT}55; color:{C_DARK}; margin-right:6px; }}
-.clinical-note {{ background:{C_LIGHT}33; border:1px solid {C_MID2}; border-left:3px solid {C_PRIMARY}; border-radius:8px; padding:12px 16px 12px 18px; font-size:14px; color:{t['text_secondary']}; line-height:1.6; }}
+.clinical-note {{ background:{C_LIGHT}33; border:1px solid {C_MID2}; border-left:3px solid {C_PRIMARY}; border-radius:8px; padding:12px 16px 12px 18px; font-size:14px; color:{t['text_secondary']}; line-height:1.6;
+    box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease; }}
+.clinical-note:hover {{ box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09); transform: translateY(-2px); }}
 /* Matriz de confusión (cuadrícula HTML: celdas legibles, etiquetas horizontales) */
 .cm-title {{ font-size:14px; font-weight:600; color:{t['text']}; margin-bottom:14px; display:flex; align-items:center; gap:8px; }}
 .cm-grid {{ display:grid; grid-template-columns:64px 1fr 1fr; gap:6px; align-items:stretch; }}
@@ -356,6 +481,18 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     background-color:{t['surface_alt']} !important; border-color:{C_PRIMARY} !important;
 }}
 
+/* ═══════════════ TABLET (≤ 1024 px) ═══════════════
+   Entre el ancho de escritorio y el punto de quiebre móvil (768 px) hay una franja —tablets en
+   horizontal, ventanas a media pantalla— donde la sidebar fija (270 px) ya no deja tanto aire al
+   contenido. Aquí solo se afina la proporción (menos padding, rejillas de 3 columnas a 2) sin
+   activar aún el modo overlay de la sidebar, que solo tiene sentido en pantallas realmente estrechas. */
+@media (max-width: 1024px) {{
+    div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
+        padding-left:1.25rem !important; padding-right:1.25rem !important;
+    }}
+    .compare-grid {{ grid-template-columns:repeat(2, minmax(0, 1fr)); }}
+}}
+
 /* ═══════════════ MÓVIL (≤ 768 px) ═══════════════
    Sin esto la app era inusable en el teléfono: la sidebar (270 px fijos, con su botón de colapso
    oculto) se comía dos tercios de la pantalla y empujaba el contenido fuera. Aquí devolvemos a la
@@ -402,10 +539,8 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     div[data-testid="stColumn"] {{ flex:1 1 100% !important; min-width:100% !important; }}
     /* Rejilla de tarjetas comparativas: una por fila */
     .compare-grid {{ grid-template-columns:1fr !important; }}
-    /* Al apilarse, la fila de Bloch ya no necesita estirar la gráfica al alto de la otra columna */
-    .st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] {{
-        height:auto !important;
-    }}
+    /* Al apilarse (teléfono) la columna es de ancho completo; el alto ya lo fija la figura Plotly */
+    .st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] {{ height:auto !important; }}
     /* Cabecera proporcionada a la pantalla del teléfono */
     .page-title {{ font-size:26px; margin-bottom:10px; }}
     .page-subtitle {{ font-size:15px; margin-bottom:20px; }}
@@ -414,6 +549,30 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     /* Matriz de confusión: la columna de etiquetas fija en 64 px ahoga las celdas en pantalla estrecha */
     .cm-grid {{ grid-template-columns:52px 1fr 1fr; }}
     .cm-num {{ font-size:19px; }}
+    /* El resto de la jerarquía tipográfica también baja un escalón en móvil, en la misma proporción
+       que el título/subtítulo de arriba — así todo el texto queda a escala del viewport, no solo la
+       cabecera de la página. */
+    .section-title {{ font-size:16px; }}
+    .section-sub, .clinical-note, .cm-title {{ font-size:13px; }}
+    .kpi-value {{ font-size:15px; }}
+    .kpi-model, .kpi-label, .stat-label {{ font-size:12px; }}
+    .badge {{ font-size:11px; }}
+}}
+
+/* ═══════════════ TRANSICIÓN DE PÁGINA ═══════════════
+   El contenedor .st-key-page_enter_N (ver header(), key = índice de la página en _MENU_OPTIONS) es
+   el único elemento con un remount GARANTIZADO al navegar: key distinta = componente distinto para
+   Streamlit, así que se desmonta y se vuelve a montar de verdad. El resto del contenido normalmente
+   reutiliza sus nodos entre reruns (para no perder el estado de sliders/botones) y una animación
+   "al aparecer" sobre ellos nunca llegaría a dispararse — por eso no se ve nada si se aplica ahí. */
+@media (prefers-reduced-motion: no-preference) {{
+    div[class*="st-key-page_enter_"] {{
+        animation: pageFadeIn 0.38s ease-out;
+    }}
+}}
+@keyframes pageFadeIn {{
+    from {{ opacity:0; transform:translateY(10px); }}
+    to   {{ opacity:1; transform:translateY(0); }}
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -451,15 +610,27 @@ SHAP_SVMRBF = [
 ]
 
 # Las 8 features seleccionadas por Random Forest para el QSVM (y usadas en Bloch Sphere / Live Predictor)
+# step + fmt: por defecto st.slider con límites float usa un paso (max-min)/100 irregular (p. ej. 0,62
+# años) y muestra el valor con dos decimales ("45.00"). Fijamos pasos clínicamente naturales —0,1 para
+# magnitudes con decimal (HbA1c, IMC), 1 para las enteras— y su formato, para que el valor se lea
+# limpio ("45", "5,7") y la interacción sea coherente con cómo se miden esas variables.
 QSVM_FEATURES = {
-    "LBXGH":    {"label": "HbA1c",               "unit": "%",       "range": (4.0, 15.0),  "default": 5.7,  "importance": 0.2452},
-    "LBXGLU":   {"label": "Glucosa en ayunas",    "unit": "mg/dL",   "range": (50, 300),     "default": 100,  "importance": 0.1853},
-    "RIDAGEYR": {"label": "Edad",                 "unit": "años",    "range": (18, 80),      "default": 45,   "importance": 0.0325},
-    "LBDLDL":   {"label": "Colesterol LDL",       "unit": "mg/dL",   "range": (40, 250),     "default": 110,  "importance": 0.0315},
-    "BMXWAIST": {"label": "Circunf. cintura",     "unit": "cm",      "range": (60, 150),     "default": 95,   "importance": 0.0284},
-    "LBXIN":    {"label": "Insulina",             "unit": "µU/mL",   "range": (2, 60),       "default": 10,   "importance": 0.0264},
-    "BMXLEG":   {"label": "Long. pierna",         "unit": "cm",      "range": (30, 50),      "default": 40,   "importance": 0.0226},
-    "WTINT2YR": {"label": "Peso muestral*",       "unit": "—",       "range": (0, 200000),   "default": 50000,"importance": 0.0221},
+    "LBXGH":    {"label": "HbA1c",               "unit": "%",       "range": (4.0, 15.0),  "default": 5.7,  "importance": 0.2452, "step": 0.1, "fmt": "%.1f"},
+    "LBXGLU":   {"label": "Glucosa en ayunas",    "unit": "mg/dL",   "range": (50, 300),     "default": 100,  "importance": 0.1853, "step": 1.0, "fmt": "%d"},
+    "RIDAGEYR": {"label": "Edad",                 "unit": "años",    "range": (18, 80),      "default": 45,   "importance": 0.0325, "step": 1.0, "fmt": "%d"},
+    "LBDLDL":   {"label": "Colesterol LDL",       "unit": "mg/dL",   "range": (40, 250),     "default": 110,  "importance": 0.0315, "step": 1.0, "fmt": "%d"},
+    "BMXWAIST": {"label": "Circunf. cintura",     "unit": "cm",      "range": (60, 150),     "default": 95,   "importance": 0.0284, "step": 1.0, "fmt": "%d"},
+    "LBXIN":    {"label": "Insulina",             "unit": "µU/mL",   "range": (2, 60),       "default": 10,   "importance": 0.0264, "step": 1.0, "fmt": "%d"},
+    "BMXLEG":   {"label": "Long. pierna",         "unit": "cm",      "range": (30, 50),      "default": 40,   "importance": 0.0226, "step": 1.0, "fmt": "%d"},
+    "BMXBMI":   {"label": "IMC",                  "unit": "kg/m²",   "range": (15, 60),      "default": 27,   "importance": 0.0221, "step": 0.1, "fmt": "%.1f"},
+}
+
+# Ranking de importancia RF para el gráfico "8 features seleccionadas" (Circuito Cuántico). Versión
+# actualizada sin variables DIQ: BMXBMI sustituye a WTINT2YR en la posición 8. Independiente de
+# QSVM_FEATURES a propósito — ese dict alimenta Esfera de Bloch / Predictor en Vivo y no cambia.
+RF_TOP8_IMPORTANCE = {
+    "LBXGH": 0.2454, "LBXGLU": 0.1855, "RIDAGEYR": 0.0323, "LBDLDL": 0.0318,
+    "BMXWAIST": 0.0283, "LBXIN": 0.0265, "BMXLEG": 0.0225, "BMXBMI": 0.0221,
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -490,12 +661,24 @@ def _load_scaler_and_medians():
 
 
 @st.cache_data
-def _load_qsvm_scores():
-    scores_path = MODELS_DIR / "qsvm_y_scores.npy"
-    test_path = MODELS_DIR / "qsvm_y_test.npy"
-    if scores_path.exists() and test_path.exists():
-        return np.load(scores_path), np.load(test_path)
-    return None, None
+def _load_roc_scores(prefix: str):
+    """Scores + etiquetas reales del test para la curva ROC de un modelo. Devuelve
+    (scores, y_true) o (None, None) si faltan. Las etiquetas del test son las mismas
+    para los tres modelos (mismo split estratificado): si un modelo no trae su propio
+    <prefix>_y_test.npy, se reutiliza el del QSVM. Verificado: los AUC resultantes
+    coinciden exactamente con los del TFM (LightGBM 0,9485 · SVM-RBF 0,9377)."""
+    scores_path = MODELS_DIR / f"{prefix}_y_scores.npy"
+    if not scores_path.exists():
+        return None, None
+    test_path = MODELS_DIR / f"{prefix}_y_test.npy"
+    if not test_path.exists():
+        test_path = MODELS_DIR / "qsvm_y_test.npy"   # etiquetas compartidas del test
+    if not test_path.exists():
+        return None, None
+    scores, y_true = np.load(scores_path), np.load(test_path)
+    if len(scores) != len(y_true):   # desalineados: no dibujar algo incorrecto
+        return None, None
+    return scores, y_true
 
 
 def _build_feature_vector(sp: dict, overrides: dict) -> np.ndarray:
@@ -594,13 +777,19 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    _MENU_OPTIONS = ["Resumen", "Resultados", "Análisis SHAP", "Circuito Cuántico", "Esfera de Bloch", "Predictor en Vivo"]
+    if "page" not in st.session_state:
+        st.session_state.page = _MENU_OPTIONS[0]
+
     if narrow:
-        if st.button("›", key="toggle_sidebar", help="Expandir menú"):
+        if st.button("›", key="toggle_sidebar", help="Expandir"):
             st.session_state.sidebar_narrow = False
+            st.session_state.menu_force_index = _MENU_OPTIONS.index(st.session_state.page)
             st.rerun()
     else:
-        if st.button("‹", key="toggle_sidebar", help="Colapsar menú"):
+        if st.button("‹", key="toggle_sidebar", help="Colapsar"):
             st.session_state.sidebar_narrow = True
+            st.session_state.menu_force_index = _MENU_OPTIONS.index(st.session_state.page)
             st.rerun()
 
     # streamlit-option-menu renderiza dentro de un iframe: el CSS del documento principal
@@ -616,11 +805,29 @@ with st.sidebar:
         nav_link_style.update({"font-size": "0px", "text-align": "center", "padding": "12px 0"})
         nav_link_selected_style.update({"font-size": "0px", "text-align": "center", "padding": "12px 0"})
 
+    # manual_select fuerza al componente a saltar a un indice concreto, pero es un disparo "de un
+    # solo uso": si se reenvia en cada rerun (incluido el propio rerun que dispara un clic del
+    # usuario en el menu) compite con ese clic y el menu queda oscilando sin parar entre la pestaña
+    # vieja y la nueva hasta que se refresca la pagina. Por eso solo se rellena explicitamente justo
+    # antes de un st.rerun() disparado por OTRO widget (toggle de sidebar, toggle de tema) y se
+    # consume aqui con pop() para que en el resto de reruns (incluidos los clics normales) viaje
+    # como None y no interfiera.
+    _forced_index = st.session_state.pop("menu_force_index", None)
     page = option_menu(
         menu_title=None,
-        options=["Resumen", "Resultados", "Análisis SHAP", "Circuito Cuántico", "Esfera de Bloch", "Predictor en Vivo"],
+        options=_MENU_OPTIONS,
         icons=["house", "bar-chart", "diagram-3", "cpu", "globe", "sliders"],
-        default_index=0,
+        default_index=_MENU_OPTIONS.index(st.session_state.page),
+        manual_select=_forced_index,
+        # La key incluye el tema Y el modo narrow a proposito: option_menu vive en un iframe con
+        # estado JS propio (Vue) que solo LEE el dict "styles" al montarse — en reruns posteriores con
+        # la MISMA key, los cambios en "styles" (colores de tema, o el font-size:0 del modo narrow) no
+        # se reaplican de verdad. Con key fija, alternar sidebar_narrow dejaba el menu con el texto
+        # aun visible (a tamaño completo) junto al icono, porque el componente seguia usando los
+        # estilos con los que se monto la primera vez. Cambiar la key en cada toggle (tema Y narrow)
+        # fuerza un remount completo, que si levanta los estilos frescos. default_index/manual_select
+        # ya se encargan de que ese remount respete la pestaña activa.
+        key=f"main_menu_{st.session_state.theme}_{narrow}",
         styles={
             "container": {"padding": "0", "background-color": t["sidebar_bg"], "border-radius": "0"},
             "icon": {"font-size": "15px", "color": t["text_secondary"]},
@@ -628,6 +835,7 @@ with st.sidebar:
             "nav-link-selected": nav_link_selected_style,
         },
     )
+    st.session_state.page = page
     # Refuerzo del hover (streamlit-option-menu no expone :hover directo en icon/color de texto)
     st.markdown(f"""
     <style>
@@ -649,15 +857,24 @@ with st.sidebar:
         st.rerun()
 
     if narrow:
-        _footer_html = "JA"
+        _footer_html = ('<div class="footer-name">JAC</div>'
+                         '<div class="footer-uni">UEV</div>')
     else:
         _footer_html = ('<div class="footer-name">Juan Albornoz C. · TFM 2026</div>'
                          '<div class="footer-uni">Universidad Europea de Valencia</div>')
     st.markdown(f'<div class="sidebar-footer">{_footer_html}</div>', unsafe_allow_html=True)
 
 def header(eyebrow, title, subtitle):
-    st.markdown(f'<div class="page-title">{title}: <span style="color:{t["text_secondary"]}; font-weight:400;">{eyebrow}</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-subtitle">{subtitle}</div>', unsafe_allow_html=True)
+    # Streamlit reutiliza los mismos nodos del DOM entre reruns (para no perder el estado de sliders/
+    # botones), así que una animación CSS "al aparecer" sobre stElementContainer nunca llegaba a
+    # dispararse de verdad al cambiar de página — el nodo nunca se desmontaba. Un contenedor con key
+    # dependiente de la página SÍ fuerza un remount real cada vez que cambia `page` (key distinta =
+    # componente distinto para Streamlit), y NO se repite en reruns dentro de la misma página (mover
+    # un slider, alternar el tema) porque ahí la key no cambia y el contenedor se reutiliza tal cual.
+    _page_idx = _MENU_OPTIONS.index(page) if page in _MENU_OPTIONS else 0
+    with st.container(key=f"page_enter_{_page_idx}"):
+        st.markdown(f'<div class="page-title">{title}: <span style="color:{t["text_secondary"]}; font-weight:400;">{eyebrow}</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="page-subtitle">{subtitle}</div>', unsafe_allow_html=True)
 
 def hex_to_rgba(hex_color, alpha):
     hex_color = hex_color.lstrip("#")
@@ -742,12 +959,25 @@ if page == "Resumen":
     with col2:
         st.markdown('<div class="section-title">Distribución variable objetivo (DIQ010)</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-sub">Target binarizado: 1 = diabetes diagnosticada, 0 = resto</div>', unsafe_allow_html=True)
-        fig = go.Figure(go.Pie(
-            labels=["No diabetes", "Diabetes"], values=[86, 14], hole=0.62,
+        pie_labels, pie_values = ["No diabetes", "Diabetes"], [86, 14]
+        fig = go.Figure()
+        # Sombra sutil y uniforme (misma silueta del donut, desplazada solo un poco hacia abajo)
+        # para dar una sensación de elevación/profundidad discreta, sin separar los segmentos
+        # ni desplazarlos en diagonal (lo que se veía forzado/poco natural).
+        fig.add_trace(go.Pie(
+            labels=pie_labels, values=pie_values, hole=0.62,
+            marker=dict(colors=[hex_to_rgba(t["text"], 0.14), hex_to_rgba(t["text"], 0.14)]),
+            textinfo="none", hoverinfo="skip", sort=False, showlegend=False,
+            domain=dict(x=[0.0, 1.0], y=[0.0, 0.965]),
+        ))
+        fig.add_trace(go.Pie(
+            labels=pie_labels, values=pie_values, hole=0.62,
             marker=dict(colors=[C_LIGHT, C_PRIMARY], line=dict(color=t["surface"], width=2)),
             textinfo="label+percent", textposition="outside",
             textfont=dict(size=12, family="Inter", color=t["text"]),
             insidetextorientation="horizontal", sort=False, automargin=True,
+            hoverinfo="skip",
+            domain=dict(x=[0.0, 1.0], y=[0.035, 1.0]),
         ))
         plotly_layout(fig, height=300, showlegend=False, margin=dict(l=30, r=30, t=45, b=45))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
@@ -791,7 +1021,6 @@ elif page == "Resultados":
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown('<div class="section-title">Curvas ROC</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">AUC exacto · forma reconstruida a partir del AUC (mismo método que el TFM documenta para QSVM)</div>', unsafe_allow_html=True)
 
     def roc_curve_for_auc(auc, n=200):
         a = (1.0 / auc) - 1.0
@@ -800,13 +1029,21 @@ elif page == "Resultados":
         y[0], y[-1] = 0.0, 1.0
         return x, y
 
-    qsvm_scores, qsvm_ytest = _load_qsvm_scores()
+    # Prefijo de archivo de scores por modelo (las keys de MODELS difieren de los nombres de fichero).
+    ROC_PREFIX = {"lightgbm": "lgbm", "svm_rbf": "svm", "qsvm": "qsvm"}
+    # Cargar scores reales de cada modelo; True si TODOS son empíricos (para el subtítulo).
+    roc_data = {k: _load_roc_scores(ROC_PREFIX[k]) for k in MODEL_ORDER}
+    all_real = all(sc is not None for sc, _ in roc_data.values())
+    st.markdown(
+        f'<div class="section-sub">{"Curvas empíricas reales, punto a punto sobre las 1.567 instancias del test (mismos scores que reportan el AUC del TFM)." if all_real else "AUC exacto · forma reconstruida a partir del AUC donde no hay scores por instancia."}</div>',
+        unsafe_allow_html=True)
 
     roc_cols = st.columns(3)
     for col, key in zip(roc_cols, MODEL_ORDER):
         m = MODELS[key]
-        if key == "qsvm" and qsvm_scores is not None:
-            x, y = compute_roc_empirical(qsvm_ytest, qsvm_scores)
+        scores, y_true = roc_data[key]
+        if scores is not None:
+            x, y = compute_roc_empirical(y_true, scores)
         else:
             x, y = roc_curve_for_auc(m["auc"])
         fig = go.Figure()
@@ -862,11 +1099,19 @@ elif page == "Resultados":
     st.markdown('<div class="section-title">Comparativa de métricas</div>', unsafe_allow_html=True)
     fig = go.Figure()
     metric_keys, metric_labels = ["auc", "f1_macro", "accuracy", "mcc"], ["AUC-ROC", "F1-macro", "Accuracy", "MCC"]
+    metric_desc = {
+        "auc": "Área bajo la curva ROC: capacidad de separar diabetes vs. no-diabetes. 0,5 = azar, 1 = perfecto.",
+        "f1_macro": "Media armónica de precisión y recall promediada por clase (sin ponderar). Penaliza el desbalance.",
+        "accuracy": "Proporción de aciertos totales. Con clases desbalanceadas puede reflejar solo la clase mayoritaria.",
+        "mcc": "Coef. de correlación de Matthews: calidad global robusta al desbalance. 0 = azar, 1 = perfecto.",
+    }
     for key in MODEL_ORDER:
         m = MODELS[key]
         fig.add_trace(go.Bar(name=m["label"], x=metric_labels, y=[m[k] for k in metric_keys], marker_color=m["color"],
-                              text=[nf(m[k], 3) for k in metric_keys], textposition="outside", textfont=dict(size=11)))
-    plotly_layout(fig, height=330, barmode="group",
+                              text=[nf(m[k], 3) for k in metric_keys], textposition="outside", textfont=dict(size=14),
+                              customdata=[[nf(m[k], 3), _wrap_hover(metric_desc[k])] for k in metric_keys],
+                              hovertemplate="<b>%{fullData.name}</b> · %{x} = %{customdata[0]}<br>%{customdata[1]}<extra></extra>"))
+    plotly_layout(fig, height=460, barmode="group",
                   legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=13, color=t["text"])),
                   yaxis=dict(range=[0, 1.08], showgrid=True, gridcolor=t["border"], zeroline=False, fixedrange=True),
                   xaxis=dict(showgrid=False, tickfont=dict(size=13, color=t["text"]), fixedrange=True))
@@ -917,9 +1162,11 @@ elif page == "Análisis SHAP":
         b64 = _b64_image(str(path))
         st.markdown(f'<div class="section-title" style="margin-top:24px;">{title}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="section-sub">{caption}</div>', unsafe_allow_html=True)
+        # Acotado y centrado (max-width) igual que el circuito, en vez de estirarse a todo el ancho:
+        # el beeswarm es una figura de proporción casi cuadrada; a ancho completo dominaba la página y
+        # rompía la coherencia con el resto de tarjetas. Centrado queda como "lámina" proporcionada.
         st.markdown(f"""
-        <div style="background:#FFFFFF; border:1px solid {t['border']}; border-radius:12px; padding:10px;
-             box-shadow:0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);">
+        <div class="fig-card" style="max-width:840px; margin:0 auto;">
             <img src="data:image/png;base64,{b64}" style="width:100%; display:block; border-radius:6px;">
         </div>
         """, unsafe_allow_html=True)
@@ -946,10 +1193,11 @@ elif page == "Análisis SHAP":
         <div class="clinical-note" style="margin-bottom:14px;">
         El ranking de SVM-RBF coincide en las variables dominantes con LightGBM (<b>LBXGH</b>, <b>LBXGLU</b>,
         <b>LBDLDL</b>, <b>RIDAGEYR</b>), lo que refuerza la validez clínica del hallazgo al ser independiente del
-        algoritmo. KernelExplainer trata el modelo como caja negra, aplicable a cualquier clasificador.
+        algoritmo, dotándolo de mayor robustez metodológica. KernelExplainer trata el modelo como caja negra,
+        aplicable a cualquier clasificador.
         </div>
         """, unsafe_allow_html=True)
-        shap_chart(SHAP_SVMRBF, C_DARK, "Valores aproximados por muestreo: fondo de 100 instancias, contribuciones sobre 200 instancias de test.")
+        shap_chart(SHAP_SVMRBF, C_PRIMARY, "Valores aproximados por muestreo: fondo de 100 instancias, contribuciones sobre 200 instancias de test.")
         shap_summary_image(
             "SHAP Summary SVM.png",
             "SHAP Summary Plot — SVM-RBF (Figura 31)",
@@ -965,56 +1213,115 @@ elif page == "Circuito Cuántico":
            "Configuración del ZZFeatureMap y FidelityQuantumKernel implementados en Qiskit sobre Databricks CE.")
 
     cols = st.columns(4)
-    specs = [("8", "Qubits (feature_dimension)"), ("2", "Repeticiones (reps)"), ("Linear", "Entanglement"), ("qiskit 2.4.2", "Versión")]
+    specs = [("8", "Qubits (feature_dimension)"), ("2", "Repeticiones (reps)"), ("Linear", "Entanglement"), ("qiskit 2.5.0", "Versión")]
     for col, (num, lab) in zip(cols, specs):
         with col:
-            st.markdown(f'<div class="info-card stat-card" style="min-height:96px;"><div class="stat-num" style="font-size:clamp(14px, 1.6vw, 23px);">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="info-card stat-card" style="min-height:96px;"><div class="stat-num" style="font-size:clamp(20px, 2.4vw, 34px);">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
 
+    # "Cómo funciona" a ancho completo: sus dos párrafos son conceptualmente independientes
+    # (codificación vs. kernel), así que van lado a lado en vez de apilados — a ancho completo el
+    # texto apilado dejaría líneas incómodamente largas, y apilado-estrecho (como antes, dentro de
+    # media página) dejaba la columna vecina con un hueco vacío grande por debajo.
     st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2 = st.columns([1.1, 1])
-    with col1:
-        st.markdown('<div class="section-title">Cómo funciona</div>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="info-card">
-        <p style="font-size:15px; color:{t['text_secondary']}; line-height:1.75; margin:0 0 10px 0;">
+    st.markdown('<div class="section-title">Cómo funciona</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="info-card">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:28px;">
+        <p style="font-size:15px; color:{t['text_secondary']}; line-height:1.75; margin:0;">
         El <b style="color:{t['text']}">ZZFeatureMap</b> codifica cada una de las 8 variables clínicas como un ángulo
         de rotación (puerta RZ) en un qubit independiente, tras crear superposición con puertas Hadamard. Su elemento
         distintivo es el <b style="color:{t['text']}">entrelazamiento</b> entre pares de qubits mediante puertas que
         dependen del producto cruzado de dos variables — correlaciones que el kernel RBF clásico no puede representar.
         </p>
-        <p style="font-size:16px; color:{t['text_secondary']}; line-height:1.7; margin:0;">
+        <p style="font-size:15px; color:{t['text_secondary']}; line-height:1.75; margin:0;">
         El <b style="color:{t['text']}">FidelityQuantumKernel</b> mide la similitud entre dos pacientes como la
         fidelidad entre sus estados cuánticos: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. La implementación usa
         <code>StatevectorSampler</code>, simulando el estado exacto sin ruido — resultados deterministas y reproducibles.
         </p>
-        </div>
-        """, unsafe_allow_html=True)
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.markdown('<div class="section-title" style="margin-top:16px;">Entrenamiento y evaluación</div>', unsafe_allow_html=True)
-        tcols = st.columns(3)
-        tstats = [("500", "Instancias entrenamiento"), ("21,1 min", "Tiempo entrenamiento"), ("[425, 70]", "Support vectors")]
-        for c, (n, l) in zip(tcols, tstats):
-            with c:
-                st.markdown(f'<div class="info-card stat-card" style="min-height:112px;"><div class="stat-num" style="font-size:clamp(13px, 1.4vw, 19px);">{n}</div><div class="stat-label">{l}</div></div>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div class="clinical-note" style="margin-top:10px;">
-        Por el coste O(n²) del kernel cuántico, el entrenamiento se limitó a una muestra estratificada de 500 instancias
-        (el límite operativo de Databricks CE serverless se sitúa ~500-1.000). La evaluación se hizo sobre el test
-        completo (1.567 instancias) por lotes de 100, con un tiempo total de predicción de 132,8 minutos.
-        </div>
-        """, unsafe_allow_html=True)
+    # Fila de dos columnas: la gráfica de importancia (izquierda) ocupa proporcionalmente más ancho
+    # que la lista de estadísticas de entrenamiento (derecha) — con 8 barras horizontales necesita más
+    # espacio para leerse cómoda; la lista de KPIs es compacta y no lo necesita. El resto de la app
+    # estira el ELEMENTO más corto con CSS (mismo truco que .compare-grid / .st-key-bloch_row) en vez
+    # de dejar hueco vacío bajo un bloque de altura fija — aquí la nota de la derecha crece hasta
+    # igualar la altura de la gráfica.
+    st.markdown("<br>", unsafe_allow_html=True)
+    qc_row = st.container(key="qc_stats_row")
+    col1, col2 = qc_row.columns([1.35, 1])
+    with col1:
+        st.markdown('<div class="section-title">8 features seleccionadas (Random Forest)</div>', unsafe_allow_html=True)
+        # Datos propios de esta gráfica (no QSVM_FEATURES): esa lista alimenta también los sliders de
+        # Esfera de Bloch y Predictor en Vivo, y la actualización pedida (BMXBMI sustituye a WTINT2YR,
+        # sin variables DIQ) es solo para este ranking del Random Forest — no debe alterar esas páginas.
+        names = list(reversed(list(RF_TOP8_IMPORTANCE.keys())))
+        values = list(reversed(list(RF_TOP8_IMPORTANCE.values())))
+        customdata = [[code, _wrap_hover(VAR_DESC.get(code, code))] for code in names]
+        fig = go.Figure()
+        # Sombra casi imperceptible detrás de cada barra: misma posición y grosor exactos que la barra
+        # real (ambas con width/offset automáticos, sin forzar ningún valor a mano — eso fue lo que se
+        # veía tosco), apenas un 3% más larga y muy tenue. Solo se asoma una hebra de color detrás de
+        # la punta, como una sombra proyectada suave — nada agresivo.
+        fig.add_trace(go.Bar(
+            x=[v * 1.03 for v in values], y=names, orientation="h",
+            marker_color=hex_to_rgba(t["text"], 0.08), marker_line_width=0,
+            hoverinfo="skip", showlegend=False,
+        ))
+        fig.add_trace(go.Bar(
+            x=values, y=names, orientation="h", marker_color=C_PRIMARY, cliponaxis=False,
+            text=[nf(v) for v in values], textposition="outside", textfont=dict(size=11),
+            customdata=customdata, showlegend=False,
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+        ))
+        plotly_layout(fig, height=300, barmode="overlay",
+                      # Margen izquierdo reducido (150→95): pega las etiquetas al borde de la tarjeta
+                      # en vez de dejarlas centradas con aire de sobra. Al ser el ancho de la tarjeta
+                      # fijo, ese espacio liberado pasa directo al área de barras — se agrandan solas,
+                      # de forma proporcional, sin tocar la tarjeta que las contiene.
+                      xaxis=dict(title="Importancia RF", showgrid=True, gridcolor=t["border"], range=[0, max(values) * 1.3], fixedrange=True),
+                      yaxis=dict(tickfont=dict(size=12, color=t["text"]), fixedrange=True), margin=dict(l=95, r=70, t=20, b=40))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     with col2:
-        st.markdown('<div class="section-title">8 features seleccionadas (Random Forest)</div>', unsafe_allow_html=True)
-        names = [f"{code} · {v['label']}" for code, v in reversed(list(QSVM_FEATURES.items()))]
-        values = [v["importance"] for v in reversed(list(QSVM_FEATURES.values()))]
-        fig = go.Figure(go.Bar(x=values, y=names, orientation="h", marker_color=C_MID1, cliponaxis=False,
-                                text=[nf(v) for v in values], textposition="outside", textfont=dict(size=11)))
-        plotly_layout(fig, height=340,
-                      xaxis=dict(title="Importancia RF", showgrid=True, gridcolor=t["border"], range=[0, max(values) * 1.3], fixedrange=True),
-                      yaxis=dict(tickfont=dict(size=12, color=t["text"]), fixedrange=True), margin=dict(l=150, r=70, t=20, b=40))
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        st.markdown(f'<div class="section-sub">* WTINT2YR es un artefacto del diseño muestral NHANES, no una variable clínica.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Entrenamiento y evaluación</div>', unsafe_allow_html=True)
+        # Lista vertical de KPIs (mismo patrón .kpi-row que Esfera de Bloch / Predictor en Vivo) en vez
+        # de tarjetas en grilla: más compacta en una columna estrecha y de un vistazo. Incluye los dos
+        # datos que antes solo estaban en la nota de texto (instancias del test y tiempo de inferencia).
+        tstats = [
+            ("Instancias entrenamiento", "500"),
+            ("Tiempo entrenamiento", "21,1 min"),
+            ("Instancias test", "1.567"),
+            ("Tiempo de inferencia", "132,8 min"),
+            ("Support vectors", "[425, 70]"),
+        ]
+        kpi_rows = "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span><span class="kpi-value">{v}</span></div>' for l, v in tstats)
+        st.markdown(f'<div class="info-card">{kpi_rows}</div>', unsafe_allow_html=True)
+
+    # La nota va DEBAJO de la fila (ancho completo), no dentro de col2: así la tarjeta de KPIs es el
+    # único elemento de esa columna y puede estirarse limpio hasta igualar la altura de la gráfica —
+    # si la nota se quedara dentro de col2, empujaría esa columna más abajo que la de la gráfica.
+    st.markdown(f"""
+    <div class="clinical-note" style="margin-top:16px;">
+    Por el coste O(n²) del kernel cuántico, el entrenamiento se limitó a una muestra estratificada de 500 instancias
+    (el límite operativo de Databricks CE serverless se sitúa ~500-1.000). La evaluación se hizo sobre el test
+    completo (1.567 instancias) por lotes de 100, con un tiempo total de predicción de 132,8 minutos.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Diagrama del circuito a ancho completo (fuera de col1/col2: con 8 qubits y las 4 secciones de
+    # entrelazamiento apiladas, comprimirlo a la mitad de la página dejaría las etiquetas P(...) ilegibles.
+    _circuit_path = FIGURES_DIR / "Circuito Cuantico 8qb.png"
+    if _circuit_path.exists():
+        st.markdown('<div class="section-title" style="margin-top:20px;">Circuito completo (8 qubits)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">ZZFeatureMap con reps=2: codificación (H + P) seguida de dos rondas de entrelazamiento lineal entre qubits adyacentes.</div>', unsafe_allow_html=True)
+        _circuit_b64 = _b64_image_autocrop(str(_circuit_path))
+        st.markdown(f"""
+        <div class="fig-card" style="padding:14px; max-width:900px; margin:0 auto;">
+            <img src="data:image/png;base64,{_circuit_b64}" style="width:100%; display:block; border-radius:6px;">
+        </div>
+        """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 5 — BLOCH SPHERE EMULATOR
@@ -1032,7 +1339,8 @@ elif page == "Esfera de Bloch":
                                  format_func=lambda c: f"{c} — {QSVM_FEATURES[c]['label']}")
         v = QSVM_FEATURES[var_code]
         lo, hi = v["range"]
-        val = st.slider(f"Valor ({v['unit']})", float(lo), float(hi), float(v["default"]))
+        val = st.slider(f"Valor ({v['unit']})", float(lo), float(hi), float(v["default"]),
+                        step=v["step"], format=v["fmt"])
 
         x_norm = (val - lo) / (hi - lo)
         theta = 2 * x_norm * np.pi
@@ -1050,9 +1358,6 @@ elif page == "Esfera de Bloch":
             <div class="kpi-row"><span class="kpi-label">P(|1⟩)</span><span class="kpi-value">{pct(p1)}</span></div>
         </div>
         """, unsafe_allow_html=True)
-        # La nota de WTINT2YR se renderiza DEBAJO de la fila (no dentro de la columna): así el alto de
-        # la columna izquierda es siempre el mismo (selector + slider + tarjeta) y la alineación con la
-        # esfera no depende de la variable elegida.
 
     with col2:
         fig = go.Figure()
@@ -1075,7 +1380,7 @@ elif page == "Esfera de Bloch":
             fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.5,
                                         line=dict(color=C_MID2, width=1.5), showlegend=False, hoverinfo="skip"))
         # Ejes cartesianos
-        for ax_x, ax_y, ax_z in [([-1.25,1.25],[0,0],[0,0]), ([0,0],[-1.25,1.25],[0,0]), ([0,0],[0,0],[-1.3,1.3])]:
+        for ax_x, ax_y, ax_z in [([-1.06,1.06],[0,0],[0,0]), ([0,0],[-1.06,1.06],[0,0]), ([0,0],[0,0],[-1.10,1.10])]:
             fig.add_trace(go.Scatter3d(x=ax_x, y=ax_y, z=ax_z, mode="lines",
                                         line=dict(color=t["border"], width=2), showlegend=False, hoverinfo="skip"))
         # Vector de estado |ψ⟩ (φ = 0 → contenido en el plano XZ)
@@ -1094,22 +1399,29 @@ elif page == "Esfera de Bloch":
                                     marker=dict(size=5, color=C_PRIMARY), showlegend=False,
                                     hovertemplate=f"|ψ⟩ ({var_code})<extra></extra>"))
         # Etiquetas de los polos
-        fig.add_trace(go.Scatter3d(x=[0,0], y=[0,0], z=[1.16,-1.16], mode="text", text=["|0⟩","|1⟩"],
+        fig.add_trace(go.Scatter3d(x=[0,0], y=[0,0], z=[1.08,-1.08], mode="text", text=["|0⟩","|1⟩"],
                                     textfont=dict(size=15, color=t["text"]), showlegend=False, hoverinfo="skip"))
+        # Alto FIJO en píxeles (sin autosize): tamaño idéntico en cada rerun y en cualquier navegador
+        # (Firefox incluido). 486 px ≈ alto natural de la columna izquierda (selectbox + slider +
+        # tarjeta de métricas), para que el fondo de esta tarjeta quede alineado con el de aquella.
+        # Sube/baja este valor para agrandar/reducir la esfera.
         fig.update_layout(
-            height=460, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
+            height=486, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
             scene=dict(
-                xaxis=dict(visible=False, range=[-1.4, 1.4]),
-                yaxis=dict(visible=False, range=[-1.4, 1.4]),
-                zaxis=dict(visible=False, range=[-1.45, 1.45]),
+                # Rangos apretados (±1.08 en vez de ±1.4): la esfera de radio 1 llena ~93% del cubo en
+                # vez de ~71% → ~30% más grande DENTRO de la misma tarjeta, sin cambiar su tamaño en px.
+                # z un poco más holgado (±1.12) para dejar aire a las etiquetas |0⟩/|1⟩.
+                xaxis=dict(visible=False, range=[-1.08, 1.08]),
+                yaxis=dict(visible=False, range=[-1.08, 1.08]),
+                zaxis=dict(visible=False, range=[-1.12, 1.12]),
                 aspectmode="cube", dragmode="orbit",
                 camera=dict(eye=dict(x=1.45, y=1.45, z=0.75)),
             ),
         )
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-
-    if var_code == "WTINT2YR":
-        st.markdown('<div class="clinical-note" style="margin-bottom:12px;">WTINT2YR es un artefacto del diseño muestral NHANES (factor de expansión), no una variable clínica.</div>', unsafe_allow_html=True)
+        # key estable: sin ella Streamlit remonta el iframe de Plotly en cada rerun y la esfera
+        # parpadea/encoge; con key reutiliza el mismo componente y solo actualiza los datos.
+        st.plotly_chart(fig, width="stretch", key="bloch_sphere",
+                        config={"displayModeBar": False, "responsive": True})
 
     st.markdown(f"""
     <div class="clinical-note">
@@ -1134,7 +1446,7 @@ elif page == "Predictor en Vivo":
     if _models_ready:
         st.markdown(f"""
         <div class="clinical-note" style="margin-bottom:16px;">
-        ✅ <b>Inferencia real (ONNX).</b> Predicciones de LightGBM y SVM-RBF vía <code>onnxruntime</code>,
+        <b>Inferencia real (ONNX).</b> Predicciones de LightGBM y SVM-RBF vía <code>onnxruntime</code>,
         con el <code>StandardScaler</code> recuperado del pipeline Gold. Las 8 variables mostradas son las
         de mayor importancia clínica; las 81 features restantes se fijan en la mediana del conjunto de
         entrenamiento. QSVM no está disponible en tiempo real (coste O(n²) del kernel cuántico — 132,8 min
@@ -1160,7 +1472,8 @@ elif page == "Predictor en Vivo":
     for i, (code, v) in enumerate(items):
         with cols[i % 2]:
             lo, hi = v["range"]
-            inputs[code] = st.slider(f"{v['label']} ({v['unit']})", float(lo), float(hi), float(v["default"]), key=f"lp_{code}")
+            inputs[code] = st.slider(f"{v['label']} ({v['unit']})", float(lo), float(hi), float(v["default"]),
+                                      step=v["step"], format=v["fmt"], key=f"lp_{code}")
 
     _real = predict_real(inputs) if _models_ready else None
 
@@ -1168,7 +1481,7 @@ elif page == "Predictor en Vivo":
         risk, _svm_prob = _real
     else:
         # Sustituto transparente: combinacion ponderada por SHAP normalizado (NO es el modelo real)
-        weights = {c: v["importance"] for c, v in QSVM_FEATURES.items() if c != "WTINT2YR"}
+        weights = {c: v["importance"] for c, v in QSVM_FEATURES.items()}
         wsum = sum(weights.values())
         score = 0.0
         for code, w in weights.items():
@@ -1189,7 +1502,12 @@ elif page == "Predictor en Vivo":
             "El score supera el umbral de decisión (50%): el sustituto clasificaría como caso positivo.")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    rcol1, rcol2 = st.columns([1, 1.5])
+    # Score (izquierda) y velocímetro (derecha) viven dentro de UNA sola tarjeta: es el contenedor con
+    # clave "predictor_gauge_row" el que lleva borde/fondo/sombra (ver CSS .st-key-predictor_gauge_row),
+    # y sus dos hijos pierden su recuadro individual. vertical_alignment="center" centra ambas mitades
+    # entre sí, así que ya no hace falta fijar la altura de la caja de score en px.
+    gauge_row = st.container(key="predictor_gauge_row")
+    rcol1, rcol2 = gauge_row.columns([1, 1.4], vertical_alignment="center")
     with rcol1:
         st.markdown(f"""
         <div class="kpi-card" style="text-align:center;">
@@ -1206,24 +1524,61 @@ elif page == "Predictor en Vivo":
         </div>
         """, unsafe_allow_html=True)
     with rcol2:
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=risk * 100,
-            number={"suffix": "%", "font": {"size": 28, "color": cat_color, "family": "Inter"}},
-            gauge={
-                "axis": {"range": [0, 100], "tickvals": [0, 25, 50, 75, 100],
-                          "tickfont": {"size": 11, "color": t["text_secondary"]}},
-                "bar": {"color": cat_color, "thickness": 0.30},
-                "bgcolor": "rgba(0,0,0,0)", "borderwidth": 0,
-                "steps": [
-                    {"range": [0, 33], "color": hex_to_rgba(C_LIGHT, 0.55)},
-                    {"range": [33, 66], "color": hex_to_rgba(C_MID2, 0.60)},
-                    {"range": [66, 100], "color": hex_to_rgba(C_MID1, 0.65)},
-                ],
-                "threshold": {"line": {"color": C_DARK, "width": 3}, "thickness": 0.9, "value": 50},
-            },
-        ))
-        fig.update_layout(height=290, margin=dict(l=48, r=60, t=30, b=20),
-                          paper_bgcolor="rgba(0,0,0,0)", font=dict(family="Inter", color=t["text"]))
+        # Gauge tipo velocímetro (aguja + círculo, zonas segmentadas con separadores) en vez del modo
+        # "gauge+number" nativo de Plotly (que solo pinta una barra rellena desde cero, sin aguja).
+        # Construido a mano con arcos SVG (fig.add_shape) + una aguja por trigonometría — mismo
+        # planteamiento que ya usa el vector de estado en Esfera de Bloch. Paleta propia del proyecto:
+        # 5 tonos, de C_LIGHT (bajo riesgo) a C_DARK (alto riesgo), en vez del rojo→verde de referencia.
+        def _polar(angle_deg, r):
+            rad = np.radians(angle_deg)
+            return r * np.cos(rad), r * np.sin(rad)
+
+        def _arc_path(r_in, r_out, a0, a1, n=30):
+            a0r, a1r = np.radians(a0), np.radians(a1)
+            th_out, th_in = np.linspace(a0r, a1r, n), np.linspace(a1r, a0r, n)
+            xs = np.concatenate([r_out * np.cos(th_out), r_in * np.cos(th_in)])
+            ys = np.concatenate([r_out * np.sin(th_out), r_in * np.sin(th_in)])
+            return f"M {xs[0]},{ys[0]} " + " ".join(f"L{x},{y}" for x, y in zip(xs[1:], ys[1:])) + " Z"
+
+        def _val_to_angle(v):
+            return 180 - (v / 100) * 180  # 0 -> 180° (izq.), 100 -> 0° (der.)
+
+        fig = go.Figure()
+        r_in, r_out = 0.62, 1.0
+        gap_deg = 1.6  # separador blanco entre zonas, como en la referencia
+        band_colors = [C_LIGHT, C_MID2, C_MID1, C_PRIMARY, C_DARK]
+        n_bands = len(band_colors)
+        band_span = 180 / n_bands
+        for i, color in enumerate(band_colors):
+            a0 = 180 - i * band_span - gap_deg / 2
+            a1 = 180 - (i + 1) * band_span + (gap_deg / 2 if i < n_bands - 1 else 0)
+            fig.add_shape(type="path", path=_arc_path(r_in, r_out, a0, a1),
+                          fillcolor=color, line=dict(color=t["surface"], width=2), layer="below")
+
+        # Marcas finas en 0/25/50/75/100 (sin la rueda de números completa de un eje tradicional)
+        for tv in [0, 25, 50, 75, 100]:
+            ang = _val_to_angle(tv)
+            x0, y0 = _polar(ang, r_out + 0.02)
+            x1, y1 = _polar(ang, r_out + 0.08)
+            fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1, line=dict(color=t["text_secondary"], width=1.5))
+            xl, yl = _polar(ang, r_out + 0.20)
+            fig.add_annotation(x=xl, y=yl, text=str(tv), showarrow=False,
+                               font=dict(size=11, color=t["text_secondary"], family="Inter"))
+
+        # Aguja: línea fina + círculo abierto en el pivote (como la referencia), color según categoría
+        # de riesgo — coherente con el número y la insignia de la tarjeta izquierda.
+        needle_ang = _val_to_angle(risk * 100)
+        nx, ny = _polar(needle_ang, r_out * 0.86)
+        fig.add_trace(go.Scatter(x=[0, nx], y=[0, ny], mode="lines",
+                                 line=dict(color=cat_color, width=3), hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=[0], y=[0], mode="markers",
+                                 marker=dict(size=16, color=t["surface"], line=dict(color=cat_color, width=3)),
+                                 hoverinfo="skip", showlegend=False))
+
+        fig.update_xaxes(visible=False, range=[-1.25, 1.25], fixedrange=True)
+        fig.update_yaxes(visible=False, range=[-0.08, 1.25], fixedrange=True, scaleanchor="x", scaleratio=1)
+        fig.update_layout(height=260, margin=dict(l=16, r=16, t=6, b=4),
+                          plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                          font=dict(family="Inter", color=t["text"]))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
         st.markdown(f'<div class="section-sub" style="text-align:center; margin-top:-6px;">Zonas: bajo · moderado · alto · &nbsp;línea = umbral de decisión (50%)</div>', unsafe_allow_html=True)

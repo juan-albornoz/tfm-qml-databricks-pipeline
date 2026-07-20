@@ -179,7 +179,7 @@ TRAINING\_MODE = False  # Carga modelo guardado (\~2 min total)
 |numpy|1.23.5|
 |scikit-learn|1.6.1|
 |lightgbm|4.x|
-|qiskit|2.4.1|
+|qiskit|2.5.0|
 |qiskit-machine-learning|0.9.0|
 |qiskit-algorithms|0.4.0|
 
