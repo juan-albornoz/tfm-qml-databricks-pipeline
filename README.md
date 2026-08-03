@@ -37,7 +37,7 @@ El proyecto diseña e implementa un framework DataOps end-to-end sobre **Databri
 
 **NHANES** (National Health and Nutrition Examination Survey) — CDC, EE.UU.
 
-* 3 ciclos: 2017-2018, 2019-2020, 2021-2022
+* 3 ciclos: 2013-2014 (`\_H`), 2015-2016 (`\_I`), 2017-2018 (`\_J`)
 * 27 archivos XPT — 9 módulos por ciclo
 * 29.400 registros Bronze → 7.831 registros Silver
 * **Variable objetivo:** `DIQ010` binarizada (diabetes tipo 2)
@@ -150,23 +150,42 @@ pip install -r requirements.txt
 
 ### Configuración de credenciales AWS
 
-En `notebook\_01\_bronze.ipynb`, reemplaza los placeholders con tus credenciales reales:
+Las credenciales se gestionan con **Databricks Secrets**: nunca se escriben en el notebook. Alta del scope (una sola vez, desde la CLI de Databricks):
 
-```python
-access\_key = "TU\_ACCESS\_KEY\_ID"      # Reemplazar antes de ejecutar
-secret\_key = "TU\_SECRET\_ACCESS\_KEY"  # Reemplazar antes de ejecutar
+```bash
+databricks secrets create-scope --scope aws-nhanes
+databricks secrets put-secret   --scope aws-nhanes --key access_key
+databricks secrets put-secret   --scope aws-nhanes --key secret_key
 ```
 
-> ⚠️ Nunca subas credenciales reales al repositorio.
+`notebook_01_bronze.ipynb` las recupera en tiempo de ejecución:
+
+```python
+access_key = dbutils.secrets.get(scope="aws-nhanes", key="access_key")
+secret_key = dbutils.secrets.get(scope="aws-nhanes", key="secret_key")
+```
+
+> ⚠️ Nunca escribas credenciales en claro en los notebooks ni las subas al repositorio.
 
 ### Modo ejecución QSVM
 
-El notebook QSVM soporta dos modos para evitar re-entrenar (\~3 horas):
+El notebook QSVM detecta automáticamente si ya existe un modelo entrenado, para evitar repetir las ~3 horas de cómputo:
 
 ```python
-TRAINING\_MODE = True   # Entrena desde cero (\~154 min total)
-TRAINING\_MODE = False  # Carga modelo guardado (\~2 min total)
+TRAINING_MODE = not os.path.exists(f"{models_dir}/qsvm_final.pkl")
+# sin qsvm_final.pkl -> True  : entrena desde cero (~154 min en total)
+# con qsvm_final.pkl -> False : carga el modelo guardado (~2 min en total)
 ```
+
+Puede forzarse a `True` manualmente si se desea re-entrenar sobre un modelo ya existente.
+
+> ⚠️ Si el entorno ha actualizado Qiskit desde que se entrenó el modelo, el `.pkl` no puede deserializarse. El notebook detecta el fallo y re-entrena automáticamente — ver [TECHNICAL\_NOTES.md](TECHNICAL_NOTES.md), sección 2.11.
+
+### Despliegue de la aplicación Streamlit
+
+Streamlit Community Cloud solo accede al contenido del repositorio, no a Unity Catalog Volumes. Tras ejecutar los notebooks de modelado hay que copiar a `streamlit/models/` los 8 artefactos que consume la app: `lgbm_final.onnx`, `svm_final.onnx`, `scaler_correcto.json`, `medianas_correctas.json`, `lgbm_y_scores.npy`, `svm_y_scores.npy`, `qsvm_y_scores.npy` y `qsvm_y_test.npy`.
+
+Detalle completo en [TECHNICAL\_NOTES.md](TECHNICAL_NOTES.md), sección 6.
 
 \---
 

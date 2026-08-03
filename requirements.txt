@@ -3,10 +3,14 @@
 # Entorno: Databricks Community Edition (Serverless)
 # ============================================================
 
+# Nota: pyspark, delta-spark y los globales dbutils/display los proporciona
+# el runtime de Databricks Serverless; no se instalan mediante este archivo.
+
 # Data processing
 pandas==1.5.3
 numpy==1.23.5
 pyarrow>=10.0.0
+pyreadstat==1.3.5          # lectura de los archivos NHANES .XPT (notebook 01)
 
 # Machine Learning clásico
 scikit-learn>=1.3.0
