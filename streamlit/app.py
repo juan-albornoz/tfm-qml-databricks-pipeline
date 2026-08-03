@@ -2,9 +2,12 @@
 QML DataOps TFM Dashboard — App completa (6 paginas)
 Universidad Europea de Valencia · TFM Juan Albornoz
 
+QML DataOps TFM Dashboard — App completa (7 paginas)
+
 Estructura de paginas segun Seccion "Estructura y Paginas de la Aplicacion"
 del TFM_UEV_QML_JuanAlbornoz.docx: Overview, Results, SHAP Analysis,
-Quantum Circuit, Bloch Sphere Emulator, Live Predictor.
+Quantum Circuit, Bloch Sphere Emulator, Live Predictor. Se anade Gobernanza,
+que documenta los controles de calidad y trazabilidad del pipeline DataOps.
 
 Datos verificados forensemente (OCR + validacion cruzada contra los
 classification reports del documento, julio 2026). Ver nota de verificacion
@@ -60,31 +63,170 @@ def _b64_image_autocrop(path: str, pad: int = 16) -> str:
 # abierta también en el teléfono, comiéndose 270 de los ~390 px de pantalla.
 st.set_page_config(page_title="QML DataOps", page_icon="◆", layout="wide", initial_sidebar_state="auto")
 
+# ═════════════════════════════════════════════════════════════════════════
+# SISTEMA DE DISEÑO
+# ═════════════════════════════════════════════════════════════════════════
+# PALETA BASE (definida por el autor):
+#   #F5A623  ámbar           #F9C449  oro       #FBDD8B  crema
+#   #E9E9E9  gris claro      #1C1F26  carbón
+#
+# Medida con el validador, la paleta tiene DOS familias muy desiguales, y de ahí
+# sale todo el reparto:
+#   · Los tres cálidos caben en 17° de tono (73° → 90°) y son todos altísimos en
+#     luminosidad (L 0,784 · 0,847 · 0,905). Sobre blanco dan 2,03:1 · 1,61:1 ·
+#     1,33:1 — NINGUNO llega al 3:1 que exige una marca de datos. Sobre el carbón
+#     dan 8,1:1 · 10,2:1 · 12,4:1. Es una paleta concebida para fondo oscuro, y el
+#     tema oscuro es donde rinde al máximo.
+#   · #F5A623 ↔ #F9C449 → ΔE 7,1 en visión normal (el suelo es 15): tal cual, los
+#     dos cálidos vecinos son el mismo color para cualquier ojo, no solo para quien
+#     tiene daltonismo.
+#   · Dos neutros puros que hacen todo el trabajo estructural: #E9E9E9 (croma 0,000)
+#     y #1C1F26 (croma 0,014 — 16,5:1 sobre blanco, el ancla de contraste).
+#
+# Reparto en consecuencia:
+#   · INTERFAZ (fondos, superficies, bordes, tinta, acentos) → los 5 tonos. Carbón y
+#     gris son superficie y tinta; el ámbar es el acento de marca; oro y crema, realce.
+#   · SERIES (los 3 modelos) → NO caben tres cálidos. Se probó por enumeración: el
+#     mejor trío cálido posible se queda en ΔE 15,0-15,1 (justo en el filo del suelo)
+#     y FALLA en oscuro, además de convertir el tercer tono en un oliva turbio que ya
+#     no parece la paleta. El reparto que sí pasa usa las DOS familias —
+#     tinta · gris · ámbar— y es además la lectura correcta del relato: los dos
+#     modelos clásicos en neutro, el cuántico en el color de marca. El color va donde
+#     está la tesis.
+#   · RAMP (magnitud) → rampa de un solo tono sobre el eje cálido (h 78°), cinco pasos
+#     de luminosidad monótona. Una escala de magnitud tiene que ser monocroma para que
+#     el orden se lea sin leyenda.
+#
+# Resultados del validador con los valores de abajo (--pairs all):
+#   SERIES claro  → CVD ΔE 14,3 · visión normal 17,1 · contraste ≥3:1 los tres
+#   SERIES oscuro → CVD ΔE 16,8 · visión normal 17,2 · contraste ≥3:1 los tres
+#   RAMP claro / RAMP oscuro → monotonía, ΔL, tono único y contraste: TODAS PASS
+#   Único FAIL, deliberado: el suelo de croma sobre los dos slots neutros. Ese suelo
+#   existe para que un tono no "lea gris" y deje de hacer trabajo de identidad; aquí
+#   los neutros SON neutros a propósito y con un solo cromático entre ellos no hay
+#   ambigüedad posible (tinta ↔ gris ΔE 32). Ojo: el gris de serie es FRÍO (h 267°,
+#   el tono del propio carbón aclarado) y no cálido — un taupe cálido colapsaba
+#   contra el ámbar en ΔE 10. Si se retoca cualquier hex, hay que volver a pasar el
+#   validador.
 # ─────────────────────────────────────────────────────────────────────────
-# TOKENS DE DISEÑO (design brief del TFM)
-# ─────────────────────────────────────────────────────────────────────────
-C_PRIMARY, C_MID1, C_MID2, C_LIGHT, C_DARK = "#5D8BA6", "#86A8BC", "#AEC5D2", "#D7E2E9", "#3D6C87"
 
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 if "sidebar_narrow" not in st.session_state:
     st.session_state.sidebar_narrow = False
 
+_is_dark = st.session_state.theme == "dark"
+
+# ── Paleta base, literal. Referencia única para todo lo demás. ──
+P_AMBAR, P_ORO, P_CREMA, P_GRIS, P_CARBON = "#F5A623", "#F9C449", "#FBDD8B", "#E9E9E9", "#1C1F26"
+
+# ── Escala CATEGÓRICA: identidad de cada modelo. Orden fijo, nunca reciclado. ──
+# Tinta = baseline clásico · gris = puente estructural · ámbar = cuántico.
+# Los dos clásicos van en las dos familias neutras del autor (carbón y gris claro),
+# invertidas entre temas para que la que hace de tinta sea siempre la que contrasta.
+# El slot cuántico lleva el color de marca: en oscuro es el #F9C449 del autor sin
+# tocar (10,2:1); en claro se baja a L 0,64 porque el original da 1,61:1 sobre blanco
+# y como relleno de barra sería invisible. Se conserva el tono, se corrige el paso.
+SERIES = {
+    "lightgbm": P_GRIS    if _is_dark else P_CARBON,
+    "svm_rbf":  "#8A8F99" if _is_dark else "#71747C",
+    "qsvm":     P_ORO     if _is_dark else "#C07C08",
+}
+
+# ── Escala SECUENCIAL: magnitud (matriz de confusión, velocímetro) ──
+# Un solo tono (h 78°, el eje cálido de la paleta), luminosidad monótona. El índice 4
+# es SIEMPRE el extremo de máxima magnitud: en claro eso es el paso más oscuro y en
+# oscuro el más brillante — en ambos casos, el que más se despega de su fondo.
+RAMP = (["#724D00", "#9A6A00", "#C48800", "#EBAA2D", "#FFCF83"] if _is_dark
+        else ["#EDAB30", "#CC8E00", "#A57200", "#805800", "#604100"])
+
+# ── Acento de marca (cromo de interfaz: navegación, foco, sliders, reglas) ──
+# En oscuro es el #F5A623 del autor sin tocar (8,1:1 sobre la superficie). En claro
+# ese mismo ámbar da 2,03:1 y no puede llevar texto: el acento baja a L 0,55 del mismo
+# tono (4,96:1 sobre blanco, apto para texto pequeño según WCAG) y el ámbar puro queda
+# reservado a rellenos y tintes, donde no se le pide legibilidad.
+C_PRIMARY = P_AMBAR if _is_dark else "#9A6504"
+C_DARK    = P_ORO if _is_dark else "#6B4600"
+C_QUANTUM = SERIES["qsvm"]          # acento del componente cuántico (Bloch, ZZFeatureMap)
+# La crema es el tono de realce de la paleta, y solo sirve donde contrasta: 12,4:1
+# sobre el carbón (vale como texto) frente a 1,33:1 sobre blanco (solo como relleno o
+# tinte). Por eso en claro nunca lleva texto encima ni hace de texto.
+C_CREMA = P_CREMA
+# Alias de compatibilidad: pasos intermedios de la rampa. Se toman del extremo VISIBLE
+# de cada una — la clara corre brillante→oscuro y la oscura oscuro→brillante, así que el
+# paso "medio-alto" es RAMP[1] en claro y RAMP[3] en oscuro. Con esto el halo del
+# interruptor de tema y el anillo de las láminas pesan ópticamente igual en ambos temas.
+C_LIGHT = RAMP[0]
+C_MID2  = RAMP[3] if _is_dark else RAMP[1]
+C_MID1  = RAMP[2]
+
+# ── Colores de ESTADO (reservados: nunca se reutilizan como “serie 4”) ──
+# Única excepción deliberada a la paleta base: bien/atención/grave tienen que leerse
+# como estado de forma inmediata y universal. Con una marca ámbar hay un riesgo extra —
+# el “atención” canónico ES ámbar y se confundiría con el acento—, así que se desplaza
+# a un naranja quemado claramente más rojo (h 46° frente a los 73° de la marca) y el
+# “grave” a rojo (h 29°). Los tres van SIEMPRE acompañados de su etiqueta de texto.
+STATUS = {
+    "good":     "#4FBE8C" if _is_dark else "#2F6A4E",
+    "warning":  "#F0834A" if _is_dark else "#B4531B",
+    "critical": "#EE6A5C" if _is_dark else "#A93226",
+}
+
+# ── Tipografía ──
+# Newsreader (serif de pantalla) para titulares: da el registro editorial de
+# publicación científica. IBM Plex Sans para interfaz e IBM Plex Mono para cifras
+# y código — la familia Plex es además la tipografía de IBM, autora de Qiskit.
+FONT_SERIF = "'Newsreader', 'Iowan Old Style', Georgia, serif"
+FONT_SANS  = "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif"
+FONT_MONO  = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
+# Plotly no acepta la pila con comillas: solo el nombre de la familia.
+PLOTLY_FONT = "IBM Plex Sans"
+PLOTLY_MONO = "IBM Plex Mono"
+
 def T():
+    """Superficies y tintas, derivadas de la paleta base.
+
+    Las dos superficies clave son literalmente los dos neutros del autor, cada una en
+    el tema donde le toca ser el fondo de tarjeta: #1C1F26 en oscuro y —por el otro
+    extremo— #E9E9E9 como barra lateral y superficie alterna en claro, con blanco puro
+    para las tarjetas. El lienzo de fondo se separa un paso de la tarjeta en ambos
+    temas (#F4F3F0 en claro, #12151B en oscuro) para que la tarjeta se vea flotar.
+
+    El par tinta/superficie es el que da el contraste que se pedía: 16,5:1 en claro
+    (#1C1F26 sobre blanco) y 13,6:1 en oscuro (#E9E9E9 sobre #1C1F26) — muy por encima
+    del 4,5:1 de WCAG. Los dos escalones de tinta apagada mantienen 8,3:1 y 5,0:1 en
+    claro, 7,3:1 y 4,8:1 en oscuro, así que TODOS los niveles de texto de la app pasan
+    WCAG AA, incluido el más atenuado.
+
+    NOTA: ninguno de los tres cálidos se usa como color de texto sobre blanco: dan
+    2,03:1, 1,61:1 y 1,33:1. Viven en bordes, rellenos y realces; cuando el acento
+    tiene que llevar texto en claro, usa el paso oscurecido C_PRIMARY (4,96:1).
+    """
     if st.session_state.theme == "dark":
-        return dict(bg="#0F1B22", surface="#16242C", surface_alt="#1C2C35",
-                     text="#E8EEF2", text_secondary="#93A6B0", border="#26363F",
-                     sidebar_bg="#141F26", sidebar_active="#1F2E37")
-    return dict(bg="#FAFBFC", surface="#FFFFFF", surface_alt="#F4F7F9",
-                 text="#1A2B33", text_secondary="#5B6E77", border="#E5EBEE",
-                 sidebar_bg="#F3F5F7", sidebar_active="#E8ECF3")
+        return dict(bg="#12151B", surface=P_CARBON, surface_alt="#262A33",
+                     text=P_GRIS, text_secondary="#A9ADB6", text_muted="#868B95",
+                     border="#2C313B", border_strong="#3D434F",
+                     sidebar_bg="#0E1116", sidebar_active="#232833")
+    return dict(bg="#F4F3F0", surface="#FFFFFF", surface_alt=P_GRIS,
+                 text=P_CARBON, text_secondary="#4A4E57", text_muted="#6B6F78",
+                 border="#DCDBD6", border_strong="#BFBEB8",
+                 sidebar_bg=P_GRIS, sidebar_active="#DAD9D3")
 
 t = T()
+
+# ── Elevación: una sola definición de sombra para TODAS las tarjetas ──
+SHADOW = ("0 1px 2px rgba(0,0,0,0.30), 0 6px 20px -6px rgba(0,0,0,0.50)" if _is_dark
+          else "0 1px 1.5px rgba(11,26,38,0.04), 0 4px 14px -4px rgba(11,26,38,0.07)")
+SHADOW_HOVER = ("0 2px 4px rgba(0,0,0,0.35), 0 16px 34px -10px rgba(0,0,0,0.62)" if _is_dark
+                else "0 2px 4px rgba(11,26,38,0.05), 0 16px 32px -10px rgba(11,26,38,0.13)")
+
 narrow = st.session_state.sidebar_narrow
 SIDEBAR_WIDTH = "84px" if narrow else "270px"
-# Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si dejáramos
-# C_LIGHT fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
-SLIDER_GROOVE = C_LIGHT if st.session_state.theme == "light" else t["surface_alt"]
+# Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si usáramos
+# un azul fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
+# En claro NO se usa RAMP[0]: ese paso está calibrado para pintar DATO sobre blanco y como
+# carril de control resultaba demasiado saturado. Aquí va un tinte más apagado del mismo tono.
+SLIDER_GROOVE = "#DFDCD3" if st.session_state.theme == "light" else t["surface_alt"]
 
 # ── Tratamiento de las figuras PNG de fondo blanco (beeswarm SHAP, circuito) según tema ──
 # Esas imágenes tienen fondo blanco intrínseco (figuras científicas del TFM). En tema claro se funden
@@ -93,20 +235,32 @@ SLIDER_GROOVE = C_LIGHT if st.session_state.theme == "light" else t["surface_alt
 # como "lámina enmarcada": un anillo fino en color de marca (C_MID2) las ata a la paleta, una sombra
 # profunda las asienta, y un filtro casi imperceptible baja el fogonazo del blanco puro. En claro se
 # mantiene el aspecto plano y sobrio de siempre.
-_is_dark = st.session_state.theme == "dark"
 FIG_IMG_FILTER = "brightness(0.965) saturate(1.03)" if _is_dark else "none"
-FIG_CARD_SHADOW = (f"0 0 0 1px {C_MID2}33, 0 12px 34px rgba(0,0,0,0.42)" if _is_dark
-                   else "0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05)")
-FIG_CARD_SHADOW_HOVER = (f"0 0 0 1px {C_PRIMARY}66, 0 16px 42px rgba(0,0,0,0.50)" if _is_dark
-                         else "0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09)")
+FIG_CARD_SHADOW = (f"0 0 0 1px {C_MID2}33, {SHADOW}" if _is_dark else SHADOW)
+FIG_CARD_SHADOW_HOVER = (f"0 0 0 1px {C_PRIMARY}66, {SHADOW_HOVER}" if _is_dark else SHADOW_HOVER)
 # Padding-"passe-partout" algo mayor en oscuro: la lámina blanca respira dentro del marco.
 FIG_CARD_PAD = "14px" if _is_dark else "10px"
 
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-html, body, [class*="css"] {{ font-family:'Inter',system-ui,sans-serif !important; }}
-.stApp {{ background-color:{t['bg']}; color:{t['text']}; }}
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+html, body, [class*="css"] {{ font-family:{FONT_SANS} !important; }}
+/* Cifras SIEMPRE tabulares: al mover un slider o cambiar de página los números no “bailan”
+   horizontalmente, porque todos los dígitos ocupan el mismo ancho. */
+body {{ font-variant-numeric: tabular-nums; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }}
+.stApp {{
+    background-color:{t['bg']}; color:{t['text']};
+    /* Dos halos muy tenues en el color de marca: dan profundidad al fondo plano sin
+       introducir una textura visible. En claro son casi imperceptibles; en oscuro
+       evitan que el fondo lea como negro muerto. */
+    background-image:
+        radial-gradient(1100px 520px at 12% -8%, {C_PRIMARY}{'1E' if _is_dark else '0D'}, transparent 60%),
+        radial-gradient(900px 460px at 100% 0%, {C_QUANTUM}{'16' if _is_dark else '0A'}, transparent 62%);
+    /* SIN background-attachment:fixed a propósito. Sería redundante —el que hace scroll es
+       section[data-testid="stMain"], no .stApp, que ya ocupa el viewport— y en Firefox un
+       fondo fijo obliga a repintar los dos degradados en cada scroll, con el tirón
+       consiguiente. Sin él se ve igual y el scroll queda limpio. */
+}}
 /* Reduce a la mitad el espacio vacío por defecto entre el borde superior y el contenido,
    igual en las 6 páginas ya que todas comparten esta misma estructura de bloque principal. */
 div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
@@ -118,8 +272,13 @@ div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
     margin-left:auto !important; margin-right:auto !important;
 }}
 section[data-testid="stSidebar"] {{
-    background-color:{t['sidebar_bg']}; border-right:1px solid {t['border']};
-    box-shadow: 3px 0 16px rgba(20,30,40,0.07), 1px 0 3px rgba(20,30,40,0.05);
+    background-color:{t['sidebar_bg']};
+    /* Velo vertical muy tenue en el tono de marca: el panel gana profundidad y se
+       distingue del lienzo principal sin recurrir a un borde marcado. */
+    background-image:linear-gradient(180deg, {C_PRIMARY}{'14' if _is_dark else '0A'}, transparent 42%);
+    border-right:1px solid {t['border']};
+    box-shadow: {"1px 0 0 rgba(255,255,255,0.03), 8px 0 28px rgba(0,0,0,0.42)" if _is_dark
+                 else "1px 0 2px rgba(11,26,38,0.04), 6px 0 22px -8px rgba(11,26,38,0.09)"};
     width:{SIDEBAR_WIDTH} !important; min-width:{SIDEBAR_WIDTH} !important; max-width:{SIDEBAR_WIDTH} !important;
     /* Colapsar/descolapsar desliza el ancho en vez de saltar de golpe entre 270 y 84px. */
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1), min-width 0.32s cubic-bezier(0.4,0,0.2,1),
@@ -190,7 +349,7 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 .st-key-theme_toggle button {{
     width:30px !important; height:15px !important; min-height:15px !important; padding:0 !important;
     border-radius:999px !important; border:none !important;
-    background-color:{"#FFFFFF" if st.session_state.theme == "light" else "#0B1319"} !important;
+    background-color:{"#FFFFFF" if st.session_state.theme == "light" else "#080A0E"} !important;
     box-shadow: 0 0 0 1px {C_MID2}55, 0 0 7px 1.5px {C_MID2}99, 0 0 15px 4px {C_MID2}55 !important;
     transition: box-shadow 0.2s ease, transform 0.15s ease;
 }}
@@ -207,8 +366,9 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     color:{t['text_secondary']}; overflow:hidden; z-index:997; line-height:1.35;
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
-.sidebar-footer .footer-name {{ font-size:14.5px; color:{t['text']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
-.sidebar-footer .footer-uni {{ font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.sidebar-footer .footer-name {{ font-size:12.5px; font-weight:500; color:{t['text']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.sidebar-footer .footer-uni {{ font-family:{FONT_MONO}; font-size:10px; font-weight:400; letter-spacing:0.06em;
+    color:{t['text_muted']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
 /* El option_menu vive en un iframe con fondo propio: igualarlo al de la sidebar (sin caja/sombra
    propia — ya tiene el mismo fondo, así que se funde visualmente con el resto de la sidebar) */
 section[data-testid="stSidebar"] iframe {{ background-color:{t['sidebar_bg']} !important; }}
@@ -224,19 +384,50 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
 @media (prefers-reduced-motion: no-preference) {{
     section[data-testid="stSidebar"] iframe {{ animation: pageFadeIn 0.3s ease-out; }}
 }}
-.page-title {{ font-size:38px; font-weight:600; color:{t['text']}; margin-bottom:14px; letter-spacing:-0.02em; line-height:1.2; }}
-.page-subtitle {{ font-size:18px; font-weight:400; color:{t['text_secondary']}; margin-bottom:32px; line-height:1.6; }}
+/* ═══════════════ CABECERA DE PÁGINA ═══════════════
+   Registro editorial de publicación científica: antetítulo en versalitas monoespaciadas
+   (etiqueta de sección), titular en serif de pantalla, subtítulo en sans, y un filete
+   que cierra el bloque y lo separa del contenido. */
+.page-eyebrow {{
+    font-family:{FONT_MONO}; font-size:11.5px; font-weight:500; letter-spacing:0.16em;
+    text-transform:uppercase; color:{C_PRIMARY}; margin-bottom:12px;
+    display:flex; align-items:center; gap:10px;
+}}
+.page-eyebrow::before {{
+    content:""; width:18px; height:2px; border-radius:1px; background:{C_PRIMARY}; flex-shrink:0;
+}}
+.page-title {{
+    font-family:{FONT_SERIF}; font-size:46px; font-weight:400; color:{t['text']};
+    margin-bottom:12px; letter-spacing:-0.015em; line-height:1.12;
+}}
+.page-subtitle {{
+    font-size:16.5px; font-weight:400; color:{t['text_secondary']}; line-height:1.65;
+    max-width:76ch; margin-bottom:14px;
+}}
+/* Filete de cierre: se desvanece hacia la derecha en vez de cortar en seco */
+.page-rule {{
+    height:1px; margin-bottom:30px;
+    background:linear-gradient(90deg, {t['border_strong']}, {t['border']} 45%, transparent);
+}}
 .kpi-card, .info-card {{
-    background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:12px; padding:18px 20px; height:100%;
-    box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
-    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:14px; padding:20px 22px; height:100%;
+    box-shadow: {SHADOW};
+    transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s ease;
 }}
 .kpi-card:hover, .info-card:hover {{
-    box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09);
+    box-shadow: {SHADOW_HOVER};
+    border-color:{t['border_strong']};
     transform: translateY(-2px);
 }}
-/* Tarjeta "lead" (párrafo introductorio) con acento lateral en el color primario */
-.lead-card {{ border-left:3px solid {C_PRIMARY}; }}
+/* Tarjeta "lead" (párrafo introductorio): filete lateral degradado de marca a violeta —
+   el recorrido clásico→cuántico que resume la tesis. Va como pseudo-elemento y NO con
+   border-image: esa propiedad sustituye los cuatro bordes a la vez (pintaría el degradado
+   también arriba, abajo y a la derecha) y además anula el border-radius de la tarjeta. */
+.lead-card {{ position:relative; overflow:hidden; }}
+.lead-card::before {{
+    content:""; position:absolute; top:0; bottom:0; left:0; width:2px;
+    background:linear-gradient(180deg, {C_PRIMARY}, {C_QUANTUM});
+}}
 /* Fila de tarjetas comparativas: grid en vez de st.columns para que las 3 tengan SIEMPRE la
    misma altura (el estirado es nativo del grid), sin importar cuánto texto envuelva ni el zoom. */
 .compare-grid {{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; align-items:stretch; }}
@@ -286,12 +477,12 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
    y se funden dentro, separados por una línea vertical fina. Con vertical_alignment="center" en las
    columnas, ambas mitades quedan centradas entre sí sin necesidad de fijar alturas en px. */
 .st-key-predictor_gauge_row {{
-    background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:14px;
-    padding:18px 26px; box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
-    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:16px;
+    padding:20px 28px; box-shadow: {SHADOW};
+    transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s ease;
 }}
 .st-key-predictor_gauge_row:hover {{
-    box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09);
+    box-shadow: {SHADOW_HOVER}; border-color:{t['border_strong']};
     transform: translateY(-2px);
 }}
 .st-key-predictor_gauge_row .kpi-card, .st-key-predictor_gauge_row .kpi-card:hover {{
@@ -306,26 +497,78 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
 .st-key-predictor_gauge_row div[data-testid="stColumn"]:first-of-type {{
     border-right:1px solid {t['border']};
 }}
-/* Ítem de la arquitectura Medallón como mini-tarjeta con acento lateral por capa */
+/* Ítem de la arquitectura Medallón como mini-tarjeta con acento lateral por capa.
+   El acento lo fija cada ítem en línea con su paso de la rampa secuencial (Bronze →
+   Silver → Gold es una progresión, no tres identidades: le corresponde una escala de
+   magnitud, no colores categóricos). */
 .medallion-item {{
-    display:flex; gap:12px; align-items:flex-start; padding:13px 15px; margin-bottom:10px;
-    background:{t['surface']}; border:1px solid {t['border']}; border-left:3px solid {C_PRIMARY};
-    border-radius:10px; box-shadow:0 1px 2px rgba(20,30,40,0.04);
-    transition: box-shadow 0.18s ease, transform 0.18s ease;
+    display:flex; gap:14px; align-items:flex-start; padding:15px 17px; margin-bottom:10px;
+    background:{t['surface']}; border:1px solid {t['border']}; border-left:2px solid {C_PRIMARY};
+    border-radius:0 12px 12px 0; box-shadow:{SHADOW};
+    transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s ease;
 }}
-.medallion-item:hover {{ box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09); transform:translateY(-2px); }}
+.medallion-item:hover {{ box-shadow:{SHADOW_HOVER}; transform:translateY(-2px); }}
+.medallion-name {{
+    font-family:{FONT_MONO}; font-size:11px; font-weight:600; letter-spacing:0.14em;
+    text-transform:uppercase; margin-bottom:5px;
+}}
+/* ═══════════════ GOBERNANZA ═══════════════
+   Fila de expectativa validada. El estado NUNCA va solo en color: punto + etiqueta de
+   texto ("PASSED"), que es lo que exige el sistema de diseño para los colores de estado
+   y lo único que funciona en impresión monocroma o con daltonismo. */
+.gov-check {{
+    display:grid; grid-template-columns:15px minmax(96px, 128px) 1fr auto; gap:12px;
+    align-items:center; padding:9px 2px; border-bottom:1px solid {t['border']};
+}}
+.gov-check:last-child {{ border-bottom:none; }}
+.gov-dot {{ width:7px; height:7px; border-radius:50%; margin-left:4px; flex-shrink:0; }}
+.gov-col {{ font-family:{FONT_MONO}; font-size:11.5px; font-weight:500; color:{t['text']};
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.gov-rule {{ font-size:12.5px; color:{t['text_secondary']}; line-height:1.5; }}
+.gov-state {{ font-family:{FONT_MONO}; font-size:9.5px; font-weight:600; letter-spacing:0.11em;
+    text-transform:uppercase; white-space:nowrap; }}
+/* Cabecera de dimensión dentro de la suite */
+.gov-dim {{
+    font-family:{FONT_MONO}; font-size:10px; font-weight:600; letter-spacing:0.14em;
+    text-transform:uppercase; color:{t['text_muted']}; margin:16px 0 2px;
+    display:flex; align-items:center; gap:10px;
+}}
+.gov-dim:first-child {{ margin-top:0; }}
+.gov-dim::after {{ content:""; flex:1 1 auto; height:1px; background:{t['border']}; }}
+/* Tabla del historial Delta: cifras monoespaciadas, filas separadas por filete fino.
+   Con overflow-x propio — en móvil la tabla desborda antes que el cuerpo de la página. */
+.gov-table-wrap {{ overflow-x:auto; }}
+.gov-table {{ width:100%; border-collapse:collapse; font-size:12.5px; min-width:460px; }}
+.gov-table th {{
+    font-family:{FONT_MONO}; font-size:9.5px; font-weight:600; letter-spacing:0.12em;
+    text-transform:uppercase; color:{t['text_muted']}; text-align:left;
+    padding:0 14px 9px 0; border-bottom:1px solid {t['border_strong']}; white-space:nowrap;
+}}
+.gov-table td {{
+    padding:9px 14px 9px 0; border-bottom:1px solid {t['border']};
+    color:{t['text_secondary']}; white-space:nowrap;
+}}
+.gov-table tr:last-child td {{ border-bottom:none; }}
+.gov-table .num {{ font-family:{FONT_MONO}; font-variant-numeric:tabular-nums; color:{t['text']}; }}
+/* Bloque de código dentro de una tarjeta (los asserts de la cadena anti-leakage) */
+.gov-code {{
+    font-family:{FONT_MONO}; font-size:11px; line-height:1.65; color:{t['text_secondary']};
+    background:{t['surface_alt']}; border:1px solid {t['border']}; border-radius:8px;
+    padding:10px 12px; margin-top:10px; overflow-x:auto; white-space:pre;
+}}
 /* Contenedores de gráficas Plotly con la misma profundidad sutil Y el mismo hover de elevación que
    las tarjetas .kpi-card / .info-card, para que TODAS las tarjetas reaccionen igual al pasar el ratón. */
 div[data-testid="stPlotlyChart"] {{
     background-color:{t['surface']};
     border:1px solid {t['border']};
-    border-radius:12px;
-    padding:8px;
-    box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
-    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    border-radius:14px;
+    padding:10px;
+    box-shadow: {SHADOW};
+    transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s ease;
 }}
 div[data-testid="stPlotlyChart"]:hover {{
-    box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09);
+    box-shadow: {SHADOW_HOVER};
+    border-color:{t['border_strong']};
     transform: translateY(-2px);
 }}
 /* Tarjeta contenedora de una figura/imagen (SHAP summary, circuito cuántico): mismo aspecto y mismo
@@ -333,9 +576,9 @@ div[data-testid="stPlotlyChart"]:hover {{
    convierte en "lámina enmarcada" (anillo de marca + sombra profunda + brillo atenuado) para que el
    bloque blanco no flote sobre el fondo oscuro — ver FIG_CARD_SHADOW / FIG_IMG_FILTER. */
 .fig-card {{
-    background:#FFFFFF; border:1px solid {t['border']}; border-radius:12px; padding:{FIG_CARD_PAD};
+    background:#FFFFFF; border:1px solid {t['border']}; border-radius:14px; padding:{FIG_CARD_PAD};
     box-shadow: {FIG_CARD_SHADOW};
-    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s ease;
 }}
 .fig-card:hover {{
     box-shadow: {FIG_CARD_SHADOW_HOVER};
@@ -344,49 +587,102 @@ div[data-testid="stPlotlyChart"]:hover {{
 /* Atenúa el fogonazo del blanco puro en oscuro (imperceptible en claro: filter:none). El radio
    redondea la imagen igual que el inline style, por si algún navegador lo ignorara. */
 .fig-card img {{ filter: {FIG_IMG_FILTER}; }}
-.kpi-model {{ font-size:13px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:7px; }}
-.kpi-dot {{ width:8px; height:8px; border-radius:50%; }}
-.kpi-row {{ display:flex; justify-content:space-between; align-items:baseline; padding:7px 0; border-bottom:1px solid {t['border']}; }}
-.kpi-row:last-child {{ border-bottom:none; }}
+/* ═══════════════ MÉTRICAS ═══════════════
+   Toda cifra va en monoespaciada con cifras tabulares: alinea las columnas de valores
+   entre tarjetas y evita el salto horizontal al recalcularse. */
+.kpi-model {{ font-size:12.5px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px;
+    letter-spacing:0.01em; color:{t['text']}; }}
+.kpi-dot {{ width:8px; height:8px; border-radius:2px; flex-shrink:0; }}
+.kpi-row {{ display:flex; justify-content:space-between; align-items:baseline; padding:8px 0; border-bottom:1px solid {t['border']}; }}
+.kpi-row:last-child {{ border-bottom:none; padding-bottom:0; }}
 .kpi-label {{ font-size:13px; color:{t['text_secondary']}; font-weight:400; }}
-.kpi-value {{ font-size:17px; font-weight:700; color:{t['text']}; }}
-.kpi-value-auc {{ font-size:clamp(20px, 2.4vw, 34px); font-weight:700; color:{t['text']}; }}
-.stat-num {{ font-size:clamp(16px, 2vw, 30px); font-weight:700; color:{t['text']}; white-space:nowrap; line-height:1.1; }}
-.stat-label {{ font-size:13px; color:{t['text_secondary']}; margin-top:3px; }}
-/* Tarjeta de estadística: altura consistente entre las 4 columnas, contenido alineado abajo */
-.stat-card {{ display:flex; flex-direction:column; justify-content:flex-end; min-height:112px; }}
-.section-title {{ font-size:18px; font-weight:600; color:{t['text']}; margin-bottom:4px; display:flex; align-items:center; gap:9px; }}
-.section-title::before {{ content:""; width:3px; height:16px; border-radius:2px; background:{C_PRIMARY}; flex-shrink:0; }}
-.section-sub {{ font-size:14px; color:{t['text_secondary']}; margin-bottom:14px; padding-left:12px; }}
-.badge {{ display:inline-block; font-size:12px; font-weight:600; letter-spacing:0.02em; padding:4px 10px;
-    border-radius:20px; background:{C_LIGHT}55; color:{C_DARK}; margin-right:6px; }}
-.clinical-note {{ background:{C_LIGHT}33; border:1px solid {C_MID2}; border-left:3px solid {C_PRIMARY}; border-radius:8px; padding:12px 16px 12px 18px; font-size:14px; color:{t['text_secondary']}; line-height:1.6;
-    box-shadow: 0 1px 2px rgba(20,30,40,0.04), 0 2px 8px rgba(20,30,40,0.05);
-    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease; }}
-.clinical-note:hover {{ box-shadow: 0 2px 4px rgba(20,30,40,0.06), 0 8px 20px rgba(20,30,40,0.09); transform: translateY(-2px); }}
+.kpi-value {{ font-family:{FONT_MONO}; font-size:15px; font-weight:500; color:{t['text']}; font-variant-numeric:tabular-nums; }}
+.kpi-value-auc {{ font-family:{FONT_MONO}; font-size:clamp(22px, 2.5vw, 36px); font-weight:500; color:{t['text']};
+    letter-spacing:-0.02em; font-variant-numeric:tabular-nums; line-height:1.05; }}
+.stat-num {{ font-family:{FONT_MONO}; font-size:clamp(17px, 2.1vw, 31px); font-weight:500; color:{t['text']};
+    white-space:nowrap; line-height:1.05; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }}
+.stat-label {{ font-family:{FONT_MONO}; font-size:10.5px; font-weight:500; letter-spacing:0.11em; text-transform:uppercase;
+    color:{t['text_muted']}; margin-top:8px; }}
+/* Tarjeta de estadística: altura consistente entre las 4 columnas, contenido alineado abajo.
+   El filete superior en color de marca las ata visualmente al sistema. */
+.stat-card {{ display:flex; flex-direction:column; justify-content:flex-end; min-height:118px; position:relative; overflow:hidden; }}
+.stat-card::before {{
+    content:""; position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, {C_PRIMARY}, {C_PRIMARY}00 85%);
+}}
+/* Variante cuántica: en Circuito Cuántico el filete va en oro, el tono reservado al
+   componente cuántico en toda la aplicación (QSVM, vector de estado en la esfera). */
+.stat-card.quantum::before {{ background:linear-gradient(90deg, {C_QUANTUM}, {C_QUANTUM}00 85%); }}
+/* ═══════════════ TÍTULOS DE SECCIÓN ═══════════════
+   Recurso editorial clásico: el título ocupa lo que necesita y un filete fino recorre el
+   resto del ancho hasta el margen, marcando el arranque de bloque sin cargar la página. */
+.section-title {{
+    font-family:{FONT_SERIF}; font-size:23px; font-weight:400; color:{t['text']};
+    margin-bottom:5px; display:flex; align-items:center; gap:14px; letter-spacing:-0.01em; line-height:1.3;
+}}
+.section-title::after {{
+    content:""; flex:1 1 auto; height:1px; min-width:20px;
+    background:linear-gradient(90deg, {t['border_strong']}, transparent);
+}}
+.section-sub {{ font-size:13.5px; color:{t['text_secondary']}; margin-bottom:16px; line-height:1.6; max-width:82ch; }}
+.badge {{ display:inline-block; font-family:{FONT_MONO}; font-size:11px; font-weight:500; letter-spacing:0.08em;
+    text-transform:uppercase; padding:4px 10px; border-radius:6px;
+    background:{C_PRIMARY}1A; color:{C_PRIMARY}; margin-right:6px; }}
+/* Nota metodológica: filete lateral en color de marca sobre fondo apenas teñido. Sin
+   elevación ni hover — es texto de apoyo, no una tarjeta interactiva; que “saltara” al
+   pasar el ratón la ponía al mismo nivel jerárquico que los datos. */
+.clinical-note {{
+    background:{C_PRIMARY}0D; border:1px solid {C_PRIMARY}26; border-left:2px solid {C_PRIMARY};
+    border-radius:0 10px 10px 0; padding:14px 18px 14px 20px;
+    font-size:13.5px; color:{t['text_secondary']}; line-height:1.7;
+}}
+.clinical-note b {{ color:{t['text']}; font-weight:600; }}
 /* Matriz de confusión (cuadrícula HTML: celdas legibles, etiquetas horizontales) */
-.cm-title {{ font-size:14px; font-weight:600; color:{t['text']}; margin-bottom:14px; display:flex; align-items:center; gap:8px; }}
-.cm-grid {{ display:grid; grid-template-columns:64px 1fr 1fr; gap:6px; align-items:stretch; }}
-.cm-collabel {{ font-size:11px; font-weight:500; color:{t['text_secondary']}; text-align:center; align-self:end; padding-bottom:5px; line-height:1.3; }}
-.cm-rowlabel {{ font-size:11px; font-weight:500; color:{t['text_secondary']}; text-align:right; align-self:center; padding-right:9px; line-height:1.3; }}
-.cm-cell {{ border-radius:9px; aspect-ratio:1 / 0.72; display:flex; flex-direction:column; align-items:center; justify-content:center; transition:transform 0.15s ease; }}
-.cm-cell:hover {{ transform:scale(1.03); }}
-.cm-num {{ font-size:23px; font-weight:700; line-height:1; }}
-.cm-tag {{ font-size:10px; font-weight:600; letter-spacing:0.04em; margin-top:4px; }}
-code {{ background:{t['surface_alt']}; padding:2px 6px; border-radius:4px; font-size:13px;
-    font-family:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; color:{t['text']}; }}
-/* Tabs nativos de Streamlit (st.tabs): usar la paleta del proyecto en vez del rojo por defecto */
-button[data-baseweb="tab"] {{ color:{t['text_secondary']} !important; }}
-button[data-baseweb="tab"]:hover {{ color:{C_PRIMARY} !important; }}
+.cm-title {{ font-size:13px; font-weight:600; color:{t['text']}; margin-bottom:16px; display:flex; align-items:center; gap:8px; }}
+.cm-grid {{ display:grid; grid-template-columns:64px 1fr 1fr; gap:4px; align-items:stretch; }}
+.cm-collabel {{ font-family:{FONT_MONO}; font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase;
+    color:{t['text_muted']}; text-align:center; align-self:end; padding-bottom:7px; line-height:1.45; }}
+.cm-rowlabel {{ font-family:{FONT_MONO}; font-size:10px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase;
+    color:{t['text_muted']}; text-align:right; align-self:center; padding-right:10px; line-height:1.45; }}
+/* gap:4px + este anillo del color de la superficie = el separador de 2px que exige el
+   sistema de diseño entre rellenos contiguos, para que dos celdas de tono parecido no
+   se lean como una sola mancha. */
+.cm-cell {{ border-radius:8px; aspect-ratio:1 / 0.72; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px {t['surface']};
+    transition:transform 0.15s ease, box-shadow 0.15s ease; }}
+.cm-cell:hover {{ transform:scale(1.025); box-shadow:inset 0 0 0 1px {t['surface']}, {SHADOW}; }}
+.cm-num {{ font-family:{FONT_MONO}; font-size:24px; font-weight:500; line-height:1; font-variant-numeric:tabular-nums; }}
+.cm-tag {{ font-family:{FONT_MONO}; font-size:9.5px; font-weight:500; letter-spacing:0.12em; margin-top:6px; }}
+code {{ background:{t['surface_alt']}; padding:2px 6px; border-radius:5px; font-size:12.5px;
+    border:1px solid {t['border']}; font-family:{FONT_MONO}; color:{t['text']}; }}
+/* ═══════════════ TABS NATIVOS (st.tabs — Análisis SHAP) ═══════════════
+   Etiquetas en monoespaciada versalita: leen como un selector de instrumento, no como
+   un menú web genérico. El subrayado activo es de 2px en color de marca. */
+button[data-baseweb="tab"] {{
+    color:{t['text_secondary']} !important;
+    font-family:{FONT_MONO} !important; font-size:11.5px !important; font-weight:500 !important;
+    letter-spacing:0.09em !important; text-transform:uppercase !important;
+    padding-top:10px !important; padding-bottom:10px !important;
+    transition: color 0.15s ease !important;
+}}
+button[data-baseweb="tab"] p {{
+    font-family:{FONT_MONO} !important; font-size:11.5px !important; font-weight:500 !important;
+    letter-spacing:0.09em !important; text-transform:uppercase !important;
+}}
+button[data-baseweb="tab"]:hover {{ color:{t['text']} !important; }}
 button[data-baseweb="tab"][aria-selected="true"] {{ color:{C_PRIMARY} !important; }}
-[data-baseweb="tab-highlight"] {{ background-color:{C_PRIMARY} !important; }}
+[data-baseweb="tab-highlight"] {{ background-color:{C_PRIMARY} !important; height:2px !important; }}
 [data-baseweb="tab-border"] {{ background-color:{t['border']} !important; }}
-/* Scrollbar fino y en paleta (WebKit + Firefox): sustituye la barra gruesa del SO por un acabado sobrio */
+/* Scrollbar fino y en paleta (WebKit + Firefox): sustituye la barra gruesa del SO por un acabado sobrio.
+   Ojo: en Firefox las reglas ::-webkit-scrollbar NO se aplican — todo el acabado lo da la línea
+   scrollbar-width / scrollbar-color de abajo, sin estado :hover posible. Por eso el pulgar usa
+   border_strong y no border: con el tono de borde (#E1E8EE en claro) quedaba casi invisible sobre
+   el fondo, y en Firefox no hay hover que lo rescate. */
 *::-webkit-scrollbar {{ width:10px; height:10px; }}
 *::-webkit-scrollbar-track {{ background:transparent; }}
-*::-webkit-scrollbar-thumb {{ background:{t['border']}; border-radius:8px; border:2px solid {t['bg']}; }}
+*::-webkit-scrollbar-thumb {{ background:{t['border_strong']}; border-radius:8px; border:2px solid {t['bg']}; }}
 *::-webkit-scrollbar-thumb:hover {{ background:{C_MID2}; }}
-* {{ scrollbar-width:thin; scrollbar-color:{t['border']} transparent; }}
+* {{ scrollbar-width:thin; scrollbar-color:{t['border_strong']} transparent; }}
 /* Selección de texto en color de marca (en vez del azul del navegador) */
 ::selection {{ background:{C_PRIMARY}33; color:{t['text']}; }}
 /* Foco de teclado visible y consistente (accesibilidad) sin desplazar el layout */
@@ -542,21 +838,24 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     /* Al apilarse (teléfono) la columna es de ancho completo; el alto ya lo fija la figura Plotly */
     .st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] {{ height:auto !important; }}
     /* Cabecera proporcionada a la pantalla del teléfono */
-    .page-title {{ font-size:26px; margin-bottom:10px; }}
-    .page-subtitle {{ font-size:15px; margin-bottom:20px; }}
-    .kpi-card, .info-card {{ padding:14px 15px; }}
-    .stat-card {{ min-height:84px !important; }}
+    .page-eyebrow {{ font-size:10px; letter-spacing:0.13em; margin-bottom:9px; }}
+    .page-title {{ font-size:30px; margin-bottom:9px; }}
+    .page-subtitle {{ font-size:14.5px; margin-bottom:10px; }}
+    .page-rule {{ margin-bottom:22px; }}
+    .kpi-card, .info-card {{ padding:16px 16px; }}
+    .stat-card {{ min-height:88px !important; }}
     /* Matriz de confusión: la columna de etiquetas fija en 64 px ahoga las celdas en pantalla estrecha */
     .cm-grid {{ grid-template-columns:52px 1fr 1fr; }}
     .cm-num {{ font-size:19px; }}
     /* El resto de la jerarquía tipográfica también baja un escalón en móvil, en la misma proporción
        que el título/subtítulo de arriba — así todo el texto queda a escala del viewport, no solo la
        cabecera de la página. */
-    .section-title {{ font-size:16px; }}
-    .section-sub, .clinical-note, .cm-title {{ font-size:13px; }}
-    .kpi-value {{ font-size:15px; }}
-    .kpi-model, .kpi-label, .stat-label {{ font-size:12px; }}
-    .badge {{ font-size:11px; }}
+    .section-title {{ font-size:19px; gap:10px; }}
+    .section-sub, .clinical-note, .cm-title {{ font-size:12.5px; }}
+    .kpi-value {{ font-size:14px; }}
+    .kpi-model, .kpi-label {{ font-size:12px; }}
+    .stat-label {{ font-size:9.5px; letter-spacing:0.09em; }}
+    .badge {{ font-size:10px; }}
 }}
 
 /* ═══════════════ TRANSICIÓN DE PÁGINA ═══════════════
@@ -580,15 +879,218 @@ button[data-testid="stExpandSidebarButton"]:hover {{
 # ─────────────────────────────────────────────────────────────────────────
 # DATOS VERIFICADOS
 # ─────────────────────────────────────────────────────────────────────────
+# El color de cada modelo sale de SERIES (escala categórica): el tono sigue a la ENTIDAD
+# y es el mismo en las 6 páginas — tarjeta KPI, curva ROC, matriz de confusión y barras
+# agrupadas. Antes eran tres pasos de una misma rampa azul y se confundían entre sí.
 MODELS = {
-    "lightgbm": {"label": "LightGBM", "color": C_PRIMARY, "auc": 0.9485, "f1_macro": 0.6523,
+    "lightgbm": {"label": "LightGBM", "color": SERIES["lightgbm"], "auc": 0.9485, "f1_macro": 0.6523,
                  "accuracy": 0.7243, "mcc": 0.4566, "cm": {"tn": 924, "fp": 423, "fn": 9, "tp": 211}},
-    "svm_rbf": {"label": "SVM-RBF", "color": C_DARK, "auc": 0.9377, "f1_macro": 0.8243,
+    "svm_rbf": {"label": "SVM-RBF", "color": SERIES["svm_rbf"], "auc": 0.9377, "f1_macro": 0.8243,
                 "accuracy": 0.9075, "mcc": 0.6539, "cm": {"tn": 1250, "fp": 97, "fn": 48, "tp": 172}},
-    "qsvm": {"label": "QSVM", "color": C_MID1, "auc": 0.5493, "f1_macro": 0.4669,
+    "qsvm": {"label": "QSVM", "color": SERIES["qsvm"], "auc": 0.5493, "f1_macro": 0.4669,
              "accuracy": 0.8602, "mcc": 0.0625, "cm": {"tn": 1347, "fp": 0, "fn": 219, "tp": 1}},
 }
 MODEL_ORDER = ["lightgbm", "svm_rbf", "qsvm"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# GOBERNANZA Y CALIDAD DEL DATO
+# ─────────────────────────────────────────────────────────────────────────
+# TODAS las cifras de esta sección se han transcrito de las SALIDAS EJECUTADAS de los
+# notebooks (los .ipynb del repositorio conservan sus outputs) y de TECHNICAL_NOTES.md.
+# Ninguna es estimada. Origen de cada bloque, indicado en su comentario.
+#
+# La app no puede leerlas en vivo: Streamlit Community Cloud solo ve el repositorio, no
+# Unity Catalog Volumes (ver TECHNICAL_NOTES §6). Igual que los .onnx y los .npy, viajan
+# embarcadas. Si se re-ejecuta el pipeline y cambian los conteos, hay que actualizarlas.
+
+# Embudo de registros: NB01 c.16/26 (Bronze) y NB02 c.11/13/15 (filtros Silver).
+# El "antes" del filtro DIQ010 es 7.835 y no el 7.831 que imprime la celda: esa celda se
+# re-ejecutó sobre el dataframe ya filtrado y su contador de partida quedó desplazado. Los
+# 4 registros descartados se confirman con el value_counts de la propia celda
+# (6.510 + 1.099 + 222 = 7.831).
+GOV_EMBUDO = [
+    ("Bronze — 3 ciclos unidos", 29400, None,
+     "27 ficheros XPT · join por SEQN · 162 columnas comunes a los tres ciclos"),
+    ("Filtro edad ≥ 18 años", 17961, 11439, "Restricción a población adulta"),
+    ("Filtro ayuno — LBXGLU no nulo", 7835, 10126,
+     "Proxy del subgrupo en ayunas: PHAFSTMN no es consistente entre ciclos"),
+    ("Filtro DIQ010 válido", 7831, 4,
+     "Descarta los códigos 7 «no sabe» y 9 «rehúsa responder», y los nulos"),
+]
+# NB02 c.19/21/23/25/27 · NB03 c.8/10/12/14
+GOV_SILVER_OPS = [
+    ("Variables DIQ excluidas por leakage", "6", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
+    ("Columnas sparse eliminadas", "66", "Umbral de >80 % de valores ausentes"),
+    ("Variables winsorizadas", "67", "Recorte de outliers por IQR × 3"),
+    ("Missing tras imputación", "0", "De 75.855 a 0 en el dataset SVM/QSVM (mediana + moda)"),
+]
+GOV_GOLD_OPS = [
+    ("Features tras codificación", "106", "One-hot de 5 variables categóricas sobre 84 features"),
+    ("Descartadas por correlación", "16", "Umbral r > 0,90 entre pares de predictores"),
+    ("Features finales", "89", "Conjunto con el que se entrenan los tres modelos"),
+    ("Partición estratificada", "6.264 / 1.567", "80/20 · 14,03 % positivos en train, 14,04 % en test"),
+]
+
+# NB07 — suite dataframe-expectations 0.7.0, salida de las celdas 10 y 12.
+GOV_SUITE = {
+    "nombre": "silver_quality_suite", "fecha": "2026-06-22", "registros": 7831,
+    "total": 15, "passed": 15, "failed": 0, "pass_rate": 1.0, "duracion_s": 0.001765,
+}
+# Las 15 expectativas, con la descripción literal que devuelve el runner.
+GOV_EXPECTATIVAS = [
+    ("Completitud", "TARGET", "como máximo 0 nulos"),
+    ("Completitud", "LBXGH", "como máximo 0 nulos"),
+    ("Completitud", "LBXGLU", "como máximo 0 nulos"),
+    ("Completitud", "RIDAGEYR", "como máximo 0 nulos"),
+    ("Completitud", "BMXBMI", "como máximo 0 nulos"),
+    ("Rangos clínicos", "RIDAGEYR", "mínimo entre 18 y 25"),
+    ("Rangos clínicos", "RIDAGEYR", "máximo entre 70 y 120"),
+    ("Rangos clínicos", "LBXGH", "mínimo entre 3,0 y 6,0"),
+    ("Rangos clínicos", "LBXGH", "máximo entre 8,0 y 20,0"),
+    ("Rangos clínicos", "LBXGLU", "mínimo entre 30 y 80"),
+    ("Rangos clínicos", "LBXGLU", "máximo entre 150 y 500"),
+    ("Rangos clínicos", "BMXBMI", "mínimo entre 10,0 y 18"),
+    ("Rangos clínicos", "BMXBMI", "máximo entre 40,0 y 80"),
+    ("Volumen", "DataFrame", "al menos 7.000 filas"),
+    ("Volumen", "DataFrame", "como máximo 9.000 filas"),
+]
+
+# NB03 c.34 — historial Delta de la capa Gold. Se muestran las 6 versiones más recientes
+# de las 10 registradas; el resto se purga a las 168 h por retención de Delta.
+GOV_DELTA_HISTORY = [
+    (9, "2026-07-16 16:58:32", "WRITE", 7831, 757558),
+    (8, "2026-07-14 14:22:20", "WRITE", 7831, 757558),
+    (7, "2026-06-23 20:13:23", "WRITE", 7831, 755326),
+    (6, "2026-06-23 20:11:48", "WRITE", 7831, 755326),
+    (5, "2026-06-21 06:13:12", "WRITE", 7831, 754078),
+    (4, "2026-06-21 06:04:25", "WRITE", 7831, 754078),
+]
+
+# La cadena de custodia contra la fuga de información, en el orden en que actúa.
+GOV_LEAKAGE = [
+    ("01", "Exclusión en Silver", "NB02 · celda 9",
+     "Se eliminan 6 variables DIQ de tratamiento y seguimiento antes de winsorizar: son "
+     "consecuencia del diagnóstico, no predictores de él.", None),
+    ("02", "Verificación cruzada", "NB02 · celda 18",
+     "Se comprueba que ninguna DIQ sobrevive en los 2 Parquet de Silver ni en los 13 de "
+     "Gold. Resultado: 15/15 artefactos limpios.", None),
+    ("03", "Filtro defensivo del QSVM", "NB03 · celda 8",
+     "Segunda barrera antes de la selección por Random Forest. No descarta ninguna columna "
+     "(89 de 89 pasan) — precisamente la prueba de que la primera barrera funcionó.", None),
+    ("04", "Guarda de pesos de muestreo", "NB03 · celda 6",
+     "Detiene el pipeline si aparece cualquier peso de muestreo distinto del conocido. "
+     "WTINT2YR sí llega al modelado y está documentado en TECHNICAL_NOTES 2.10.",
+     'pesos = [c for c in X_svm.columns if c.startswith(("WTSAF", "WTMEC", "WTINT"))]\n'
+     'assert set(pesos) <= {"WTINT2YR"}, f"Peso de muestreo inesperado: {pesos}"'),
+]
+
+# Escalado anti-leakage del StandardScaler: NB03 c.16/18.
+GOV_SCALER = [
+    ("Ajuste", "Solo sobre train", "fit_transform en train · transform en test"),
+    ("Columnas evaluadas", "66", "Con varianza > 0"),
+    ("Columnas constantes", "23", "Varianza 0 — ver TECHNICAL_NOTES 2.8"),
+    ("Media ≈ 0 · desv. ≈ 1", "Verificado", "Assert sobre todas las columnas con dispersión"),
+]
+
+# Inventario de frameworks por capa. El primer elemento de cada lista es el framework
+# que vertebra la capa; el resto, los que lo acompañan.
+# Color del filete: las TRES CAPAS de datos son una progresión de refinamiento y toman
+# pasos de la rampa secuencial (igual que la arquitectura Medallón); los TRES MODELOS son
+# identidades y toman su color de SERIES, el mismo que llevan en el resto de la aplicación.
+GOV_STACK = [
+    ("Bronze", "ingesta", RAMP[1],
+     ["boto3", "pyreadstat 1.3.5", "Delta Lake", "Databricks Secrets", "PySpark"],
+     "boto3 sustituye a spark.conf, bloqueado en Serverless (TN 2.1). Tres asserts "
+     "de integridad: 27/27 ficheros, el join por SEQN no duplica filas, y Delta cuadra "
+     "con pandas."),
+    ("Silver", "calidad", RAMP[2],
+     ["dataframe-expectations 0.7.0", "pandas", "NumPy", "PyArrow", "Delta Lake"],
+     "El framework de calidad del TFM. Great Expectations es incompatible con el "
+     "entorno (TN 2.3). Suite de 15 expectativas en 3 dimensiones, con evidencia "
+     "persistida en CSV."),
+    ("Gold", "preparación", RAMP[3],
+     ["scikit-learn", "StandardScaler", "RandomForest", "joblib", "Delta time travel"],
+     "Escalado ajustado solo sobre train, partición estratificada con semilla fija y "
+     "exportación del contrato de serving (scaler y medianas en JSON)."),
+    ("LightGBM", "modelo", SERIES["lightgbm"],
+     ["LightGBM", "SHAP TreeExplainer", "skl2onnx", "onnxmltools", "GridSearchCV"],
+     "Interpretabilidad exacta por algoritmo polinomial sobre las 1.567 instancias de "
+     "test, y verificación de que el ONNX reproduce el PKL al 100 %."),
+    ("SVM-RBF", "modelo", SERIES["svm_rbf"],
+     ["scikit-learn SVC", "SHAP KernelExplainer", "shap.kmeans", "skl2onnx"],
+     "SHAP agnóstico al modelo, con coste de horas: se calcula una vez sobre 200 "
+     "instancias y se persiste en disco para reutilizarlo."),
+    ("QSVM", "modelo", SERIES["qsvm"],
+     ["Qiskit 2.5.0", "qiskit-machine-learning 0.9.0", "qiskit-algorithms 0.4.0",
+      "ZZFeatureMap", "FidelityQuantumKernel"],
+     "Sin soporte ONNX: el formato no admite operaciones cuánticas (TN 2.5). La "
+     "trazabilidad recae en un CSV de métricas con los 14 campos de configuración."),
+]
+
+# Registro de decisiones — las 11 limitaciones de TECHNICAL_NOTES.md §2, resumidas.
+# "critical" marca las que condicionan la arquitectura; "warning", las asumidas y
+# documentadas sin corregir; "good", las resueltas sin residuo.
+GOV_DECISIONES = [
+    ("2.1", "critical", "spark.conf bloqueado en Serverless",
+     "La configuración de credenciales AWS por spark.conf.set devuelve CONFIG_NOT_AVAILABLE, "
+     "el mecanismo estándar para conectar Spark con S3.",
+     "boto3 como cliente alternativo. S3 queda como almacenamiento de origen y Unity Catalog "
+     "Volumes como capa de procesamiento."),
+    ("2.2", "critical", "MLflow bloqueado en Serverless",
+     "La integración nativa de MLflow está deshabilitada en la capa gratuita: no hay registro "
+     "de experimentos, métricas ni artefactos.",
+     "Doble mecanismo sustitutivo: los transaction logs de Delta Lake aportan versión, "
+     "timestamp y métricas de operación; y cada notebook persiste sus métricas en CSV."),
+    ("2.3", "critical", "Great Expectations incompatible",
+     "Requiere una combinación de pandas/numpy que choca con las versiones fijadas del "
+     "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
+     "dataframe-expectations 0.7.0 como alternativa compatible. 15 expectativas sobre Silver "
+     "en tres dimensiones. Resultado 15/15, pass rate 1,0."),
+    ("2.4", "warning", "QSVM — coste computacional O(n²)",
+     "Sobre las 6.264 instancias de train, la matriz de kernel exigiría ~39 millones de "
+     "evaluaciones del circuito. Con 1.500 el kernel agota la memoria.",
+     "Entrenamiento sobre muestra estratificada de 500 instancias (~22 min) preservando el "
+     "ratio 86/14. La evaluación sí usa el test completo, para que las métricas comparen."),
+    ("2.5", "warning", "QSVM — sin soporte ONNX nativo",
+     "El formato ONNX no admite operaciones cuánticas: ni skl2onnx ni onnxmltools pueden "
+     "serializar un kernel basado en simulación de estados.",
+     "Serialización con joblib. El modelo requiere el entorno Qiskit para inferencia, por lo "
+     "que el QSVM no entra en el Predictor en Vivo."),
+    ("2.6", "warning", "Versiones de Qiskit no fijables",
+     "immutable_package_constraints.txt de Databricks bloquea la instalación de versiones "
+     "concretas, así que no hay reproducibilidad exacta de versión.",
+     "El pipeline corre con las versiones del entorno (2.5.0 / 0.9.0 / 0.4.0), cuya API es "
+     "compatible, y el notebook las imprime en una celda de verificación."),
+    ("2.7", "good", "Pérdida de variables por duración de sesión",
+     "Las celdas largas (22 min de entrenamiento, 132 de predicción) pueden agotar la sesión "
+     "serverless y llevarse las variables en memoria.",
+     "Persistencia inmediata tras cada operación costosa y modo TRAINING_MODE que recarga "
+     "desde disco en ejecuciones posteriores."),
+    ("2.8", "warning", "Winsorización aplicada a categóricas codificadas",
+     "NHANES codifica numéricamente muchas categóricas. Si más del 75 % comparte valor, "
+     "IQR = 0, los límites colapsan y clip() convierte la variable en constante. "
+     "10 columnas quedaron colapsadas así.",
+     "Se documenta sin modificar: corregirlo alteraría Silver, Gold y los tres modelos. Las "
+     "columnas constantes no sesgan —el modelo no extrae señal de ellas—, pero pierden "
+     "información. Corrección identificada como trabajo futuro."),
+    ("2.9", "warning", "Correlación calculada antes de particionar",
+     "El filtro r > 0,90 se calcula sobre el dataset completo, así que las 16 columnas "
+     "descartadas se deciden usando también las observaciones de test.",
+     "Se documenta sin modificar. No afecta al escalado ni a la selección de features del "
+     "QSVM, ambos ajustados solo sobre train, pero la selección deja de ser estrictamente "
+     "ciega al test."),
+    ("2.10", "warning", "Peso de muestreo WTINT2YR entre las features",
+     "El join intracíclico duplica WTSAF2YR en tres columnas. WTINT2YR no está en la lista "
+     "de exclusión y sobrevive al filtro de correlación: es una de las 89 features.",
+     "Se documenta sin modificar y se añade un assert que detecta la aparición de cualquier "
+     "OTRO peso. Un peso muestral no es una variable clínica: no filtra el objetivo, pero "
+     "deja al modelo apoyarse en el diseño de la encuesta."),
+    ("2.11", "good", "El QSVM serializado no es recargable entre versiones",
+     "El pickle arrastra el ZZFeatureMap con sus ParameterExpression. Si Qiskit cambia de "
+     "versión, la deserialización falla — y Serverless actualiza sin aviso.",
+     "La carga va envuelta en try/except: si falla, TRAINING_MODE pasa a True y el notebook "
+     "re-entrena en lugar de abortar. Queda operativo en los tres escenarios posibles."),
+]
 
 SHAP_LIGHTGBM = [
     ("LBXGH", "HbA1c", 1.1243), ("RIDAGEYR", "Edad", 0.4654), ("LBXGLU", "Glucosa ayunas", 0.3161),
@@ -777,7 +1279,11 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    _MENU_OPTIONS = ["Resumen", "Resultados", "Análisis SHAP", "Circuito Cuántico", "Esfera de Bloch", "Predictor en Vivo"]
+    # Gobernanza va en SEGUNDA posición, no al final: el título del TFM es "Integración QML en
+    # pipeline DataOps" y la mitad DataOps se sostiene en esta página. Puesta aquí, la app se
+    # recorre en el orden real de ejecución —el dato antes que los modelos— y enlaza con el
+    # bloque Medallón de Resumen, que es su resumen de tres líneas.
+    _MENU_OPTIONS = ["Resumen", "Gobernanza", "Resultados", "Análisis SHAP", "Circuito Cuántico", "Esfera de Bloch", "Predictor en Vivo"]
     if "page" not in st.session_state:
         st.session_state.page = _MENU_OPTIONS[0]
 
@@ -795,12 +1301,16 @@ with st.sidebar:
     # streamlit-option-menu renderiza dentro de un iframe: el CSS del documento principal
     # (st.markdown) no puede alcanzar sus elementos internos. Por eso el modo narrow se logra
     # aquí, vía el dict "styles" que sí viaja al componente, en vez de con CSS externo.
-    nav_link_style = {"font-size": "13.5px", "text-align": "left", "margin": "2px 0", "padding": "10px 8px",
-                       "border-radius": "10px", "color": t["text_secondary"], "font-weight": "400",
-                       "border-left": "0px solid transparent", "transition": "all 0.12s ease",
+    # Ítem activo con filete izquierdo en color de marca (patrón de navegación de producto:
+    # el indicador vive en el borde y no depende solo del relleno, que en tema claro es muy
+    # tenue). El resto conserva su color de texto secundario y un fondo neutro al hover.
+    nav_link_style = {"font-family": "'IBM Plex Sans', system-ui, sans-serif",
+                       "font-size": "13.5px", "text-align": "left", "margin": "3px 0", "padding": "10px 10px",
+                       "border-radius": "0 9px 9px 0", "color": t["text_secondary"], "font-weight": "400",
+                       "border-left": "2px solid transparent", "transition": "all 0.14s ease",
                        "--hover-color": t["sidebar_active"]}
     nav_link_selected_style = {"background-color": t["sidebar_active"], "color": t["text"], "font-weight": "600",
-                                "border-left": "0px solid transparent", "border-radius": "10px"}
+                                "border-left": f"2px solid {C_PRIMARY}", "border-radius": "0 9px 9px 0"}
     if narrow:
         nav_link_style.update({"font-size": "0px", "text-align": "center", "padding": "12px 0"})
         nav_link_selected_style.update({"font-size": "0px", "text-align": "center", "padding": "12px 0"})
@@ -816,7 +1326,7 @@ with st.sidebar:
     page = option_menu(
         menu_title=None,
         options=_MENU_OPTIONS,
-        icons=["house", "bar-chart", "diagram-3", "cpu", "globe", "sliders"],
+        icons=["house", "shield-check", "bar-chart", "diagram-3", "cpu", "globe", "sliders"],
         default_index=_MENU_OPTIONS.index(st.session_state.page),
         manual_select=_forced_index,
         # La key incluye el tema Y el modo narrow a proposito: option_menu vive en un iframe con
@@ -873,13 +1383,51 @@ def header(eyebrow, title, subtitle):
     # un slider, alternar el tema) porque ahí la key no cambia y el contenedor se reutiliza tal cual.
     _page_idx = _MENU_OPTIONS.index(page) if page in _MENU_OPTIONS else 0
     with st.container(key=f"page_enter_{_page_idx}"):
-        st.markdown(f'<div class="page-title">{title}: <span style="color:{t["text_secondary"]}; font-weight:400;">{eyebrow}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="page-subtitle">{subtitle}</div>', unsafe_allow_html=True)
+        # El antetítulo pasa a línea propia sobre el titular (antes iba pegado detrás, como
+        # "Resultados: Comparativa triangulada"): así el titular queda limpio en serif y la
+        # etiqueta de sección se lee como tal. Mismos textos, distinta jerarquía visual.
+        st.markdown(
+            f'<div class="page-eyebrow">{eyebrow}</div>'
+            f'<div class="page-title">{title}</div>'
+            f'<div class="page-subtitle">{subtitle}</div>'
+            f'<div class="page-rule"></div>',
+            unsafe_allow_html=True)
+
+def _hex_rgb(hex_color):
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 def hex_to_rgba(hex_color, alpha):
-    hex_color = hex_color.lstrip("#")
-    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    r, g, b = _hex_rgb(hex_color)
     return f"rgba({r},{g},{b},{alpha})"
+
+def _rel_luminance(rgb):
+    """Luminancia relativa WCAG de un color ya compuesto (canales 0-255)."""
+    def _lin(c):
+        c /= 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (_lin(v) for v in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+def ink_over(hex_color, alpha, surface):
+    """Tinta legible sobre un relleno SEMITRANSPARENTE, calculada, no supuesta.
+
+    El fondo real de una celda pintada con alfa es la MEZCLA del color con la
+    superficie de debajo, no el color a secas. Con la paleta azul anterior daba igual
+    —todas las series eran oscuras y el blanco valía siempre—, pero con esta no: en
+    tema oscuro la serie de LightGBM es #E9E9E9 y la de QSVM #F9C449, así que una
+    tinta blanca fija sería blanco sobre blanco. Aquí se compone la mezcla y se elige
+    entre carbón y blanco el que más contraste dé, de modo que la regla sigue siendo
+    correcta si mañana se vuelve a cambiar la paleta.
+
+    Devuelve (tinta, tinta_atenuada) para el número y su etiqueta.
+    """
+    mix = tuple(f * alpha + b * (1 - alpha)
+                for f, b in zip(_hex_rgb(hex_color), _hex_rgb(surface)))
+    lum = _rel_luminance(mix)
+    if (1.05 / (lum + 0.05)) >= ((lum + 0.05) / (_rel_luminance(_hex_rgb(P_CARBON)) + 0.05)):
+        return "#FFFFFF", "rgba(255,255,255,0.78)"
+    return P_CARBON, hex_to_rgba(P_CARBON, 0.72)
 
 def nf(x, dec=4):
     """Formato numérico español: coma decimal, punto de millar (consistente con la prosa del TFM)."""
@@ -890,14 +1438,34 @@ def pct(x, dec=1):
     """Porcentaje en formato español: '78,2 %' (x en [0,1])."""
     return f"{nf(x * 100, dec)} %"
 
+GRID = hex_to_rgba(t["text_secondary"], 0.16)   # rejilla recesiva: se ve, no compite
+
+
 def plotly_layout(fig, height=300, **kwargs):
+    """Tema común a TODAS las gráficas: rejilla recesiva, ejes sin línea, cifras en
+    monoespaciada y esquinas de barra redondeadas (4px, como marca el sistema de diseño).
+    Al centralizarlo aquí, cualquier ajuste tipográfico o de rejilla se propaga a las
+    seis páginas sin tocarlas una a una."""
     margin = kwargs.pop("margin", dict(l=40, r=16, t=30, b=36))
+    # Ejes primero: sin línea de eje ni cero marcado, rejilla punteada tenue y cifras en
+    # monoespaciada. Van ANTES del update_layout de abajo a propósito — Plotly fusiona
+    # propiedad a propiedad, así que lo último aplicado gana. Si estos valores por defecto
+    # se aplicaran después, pisarían el tickfont que fija cada página (p. ej. las etiquetas
+    # de categoría de la comparativa de métricas, que son palabras y van en sans, no en
+    # monoespaciada). Puestos aquí, son solo el punto de partida y la página manda.
+    fig.update_xaxes(showline=False, zeroline=False, griddash="dot", gridwidth=1,
+                     tickfont=dict(family=PLOTLY_MONO, size=11))
+    fig.update_yaxes(showline=False, zeroline=False, griddash="dot", gridwidth=1,
+                     tickfont=dict(family=PLOTLY_MONO, size=11))
     fig.update_layout(
         height=height, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter", color=t["text_secondary"], size=12),
+        font=dict(family=PLOTLY_FONT, color=t["text_secondary"], size=12),
         separators=",.",  # localización ES: coma decimal / punto de millar en ticks y hover
-        hoverlabel=dict(bgcolor=t["surface"], bordercolor=t["border"], align="left",
-                         font=dict(family="Inter", size=12, color=t["text"])),
+        # barcornerradius es de layout (no de traza): redondea el extremo de dato de TODAS
+        # las barras de la figura, verticales y horizontales.
+        barcornerradius=4,
+        hoverlabel=dict(bgcolor=t["surface"], bordercolor=t["border_strong"], align="left",
+                         font=dict(family=PLOTLY_FONT, size=12, color=t["text"])),
         margin=margin, **kwargs,
     )
     return fig
@@ -940,18 +1508,30 @@ if page == "Resumen":
     with col1:
         st.markdown('<div class="section-title">Arquitectura Medallón</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-sub">Cadena de valor del dato (Curry, 2016) aplicada capa a capa</div>', unsafe_allow_html=True)
+        # Bronze → Silver → Gold es una PROGRESIÓN de refinamiento, no tres identidades:
+        # le corresponde la rampa secuencial, no colores categóricos. Se toman sus tres
+        # pasos altos, así el orden de las capas se lee en el propio color sin leyenda —
+        # y con esta paleta la coincidencia es literal, la capa "Gold" acaba en el oro.
+        #
+        # El color va SOLO en el filete y en la muestra sólida. El nombre y el numeral van
+        # en tinta: los tonos cálidos de la paleta dan entre 1,3:1 y 2,0:1 sobre blanco y
+        # como texto serían ilegibles. El numeral refuerza el orden sin depender del color.
         layers = [
-            ("Bronze", "Ingesta desde AWS S3 (boto3) sin transformación. Preserva la fuente de verdad original.", C_LIGHT),
-            ("Silver", "Limpieza, imputación (mediana/moda), winsorización IQR y validación con dataframe-expectations.", C_MID2),
-            ("Gold", "Escalado, codificación, partición 80/20 estratificada. Listo para modelado.", C_MID1),
+            ("01", "Bronze", "Ingesta desde AWS S3 (boto3) sin transformación. Preserva la fuente de verdad original.", RAMP[2]),
+            ("02", "Silver", "Limpieza, imputación (mediana/moda), winsorización IQR y validación con dataframe-expectations.", RAMP[3]),
+            ("03", "Gold", "Escalado, codificación, partición 80/20 estratificada. Listo para modelado.", RAMP[4]),
         ]
-        for name, desc, color in layers:
+        for num, name, desc, color in layers:
             st.markdown(f"""
             <div class="medallion-item" style="border-left-color:{color};">
-                <div style="width:10px;height:10px;border-radius:3px;background:{color};margin-top:5px;flex-shrink:0;"></div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;margin-top:3px;">
+                    <div style="font-family:{FONT_MONO};font-size:11px;font-weight:600;
+                                color:{t['text_muted']};letter-spacing:0.05em;">{num}</div>
+                    <div style="width:9px;height:9px;border-radius:2px;background:{color};"></div>
+                </div>
                 <div>
-                    <div style="font-size:14px;font-weight:600;color:{t['text']};">{name}</div>
-                    <div style="font-size:13px;color:{t['text_secondary']};line-height:1.55;">{desc}</div>
+                    <div class="medallion-name" style="color:{t['text']};">{name}</div>
+                    <div style="font-size:13px;color:{t['text_secondary']};line-height:1.6;">{desc}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -970,35 +1550,316 @@ if page == "Resumen":
             textinfo="none", hoverinfo="skip", sort=False, showlegend=False,
             domain=dict(x=[0.0, 1.0], y=[0.0, 0.965]),
         ))
+        # Clase minoritaria en color de marca, mayoritaria en un neutro teñido: el ojo va
+        # directo al 14 % (que es el dato relevante) sin que dos tonos saturados compitan.
         fig.add_trace(go.Pie(
-            labels=pie_labels, values=pie_values, hole=0.62,
-            marker=dict(colors=[C_LIGHT, C_PRIMARY], line=dict(color=t["surface"], width=2)),
+            labels=pie_labels, values=pie_values, hole=0.68,
+            marker=dict(colors=[hex_to_rgba(t["text_secondary"], 0.22), C_PRIMARY],
+                        line=dict(color=t["surface"], width=2)),
             textinfo="label+percent", textposition="outside",
-            textfont=dict(size=12, family="Inter", color=t["text"]),
+            textfont=dict(size=12, family=PLOTLY_FONT, color=t["text"]),
             insidetextorientation="horizontal", sort=False, automargin=True,
             hoverinfo="skip",
             domain=dict(x=[0.0, 1.0], y=[0.035, 1.0]),
         ))
+        # El agujero del donut deja de estar vacío: aloja la cifra protagonista. Es el
+        # recurso de “número héroe” — la lectura principal no obliga a interpretar el arco.
+        fig.add_annotation(text="14 %", x=0.5, y=0.545, xref="paper", yref="paper", showarrow=False,
+                           font=dict(family=PLOTLY_MONO, size=34, color=t["text"]))
+        fig.add_annotation(text="DIABETES", x=0.5, y=0.40, xref="paper", yref="paper", showarrow=False,
+                           font=dict(family=PLOTLY_MONO, size=10.5, color=t["text_muted"]))
         plotly_layout(fig, height=300, showlegend=False, margin=dict(l=30, r=30, t=45, b=45))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     st.markdown('<div class="section-title" style="margin-top:6px;">Comparativa triangulada — objetivo del experimento</div>', unsafe_allow_html=True)
-    labels3 = [("LightGBM", "Baseline tabular de referencia", C_PRIMARY),
-               ("SVM-RBF", "Puente estructural hacia el componente cuántico", C_DARK),
-               ("QSVM", "FidelityQuantumKernel — mismo clasificador, kernel cuántico", C_MID1)]
+    # Mismos tonos que en Resultados: el color sigue al modelo en toda la aplicación.
+    labels3 = [("LightGBM", "Baseline tabular de referencia", SERIES["lightgbm"]),
+               ("SVM-RBF", "Puente estructural hacia el componente cuántico", SERIES["svm_rbf"]),
+               ("QSVM", "FidelityQuantumKernel — mismo clasificador, kernel cuántico", SERIES["qsvm"])]
     # HTML sin saltos ni indentación: Streamlit trataría las líneas con 4+ espacios como bloque de código.
     _compare_cards = "".join(
-        f'<div class="info-card" style="border-top:3px solid {color};">'
-        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">'
-        f'<span style="width:9px;height:9px;border-radius:50%;background:{color};flex-shrink:0;"></span>'
-        f'<span style="font-size:14px;font-weight:600;color:{t["text"]};">{name}</span></div>'
-        f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.55;">{desc}</div></div>'
+        f'<div class="info-card" style="border-top:2px solid {color};">'
+        f'<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">'
+        f'<span style="width:8px;height:8px;border-radius:2px;background:{color};flex-shrink:0;"></span>'
+        f'<span style="font-size:13.5px;font-weight:600;color:{t["text"]};letter-spacing:0.01em;">{name}</span></div>'
+        f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.6;">{desc}</div></div>'
         for name, desc, color in labels3
     )
     st.markdown(f'<div class="compare-grid">{_compare_cards}</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════
-# PAGINA 2 — RESULTS
+# PAGINA 2 — GOBERNANZA
+# ═══════════════════════════════════════════════════════════════════════
+elif page == "Gobernanza":
+    header("Gobernanza · DataOps", "Gobernanza y Calidad del Dato",
+           "Los controles que sostienen el pipeline: qué se valida, qué se descarta y por qué, "
+           "qué queda registrado y con qué frameworks. Todas las cifras proceden de las salidas "
+           "ejecutadas de los notebooks.")
+
+    tab_calidad, tab_linaje, tab_stack = st.tabs(
+        ["Calidad del dato", "Linaje y trazabilidad", "Inventario de frameworks"])
+
+    # ─────────────────────────── TAB A — CALIDAD ───────────────────────────
+    with tab_calidad:
+        _kpis = [
+            (f"{GOV_SUITE['passed']}/{GOV_SUITE['total']}", "Expectativas superadas"),
+            (nf(GOV_SUITE["pass_rate"], 1), "Pass rate de la suite"),
+            (f"{GOV_SUITE['registros']:,}".replace(",", "."), "Registros validados"),
+            ("15/15", "Artefactos sin leakage"),
+        ]
+        st.markdown(
+            '<div class="compare-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">'
+            + "".join(
+                f'<div class="info-card stat-card">'
+                f'<div class="stat-num">{v}</div>'
+                f'<div class="stat-label">{lab}</div></div>'
+                for v, lab in _kpis)
+            + "</div>", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Embudo de registros</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">De los 29.400 registros de Bronze sobreviven 7.831 a los '
+                     'filtros de cohorte de Silver. Cada escalón responde a un criterio explícito, no a una '
+                     'limpieza genérica.</div>', unsafe_allow_html=True)
+
+        _fcol, _ncol = st.columns([1.35, 1], gap="medium")
+        with _fcol:
+            # Las etapas son una PROGRESIÓN (cada una contiene a la siguiente): magnitud, no
+            # identidad. Le corresponde la rampa secuencial, no colores categóricos. Se recorre
+            # de RAMP[0] a RAMP[3] para que el refinamiento creciente se lea en el propio color.
+            _nombres = [e[0] for e in GOV_EMBUDO][::-1]
+            _valores = [e[1] for e in GOV_EMBUDO][::-1]
+            _colores = [RAMP[i] for i in range(len(GOV_EMBUDO))][::-1]
+            _hover = [_wrap_hover(e[3]) for e in GOV_EMBUDO][::-1]
+            _perdidos = [e[2] for e in GOV_EMBUDO][::-1]
+            _etiquetas = [f"{v:,}".replace(",", ".") for v in _valores]
+
+            fig = go.Figure(go.Bar(
+                x=_valores, y=_nombres, orientation="h",
+                marker_color=_colores, cliponaxis=False,
+                text=_etiquetas, textposition="outside",
+                textfont=dict(family=PLOTLY_MONO, size=12, color=t["text"]),
+                customdata=list(zip(_hover, [("—" if p is None else f"{p:,}".replace(",", "."))
+                                              for p in _perdidos])),
+                hovertemplate="<b>%{y}</b><br>Registros: %{x:,}<br>Descartados: %{customdata[1]}"
+                              "<br>%{customdata[0]}<extra></extra>",
+            ))
+            plotly_layout(fig, height=250, showlegend=False,
+                          margin=dict(l=8, r=70, t=10, b=28),
+                          xaxis=dict(range=[0, max(_valores) * 1.18], showgrid=True,
+                                     gridcolor=GRID, fixedrange=True),
+                          yaxis=dict(showgrid=False, fixedrange=True,
+                                     tickfont=dict(family=PLOTLY_FONT, size=11.5)))
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        with _ncol:
+            _pasos = "".join(
+                f'<div class="kpi-row"><span class="kpi-label">{etapa}</span>'
+                f'<span class="kpi-value">'
+                f'{"—" if perdidos is None else "−" + f"{perdidos:,}".replace(",", ".")}'
+                f'</span></div>'
+                for etapa, _v, perdidos, _d in GOV_EMBUDO)
+            st.markdown(
+                f'<div class="info-card"><div class="kpi-model">Registros descartados por filtro</div>'
+                f'{_pasos}'
+                f'<div class="kpi-row"><span class="kpi-label">Partición Gold 80/20</span>'
+                f'<span class="kpi-value">6.264 / 1.567</span></div></div>',
+                unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Suite de validación — dataframe-expectations</div>',
+                     unsafe_allow_html=True)
+        # El separador de millar se sustituye SOLO en la cifra, no en la frase: aplicar el
+        # replace a la cadena entera se llevaría por delante las comas de la prosa.
+        _n_reg = f'{GOV_SUITE["registros"]:,}'.replace(",", ".")
+        st.markdown(
+            f'<div class="section-sub">Suite <code>{GOV_SUITE["nombre"]}</code>, ejecutada el '
+            f'{GOV_SUITE["fecha"]} sobre los {_n_reg} registros de Silver en '
+            f'{nf(GOV_SUITE["duracion_s"], 4)} segundos. Great Expectations es incompatible con las '
+            f'versiones fijadas del runtime serverless: esta es la alternativa adoptada.</div>',
+            unsafe_allow_html=True)
+
+        _filas, _dim_previa = [], None
+        for dim, col, regla in GOV_EXPECTATIVAS:
+            if dim != _dim_previa:
+                _n = sum(1 for d, _, _ in GOV_EXPECTATIVAS if d == dim)
+                _filas.append(f'<div class="gov-dim">{dim} · {_n}</div>')
+                _dim_previa = dim
+            _filas.append(
+                f'<div class="gov-check">'
+                f'<span class="gov-dot" style="background:{STATUS["good"]};"></span>'
+                f'<span class="gov-col">{col}</span>'
+                f'<span class="gov-rule">{regla}</span>'
+                f'<span class="gov-state" style="color:{STATUS["good"]};">passed</span></div>')
+        st.markdown(f'<div class="info-card">{"".join(_filas)}</div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Operaciones de calidad por capa</div>',
+                     unsafe_allow_html=True)
+        _ocol1, _ocol2 = st.columns(2, gap="medium")
+        for _col, _titulo, _ops in ((_ocol1, "Silver — limpieza y saneamiento", GOV_SILVER_OPS),
+                                     (_ocol2, "Gold — preparación para modelado", GOV_GOLD_OPS)):
+            with _col:
+                _rows = "".join(
+                    f'<div class="kpi-row" style="align-items:flex-start;">'
+                    f'<span class="kpi-label" style="max-width:62%;">{lab}'
+                    f'<span style="display:block;font-size:11.5px;color:{t["text_muted"]};'
+                    f'line-height:1.5;margin-top:3px;">{det}</span></span>'
+                    f'<span class="kpi-value">{val}</span></div>'
+                    for lab, val, det in _ops)
+                st.markdown(
+                    f'<div class="info-card"><div class="kpi-model">'
+                    f'<span class="kpi-dot" style="background:{C_PRIMARY};"></span>{_titulo}</div>'
+                    f'{_rows}</div>', unsafe_allow_html=True)
+
+    # ────────────────────── TAB B — LINAJE Y TRAZABILIDAD ──────────────────────
+    with tab_linaje:
+        st.markdown('<div class="section-title">Trazabilidad sin MLflow</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">La restricción que más condiciona la arquitectura del '
+                     'pipeline, y su mitigación.</div>', unsafe_allow_html=True)
+
+        _lcol1, _lcol2 = st.columns(2, gap="medium")
+        with _lcol1:
+            st.markdown(
+                f'<div class="info-card" style="border-top:2px solid {STATUS["critical"]};">'
+                f'<div class="kpi-model"><span class="kpi-dot" style="background:{STATUS["critical"]};">'
+                f'</span>Limitación</div>'
+                f'<div style="font-size:13.5px;color:{t["text_secondary"]};line-height:1.7;">'
+                f'La integración nativa de <b style="color:{t["text"]};">MLflow</b> está deshabilitada '
+                f'en Databricks Serverless gratuito. Cualquier llamada a <code>mlflow.start_run()</code> '
+                f'o <code>mlflow.log_metric()</code> produce errores de autenticación: no hay registro '
+                f'de experimentos, métricas ni artefactos.</div></div>', unsafe_allow_html=True)
+        with _lcol2:
+            st.markdown(
+                f'<div class="info-card" style="border-top:2px solid {STATUS["good"]};">'
+                f'<div class="kpi-model"><span class="kpi-dot" style="background:{STATUS["good"]};">'
+                f'</span>Mitigación — doble mecanismo</div>'
+                f'<div style="font-size:13.5px;color:{t["text_secondary"]};line-height:1.7;">'
+                f'<b style="color:{t["text"]};">Transaction logs de Delta Lake</b> — cada escritura '
+                f'genera un registro ACID con versión, marca de tiempo y métricas de operación.<br><br>'
+                f'<b style="color:{t["text"]};">CSV de métricas por modelo</b> — cada notebook persiste '
+                f'sus resultados en Unity Catalog Volumes, y las figuras los leen de ahí en vez de '
+                f'llevarlos escritos a mano.</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Historial Delta — capa Gold</div>',
+                     unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">Seis versiones más recientes de las diez registradas. '
+                     'Delta purga las anteriores tras 168 h de retención, comportamiento esperado y no '
+                     'un fallo del pipeline.</div>', unsafe_allow_html=True)
+        _hist = "".join(
+            f'<tr><td class="num">{v}</td><td class="num">{ts}</td><td>{op}</td>'
+            f'<td class="num">{filas:,}</td><td class="num">{bytes_/1024:,.0f} KB</td></tr>'
+            .replace(",", ".")
+            for v, ts, op, filas, bytes_ in GOV_DELTA_HISTORY)
+        st.markdown(
+            f'<div class="info-card"><div class="gov-table-wrap"><table class="gov-table">'
+            f'<thead><tr><th>Versión</th><th>Timestamp</th><th>Operación</th>'
+            f'<th>Filas</th><th>Tamaño</th></tr></thead><tbody>{_hist}</tbody></table></div></div>',
+            unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Cadena de custodia contra la fuga de información</div>',
+                     unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">Cuatro barreras encadenadas. La tercera no descarta '
+                     'ninguna columna — y eso es exactamente lo que se quiere ver: prueba que las '
+                     'anteriores hicieron su trabajo.</div>', unsafe_allow_html=True)
+        # Mismo componente que la arquitectura Medallón: numeral + acento lateral + descripción.
+        # El acento sigue la rampa secuencial porque las barreras son una secuencia, no identidades.
+        for _i, (num, nombre, origen, desc, codigo) in enumerate(GOV_LEAKAGE):
+            _c = RAMP[_i + 1]
+            _code_html = (f'<div class="gov-code">{codigo}</div>' if codigo else "")
+            st.markdown(
+                f'<div class="medallion-item" style="border-left-color:{_c};">'
+                f'<div style="display:flex;flex-direction:column;align-items:center;gap:6px;'
+                f'flex-shrink:0;margin-top:3px;">'
+                f'<div style="font-family:{FONT_MONO};font-size:11px;font-weight:600;'
+                f'color:{t["text_muted"]};letter-spacing:0.05em;">{num}</div>'
+                f'<div style="width:9px;height:9px;border-radius:2px;background:{_c};"></div></div>'
+                f'<div style="min-width:0;">'
+                f'<div class="medallion-name" style="color:{t["text"]};">{nombre}'
+                f'<span style="font-weight:400;letter-spacing:0.06em;color:{t["text_muted"]};'
+                f'margin-left:10px;text-transform:none;">{origen}</span></div>'
+                f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.6;">{desc}</div>'
+                f'{_code_html}</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        _scol1, _scol2 = st.columns([1, 1.15], gap="medium")
+        with _scol1:
+            _srows = "".join(
+                f'<div class="kpi-row" style="align-items:flex-start;">'
+                f'<span class="kpi-label" style="max-width:56%;">{lab}'
+                f'<span style="display:block;font-size:11.5px;color:{t["text_muted"]};'
+                f'line-height:1.5;margin-top:3px;">{det}</span></span>'
+                f'<span class="kpi-value">{val}</span></div>'
+                for lab, val, det in GOV_SCALER)
+            st.markdown(
+                f'<div class="info-card"><div class="kpi-model">'
+                f'<span class="kpi-dot" style="background:{C_PRIMARY};"></span>'
+                f'Escalado sin fuga estadística</div>{_srows}</div>', unsafe_allow_html=True)
+        with _scol2:
+            st.markdown(
+                '<div class="clinical-note">El <b>StandardScaler</b> se ajusta exclusivamente sobre '
+                '<b>train</b>: <code>fit_transform</code> en entrenamiento y <code>transform</code> en '
+                'test. Si se ajustara sobre el conjunto completo, la media y la desviación típica del '
+                'test se filtrarían al preprocesado y las métricas quedarían optimistas. La selección '
+                'de las 8 variables del QSVM sigue la misma regla — el Random Forest se entrena solo '
+                'con <code>X_train_svm_scaled</code>.<br><br>El filtro de correlación, en cambio, '
+                '<b>sí</b> se calcula antes de particionar. Está documentado y asumido en '
+                'TECHNICAL_NOTES 2.9.</div>', unsafe_allow_html=True)
+
+    # ──────────────────── TAB C — INVENTARIO DE FRAMEWORKS ────────────────────
+    with tab_stack:
+        st.markdown('<div class="section-title">Frameworks por capa</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">El primer distintivo de cada tarjeta es el framework que '
+                     'vertebra la capa; el resto lo acompañan.</div>', unsafe_allow_html=True)
+
+        for _inicio in (0, 3):
+            _cards = "".join(
+                f'<div class="info-card" style="border-top:2px solid {color};">'
+                f'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;'
+                f'margin-bottom:11px;">'
+                f'<span style="font-size:14px;font-weight:600;color:{t["text"]};">{capa}</span>'
+                f'<span style="font-family:{FONT_MONO};font-size:9.5px;font-weight:500;'
+                f'letter-spacing:0.12em;text-transform:uppercase;color:{t["text_muted"]};">{rol}</span>'
+                f'</div>'
+                f'<div style="margin-bottom:12px;line-height:2.1;">'
+                + "".join(f'<span class="badge">{b}</span>' for b in badges) + "</div>"
+                f'<div style="font-size:12.5px;color:{t["text_secondary"]};line-height:1.65;">{nota}</div>'
+                f'</div>'
+                for capa, rol, color, badges, nota in GOV_STACK[_inicio:_inicio + 3])
+            st.markdown(f'<div class="compare-grid">{_cards}</div>', unsafe_allow_html=True)
+            if _inicio == 0:
+                st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Registro de decisiones</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-sub">Las once limitaciones documentadas en TECHNICAL_NOTES, '
+                     'con su mitigación. Tres condicionan la arquitectura, seis se asumen y documentan '
+                     'sin corregir —porque hacerlo invalidaría los resultados ya obtenidos— y dos quedan '
+                     'resueltas sin residuo.</div>', unsafe_allow_html=True)
+
+        _ETIQUETA = {"critical": "Arquitectura", "warning": "Asumida", "good": "Resuelta"}
+        for ref, nivel, titulo, problema, solucion in GOV_DECISIONES:
+            _c = STATUS[nivel]
+            with st.expander(f"{ref} · {titulo}"):
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+                    f'<span class="gov-dot" style="background:{_c};margin-left:0;"></span>'
+                    f'<span class="gov-state" style="color:{_c};">{_ETIQUETA[nivel]}</span></div>'
+                    f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.7;">'
+                    f'<b style="color:{t["text"]};">Problema · </b>{problema}<br><br>'
+                    f'<b style="color:{t["text"]};">Solución adoptada · </b>{solucion}</div>',
+                    unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="clinical-note">Las cifras de esta página se han transcrito de las salidas '
+            'ejecutadas de los notebooks del repositorio y de <code>TECHNICAL_NOTES.md</code>; ninguna '
+            'es estimada. La aplicación no puede consultarlas en vivo porque Streamlit Community Cloud '
+            'solo accede al repositorio, no a Unity Catalog Volumes.</div>', unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════
+# PAGINA 3 — RESULTS
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "Resultados":
     header("Comparativa triangulada", "Resultados",
@@ -1009,10 +1870,10 @@ elif page == "Resultados":
         m = MODELS[key]
         with col:
             st.markdown(f"""
-            <div class="kpi-card" style="border-top:3px solid {m['color']};">
+            <div class="kpi-card" style="border-top:2px solid {m['color']};">
                 <div class="kpi-model"><span class="kpi-dot" style="background:{m['color']}"></span>{m['label']}</div>
                 <div class="kpi-value-auc" style="color:{m['color']};">{nf(m['auc'])}</div>
-                <div class="kpi-label" style="margin-bottom:10px;">AUC-ROC</div>
+                <div class="stat-label" style="margin:6px 0 14px;">AUC-ROC</div>
                 <div class="kpi-row"><span class="kpi-label">F1-macro</span><span class="kpi-value">{nf(m['f1_macro'])}</span></div>
                 <div class="kpi-row"><span class="kpi-label">Accuracy</span><span class="kpi-value">{nf(m['accuracy'])}</span></div>
                 <div class="kpi-row"><span class="kpi-label">MCC</span><span class="kpi-value">{nf(m['mcc'])}</span></div>
@@ -1047,14 +1908,21 @@ elif page == "Resultados":
         else:
             x, y = roc_curve_for_auc(m["auc"])
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", line=dict(color=t["border"], width=1.5, dash="dash"), showlegend=False, hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=x, y=y, mode="lines", line=dict(color=m["color"], width=2.5), fill="tozeroy",
-                                  fillcolor=hex_to_rgba(m["color"], 0.18), name=m["label"],
+        # Diagonal de azar como referencia recesiva (punteada, gris): es el marco de lectura,
+        # no una serie más. Sin entrada de leyenda ni hover.
+        fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
+                                  line=dict(color=hex_to_rgba(t["text_secondary"], 0.35), width=1, dash="dot"),
+                                  showlegend=False, hoverinfo="skip"))
+        # Marca fina (2px) y relleno tenue: el área sugiere la magnitud del AUC sin tapar la curva.
+        fig.add_trace(go.Scatter(x=x, y=y, mode="lines", line=dict(color=m["color"], width=2, shape="spline", smoothing=0.4),
+                                  fill="tozeroy", fillcolor=hex_to_rgba(m["color"], 0.13), name=m["label"],
                                   hovertemplate="FPR %{x:.2f}<br>TPR %{y:.2f}<extra></extra>"))
-        plotly_layout(fig, height=250, showlegend=False,
-                      title=dict(text=f"{m['label']} · AUC {nf(m['auc'])}", font=dict(size=14, color=t["text"])),
-                      xaxis=dict(title="FPR", range=[0, 1], showgrid=False, zeroline=False, tickfont=dict(size=11), fixedrange=True),
-                      yaxis=dict(title="TPR", range=[0, 1], showgrid=True, gridcolor=t["border"], zeroline=False, tickfont=dict(size=11), fixedrange=True))
+        # Una sola serie por gráfica: el título la nombra y no hace falta caja de leyenda.
+        plotly_layout(fig, height=250, showlegend=False, hovermode="x unified",
+                      title=dict(text=f"{m['label']} · AUC {nf(m['auc'])}", x=0.01, xanchor="left",
+                                 font=dict(family=PLOTLY_FONT, size=13, color=t["text"])),
+                      xaxis=dict(title=dict(text="FPR", font=dict(size=11)), range=[0, 1], showgrid=False, fixedrange=True),
+                      yaxis=dict(title=dict(text="TPR", font=dict(size=11)), range=[0, 1], showgrid=True, gridcolor=GRID, fixedrange=True))
         with col:
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
@@ -1063,11 +1931,14 @@ elif page == "Resultados":
     st.markdown('<div class="section-sub">Valores exactos verificados contra el classification report de cada modelo</div>', unsafe_allow_html=True)
 
     def cm_cell(val, total, tag, color):
+        """Intensidad = proporción sobre la fila (magnitud): rampa de un solo tono, el del
+        modelo. El texto NUNCA va en el color de la serie — la tinta se CALCULA sobre la
+        mezcla real de relleno y tarjeta (ver ink_over), no por un umbral fijo de
+        proporción, que era lo que fallaba con series claras."""
         prop = val / total if total else 0.0
-        bg = hex_to_rgba(color, 0.12 + 0.80 * prop)
-        strong = prop > 0.55
-        txt = "#FFFFFF" if strong else t["text"]
-        sub = "rgba(255,255,255,0.85)" if strong else t["text_secondary"]
+        alpha = 0.10 + 0.82 * prop
+        bg = hex_to_rgba(color, alpha)
+        txt, sub = ink_over(color, alpha, t["surface"])
         return (f'<div class="cm-cell" style="background:{bg};color:{txt};">'
                 f'<div class="cm-num">{val}</div>'
                 f'<div class="cm-tag" style="color:{sub};">{tag}</div></div>')
@@ -1108,13 +1979,20 @@ elif page == "Resultados":
     for key in MODEL_ORDER:
         m = MODELS[key]
         fig.add_trace(go.Bar(name=m["label"], x=metric_labels, y=[m[k] for k in metric_keys], marker_color=m["color"],
-                              text=[nf(m[k], 3) for k in metric_keys], textposition="outside", textfont=dict(size=14),
+                              # Etiqueta directa sobre cada barra: los tres modelos quedan identificados
+                              # por texto además de por color, así la lectura no depende del tono.
+                              text=[nf(m[k], 3) for k in metric_keys], textposition="outside",
+                              textfont=dict(family=PLOTLY_MONO, size=12, color=t["text_secondary"]),
                               customdata=[[nf(m[k], 3), _wrap_hover(metric_desc[k])] for k in metric_keys],
                               hovertemplate="<b>%{fullData.name}</b> · %{x} = %{customdata[0]}<br>%{customdata[1]}<extra></extra>"))
-    plotly_layout(fig, height=460, barmode="group",
-                  legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=13, color=t["text"])),
-                  yaxis=dict(range=[0, 1.08], showgrid=True, gridcolor=t["border"], zeroline=False, fixedrange=True),
-                  xaxis=dict(showgrid=False, tickfont=dict(size=13, color=t["text"]), fixedrange=True))
+    # bargap/bargroupgap: barras finas con un carril de superficie entre ellas — dos rellenos
+    # contiguos nunca se tocan, que es lo que hace legible un grupo de tres.
+    plotly_layout(fig, height=460, barmode="group", bargap=0.42, bargroupgap=0.08,
+                  legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0,
+                              font=dict(family=PLOTLY_FONT, size=12.5, color=t["text"]),
+                              bgcolor="rgba(0,0,0,0)", itemsizing="constant"),
+                  yaxis=dict(range=[0, 1.10], showgrid=True, gridcolor=GRID, fixedrange=True),
+                  xaxis=dict(showgrid=False, tickfont=dict(family=PLOTLY_FONT, size=13, color=t["text"]), fixedrange=True))
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     st.markdown(f"""
@@ -1141,16 +2019,21 @@ elif page == "Análisis SHAP":
         values = [v for _, _, v in rev]
         customdata = [[code, label, _wrap_hover(VAR_DESC.get(code, label))] for code, label, _ in rev]
         fig = go.Figure(go.Bar(
-            x=values, y=names, orientation="h", marker_color=color,
-            text=[nf(v) for v in values], textposition="outside", textfont=dict(size=11),
+            x=values, y=names, orientation="h", marker_color=color, cliponaxis=False,
+            # El valor va en monoespaciada y en tinta secundaria, no en el color de la barra:
+            # el texto nunca lleva el color de la serie (lo aporta la propia barra al lado).
+            text=[nf(v) for v in values], textposition="outside",
+            textfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"]),
             customdata=customdata,
             hovertemplate="<b>%{customdata[0]}</b> · %{customdata[1]}<br>%{customdata[2]}<extra></extra>",
         ))
-        plotly_layout(fig, height=520, hovermode="y",
-                      xaxis=dict(title="mean(|SHAP value|)", showgrid=True, gridcolor=t["border"], range=[0, max(values) * 1.3], fixedrange=True),
-                      yaxis=dict(tickfont=dict(size=12, color=t["text"]), fixedrange=True), margin=dict(l=170, r=60, t=20, b=40))
+        plotly_layout(fig, height=520, hovermode="y", bargap=0.34,
+                      xaxis=dict(title=dict(text="mean(|SHAP value|)", font=dict(size=11)),
+                                 showgrid=True, gridcolor=GRID, range=[0, max(values) * 1.3], fixedrange=True),
+                      yaxis=dict(tickfont=dict(family=PLOTLY_MONO, size=11, color=t["text"]), fixedrange=True),
+                      margin=dict(l=170, r=60, t=20, b=40))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        st.markdown(f'<div class="section-sub">💡 Pasa el cursor sobre cada barra (fila) para ver el significado de la variable. {sample_note}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub" style="margin-top:10px;">Pasa el cursor sobre cada barra para ver el significado de la variable. {sample_note}</div>', unsafe_allow_html=True)
 
     def shap_summary_image(filename, title, caption):
         # Los SHAP summary plot (beeswarm) requieren los valores SHAP por instancia, que no están
@@ -1180,7 +2063,9 @@ elif page == "Análisis SHAP":
         (posición 6) es un artefacto del diseño muestral NHANES, no una variable clínica.
         </div>
         """, unsafe_allow_html=True)
-        shap_chart(SHAP_LIGHTGBM, C_PRIMARY, "Valores exactos (algoritmo polinomial) sobre las 1.567 instancias del test.")
+        # Cada pestaña usa el color de SU modelo (antes las dos iban en el mismo azul de marca):
+        # así el ranking se lee sin ambigüedad como perteneciente a LightGBM o a SVM-RBF.
+        shap_chart(SHAP_LIGHTGBM, SERIES["lightgbm"], "Valores exactos (algoritmo polinomial) sobre las 1.567 instancias del test.")
         shap_summary_image(
             "SHAP Summary LGBM.png",
             "SHAP Summary Plot — LightGBM (Figura 27)",
@@ -1197,7 +2082,7 @@ elif page == "Análisis SHAP":
         aplicable a cualquier clasificador.
         </div>
         """, unsafe_allow_html=True)
-        shap_chart(SHAP_SVMRBF, C_PRIMARY, "Valores aproximados por muestreo: fondo de 100 instancias, contribuciones sobre 200 instancias de test.")
+        shap_chart(SHAP_SVMRBF, SERIES["svm_rbf"], "Valores aproximados por muestreo: fondo de 100 instancias, contribuciones sobre 200 instancias de test.")
         shap_summary_image(
             "SHAP Summary SVM.png",
             "SHAP Summary Plot — SVM-RBF (Figura 31)",
@@ -1216,7 +2101,7 @@ elif page == "Circuito Cuántico":
     specs = [("8", "Qubits (feature_dimension)"), ("2", "Repeticiones (reps)"), ("Linear", "Entanglement"), ("qiskit 2.5.0", "Versión")]
     for col, (num, lab) in zip(cols, specs):
         with col:
-            st.markdown(f'<div class="info-card stat-card" style="min-height:96px;"><div class="stat-num" style="font-size:clamp(20px, 2.4vw, 34px);">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="info-card stat-card quantum" style="min-height:102px;"><div class="stat-num" style="font-size:clamp(19px, 2.3vw, 32px);">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
 
     # "Cómo funciona" a ancho completo: sus dos párrafos son conceptualmente independientes
     # (codificación vs. kernel), así que van lado a lado en vez de apilados — a ancho completo el
@@ -1266,22 +2151,27 @@ elif page == "Circuito Cuántico":
         # la punta, como una sombra proyectada suave — nada agresivo.
         fig.add_trace(go.Bar(
             x=[v * 1.03 for v in values], y=names, orientation="h",
-            marker_color=hex_to_rgba(t["text"], 0.08), marker_line_width=0,
+            marker_color=hex_to_rgba(t["text"], 0.07), marker_line_width=0,
             hoverinfo="skip", showlegend=False,
         ))
+        # Violeta: son las 8 variables que alimentan el QSVM, así que llevan el acento
+        # cuántico y no el azul de marca — la página entera queda cosida al componente.
         fig.add_trace(go.Bar(
-            x=values, y=names, orientation="h", marker_color=C_PRIMARY, cliponaxis=False,
-            text=[nf(v) for v in values], textposition="outside", textfont=dict(size=11),
+            x=values, y=names, orientation="h", marker_color=C_QUANTUM, cliponaxis=False,
+            text=[nf(v) for v in values], textposition="outside",
+            textfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"]),
             customdata=customdata, showlegend=False,
             hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
         ))
-        plotly_layout(fig, height=300, barmode="overlay",
+        plotly_layout(fig, height=300, barmode="overlay", bargap=0.34,
                       # Margen izquierdo reducido (150→95): pega las etiquetas al borde de la tarjeta
                       # en vez de dejarlas centradas con aire de sobra. Al ser el ancho de la tarjeta
                       # fijo, ese espacio liberado pasa directo al área de barras — se agrandan solas,
                       # de forma proporcional, sin tocar la tarjeta que las contiene.
-                      xaxis=dict(title="Importancia RF", showgrid=True, gridcolor=t["border"], range=[0, max(values) * 1.3], fixedrange=True),
-                      yaxis=dict(tickfont=dict(size=12, color=t["text"]), fixedrange=True), margin=dict(l=95, r=70, t=20, b=40))
+                      xaxis=dict(title=dict(text="Importancia RF", font=dict(size=11)),
+                                 showgrid=True, gridcolor=GRID, range=[0, max(values) * 1.3], fixedrange=True),
+                      yaxis=dict(tickfont=dict(family=PLOTLY_MONO, size=11, color=t["text"]), fixedrange=True),
+                      margin=dict(l=95, r=70, t=20, b=40))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     with col2:
@@ -1364,10 +2254,12 @@ elif page == "Esfera de Bloch":
         # Superficie esférica con sombreado (lighting) para darle volumen de bola real
         u, w = np.mgrid[0:2*np.pi:60j, 0:np.pi:30j]
         xs, ys, zs = np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w)
+        # La esfera es el CONTENEDOR, no el dato: va en un azul de marca muy diluido para
+        # que no compita con el vector. El dato (|ψ⟩) es lo único en violeta saturado.
         fig.add_trace(go.Surface(
-            x=xs, y=ys, z=zs, opacity=0.18, showscale=False, hoverinfo="skip",
-            colorscale=[[0, C_LIGHT], [1, C_MID2]],
-            lighting=dict(ambient=0.6, diffuse=0.9, specular=0.3, roughness=0.5, fresnel=0.2),
+            x=xs, y=ys, z=zs, opacity=0.14, showscale=False, hoverinfo="skip",
+            colorscale=[[0, RAMP[0]], [1, RAMP[2]]],
+            lighting=dict(ambient=0.66, diffuse=0.9, specular=0.22, roughness=0.6, fresnel=0.25),
             lightposition=dict(x=120, y=200, z=160),
         ))
         # Círculos máximos (ecuador + 2 meridianos): refuerzan la curvatura al rotar
@@ -1377,30 +2269,33 @@ elif page == "Esfera de Bloch":
             (np.cos(circ), np.zeros_like(circ), np.sin(circ)),   # meridiano XZ
             (np.zeros_like(circ), np.cos(circ), np.sin(circ)),   # meridiano YZ
         ]:
-            fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.5,
-                                        line=dict(color=C_MID2, width=1.5), showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.42,
+                                        line=dict(color=C_MID1, width=1.2), showlegend=False, hoverinfo="skip"))
         # Ejes cartesianos
         for ax_x, ax_y, ax_z in [([-1.06,1.06],[0,0],[0,0]), ([0,0],[-1.06,1.06],[0,0]), ([0,0],[0,0],[-1.10,1.10])]:
             fig.add_trace(go.Scatter3d(x=ax_x, y=ax_y, z=ax_z, mode="lines",
-                                        line=dict(color=t["border"], width=2), showlegend=False, hoverinfo="skip"))
-        # Vector de estado |ψ⟩ (φ = 0 → contenido en el plano XZ)
+                                        line=dict(color=t["border_strong"], width=1.5), showlegend=False, hoverinfo="skip"))
+        # Vector de estado |ψ⟩ (φ = 0 → contenido en el plano XZ), en el acento cuántico
         px, py, pz = np.sin(theta), 0.0, np.cos(theta)
         fig.add_trace(go.Scatter3d(x=[0, px], y=[0, py], z=[0, pz], mode="lines",
-                                    line=dict(color=C_PRIMARY, width=7), showlegend=False, hoverinfo="skip"))
+                                    line=dict(color=C_QUANTUM, width=7), showlegend=False, hoverinfo="skip"))
         # Punta de flecha (cono) apuntando hacia afuera a lo largo del vector
         fig.add_trace(go.Cone(x=[px], y=[py], z=[pz], u=[px], v=[py], w=[pz],
                               sizemode="absolute", sizeref=0.18, anchor="tip", showscale=False,
-                              colorscale=[[0, C_PRIMARY], [1, C_PRIMARY]], hoverinfo="skip"))
+                              colorscale=[[0, C_QUANTUM], [1, C_QUANTUM]], hoverinfo="skip"))
         # Proyección vertical al plano ecuatorial (pista de profundidad sutil)
-        fig.add_trace(go.Scatter3d(x=[px, px], y=[py, py], z=[pz, 0], mode="lines", opacity=0.45,
-                                    line=dict(color=C_PRIMARY, width=2, dash="dot"), showlegend=False, hoverinfo="skip"))
-        # Punto del estado (para el hover)
+        fig.add_trace(go.Scatter3d(x=[px, px], y=[py, py], z=[pz, 0], mode="lines", opacity=0.42,
+                                    line=dict(color=C_QUANTUM, width=2, dash="dot"), showlegend=False, hoverinfo="skip"))
+        # Punto del estado: anillo del color de la superficie alrededor del marcador, para que
+        # se despegue de la esfera cuando el vector queda por delante de ella.
         fig.add_trace(go.Scatter3d(x=[px], y=[py], z=[pz], mode="markers",
-                                    marker=dict(size=5, color=C_PRIMARY), showlegend=False,
+                                    marker=dict(size=7, color=C_QUANTUM,
+                                                line=dict(color=t["surface"], width=2)), showlegend=False,
                                     hovertemplate=f"|ψ⟩ ({var_code})<extra></extra>"))
         # Etiquetas de los polos
         fig.add_trace(go.Scatter3d(x=[0,0], y=[0,0], z=[1.08,-1.08], mode="text", text=["|0⟩","|1⟩"],
-                                    textfont=dict(size=15, color=t["text"]), showlegend=False, hoverinfo="skip"))
+                                    textfont=dict(family=PLOTLY_MONO, size=14, color=t["text_secondary"]),
+                                    showlegend=False, hoverinfo="skip"))
         # Alto FIJO en píxeles (sin autosize): tamaño idéntico en cada rerun y en cualquier navegador
         # (Firefox incluido). 486 px ≈ alto natural de la columna izquierda (selectbox + slider +
         # tarjeta de métricas), para que el fondo de esta tarjeta quede alineado con el de aquella.
@@ -1490,15 +2385,18 @@ elif page == "Predictor en Vivo":
             score += (w / wsum) * x_norm
         risk = float(np.clip(score, 0, 1))
 
-    # Categoría interpretable respecto al umbral de decisión (50%)
+    # Categoría interpretable respecto al umbral de decisión (50%). Aquí sí procede la
+    # paleta de ESTADO (bien / atención / grave): es una lectura de riesgo, no una serie
+    # de datos, y estos tonos están reservados a ese uso en toda la aplicación. La
+    # categoría se nombra siempre por texto además de por color — nunca solo color.
     if risk < 0.33:
-        cat, cat_color, interp = ("Bajo", C_MID1,
+        cat, cat_color, interp = ("Bajo", STATUS["good"],
             "Los valores introducidos sitúan el score claramente por debajo del umbral de decisión (50%).")
     elif risk < 0.5:
-        cat, cat_color, interp = ("Moderado", C_PRIMARY,
+        cat, cat_color, interp = ("Moderado", STATUS["warning"],
             "El score se aproxima al umbral de decisión (50%): zona de incertidumbre.")
     else:
-        cat, cat_color, interp = ("Elevado", C_DARK,
+        cat, cat_color, interp = ("Elevado", STATUS["critical"],
             "El score supera el umbral de decisión (50%): el sustituto clasificaría como caso positivo.")
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1511,16 +2409,18 @@ elif page == "Predictor en Vivo":
     with rcol1:
         st.markdown(f"""
         <div class="kpi-card" style="text-align:center;">
-            <div class="kpi-label" style="margin-bottom:8px;">Score de riesgo (sustituto)</div>
-            <div class="kpi-value-auc" style="color:{cat_color};">{pct(risk)}</div>
-            <div style="margin-top:12px;">
-                <span style="display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600;
-                      padding:5px 12px; border-radius:20px; background:{cat_color}1F; color:{cat_color};">
-                    <span style="width:8px; height:8px; border-radius:50%; background:{cat_color};"></span>
+            <div class="stat-label" style="margin:0 0 10px;">Score de riesgo (sustituto)</div>
+            <div class="kpi-value-auc" style="color:{cat_color}; font-size:clamp(30px, 4vw, 52px);">{pct(risk)}</div>
+            <div style="margin-top:14px;">
+                <span style="display:inline-flex; align-items:center; gap:8px; font-family:{FONT_MONO};
+                      font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase;
+                      padding:6px 13px; border-radius:7px; background:{cat_color}1A;
+                      border:1px solid {cat_color}40; color:{cat_color};">
+                    <span style="width:7px; height:7px; border-radius:2px; background:{cat_color};"></span>
                     Riesgo {cat}
                 </span>
             </div>
-            <div style="font-size:12.5px; color:{t['text_secondary']}; margin-top:14px; line-height:1.55;">{interp}</div>
+            <div style="font-size:12.5px; color:{t['text_secondary']}; margin-top:16px; line-height:1.65;">{interp}</div>
         </div>
         """, unsafe_allow_html=True)
     with rcol2:
@@ -1546,7 +2446,10 @@ elif page == "Predictor en Vivo":
         fig = go.Figure()
         r_in, r_out = 0.62, 1.0
         gap_deg = 1.6  # separador blanco entre zonas, como en la referencia
-        band_colors = [C_LIGHT, C_MID2, C_MID1, C_PRIMARY, C_DARK]
+        # Las bandas son MAGNITUD (score creciente): rampa secuencial de un solo tono, la
+        # validada. La lectura de estado la aporta la aguja, que sí va en color de estado —
+        # así el arco no se convierte en un semáforo y el dial se mantiene sobrio.
+        band_colors = list(RAMP)
         n_bands = len(band_colors)
         band_span = 180 / n_bands
         for i, color in enumerate(band_colors):
@@ -1563,7 +2466,7 @@ elif page == "Predictor en Vivo":
             fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1, line=dict(color=t["text_secondary"], width=1.5))
             xl, yl = _polar(ang, r_out + 0.20)
             fig.add_annotation(x=xl, y=yl, text=str(tv), showarrow=False,
-                               font=dict(size=11, color=t["text_secondary"], family="Inter"))
+                               font=dict(size=10.5, color=t["text_muted"], family=PLOTLY_MONO))
 
         # Aguja: línea fina + círculo abierto en el pivote (como la referencia), color según categoría
         # de riesgo — coherente con el número y la insignia de la tarjeta izquierda.
@@ -1579,6 +2482,6 @@ elif page == "Predictor en Vivo":
         fig.update_yaxes(visible=False, range=[-0.08, 1.25], fixedrange=True, scaleanchor="x", scaleratio=1)
         fig.update_layout(height=260, margin=dict(l=16, r=16, t=6, b=4),
                           plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                          font=dict(family="Inter", color=t["text"]))
+                          font=dict(family=PLOTLY_FONT, color=t["text"]))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
         st.markdown(f'<div class="section-sub" style="text-align:center; margin-top:-6px;">Zonas: bajo · moderado · alto · &nbsp;línea = umbral de decisión (50%)</div>', unsafe_allow_html=True)
