@@ -512,6 +512,22 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
     font-family:{FONT_MONO}; font-size:11px; font-weight:600; letter-spacing:0.14em;
     text-transform:uppercase; margin-bottom:5px;
 }}
+/* Enlace de navegación a Gobernanza desde el bloque Medallón. Es un st.button porque hace
+   falta ejecutar código (empujar el índice al option_menu), pero NO debe leerse como botón:
+   compite con las tarjetas y rompe el registro editorial de la página. Se despoja del chrome
+   y queda como enlace de texto en color de marca, alineado con el filete de las tarjetas. */
+.st-key-ir_gobernanza button {{
+    background:transparent !important; border:none !important; box-shadow:none !important;
+    padding:2px 0 !important; margin-top:4px !important; min-height:0 !important;
+    color:{C_PRIMARY} !important; font-weight:500 !important;
+    transition: opacity 0.15s ease !important;
+}}
+.st-key-ir_gobernanza button p {{
+    font-family:{FONT_MONO} !important; font-size:11.5px !important; font-weight:500 !important;
+    letter-spacing:0.09em !important; text-transform:uppercase !important;
+}}
+.st-key-ir_gobernanza button:hover {{ opacity:0.72; text-decoration:underline; }}
+.st-key-ir_gobernanza button:focus:not(:focus-visible) {{ box-shadow:none !important; }}
 /* ═══════════════ GOBERNANZA ═══════════════
    Fila de expectativa validada. El estado NUNCA va solo en color: punto + etiqueta de
    texto ("PASSED"), que es lo que exige el sistema de diseño para los colores de estado
@@ -932,10 +948,35 @@ GOV_GOLD_OPS = [
 ]
 
 # NB07 — suite dataframe-expectations 0.7.0, salida de las celdas 10 y 12.
+# Valores de respaldo: son los que la suite produjo el 22/06/2026, transcritos de la salida.
 GOV_SUITE = {
     "nombre": "silver_quality_suite", "fecha": "2026-06-22", "registros": 7831,
     "total": 15, "passed": 15, "failed": 0, "pass_rate": 1.0, "duracion_s": 0.001765,
 }
+# ...pero si el CSV que genera el propio NB07 está embarcado, MANDA él. Así las cifras dejan
+# de estar transcritas a mano y no pueden desincronizarse de una reejecución del pipeline:
+# basta copiar validacion_silver_dfe.csv desde el volumen a streamlit/models/ (el .gitignore
+# tiene la excepción para que suba, como ya la tienen los .onnx y los .npy).
+# Si no está, se usan los valores de arriba y la página se comporta igual que antes.
+GOV_SUITE_FUENTE = "valores verificados del notebook"
+_dfe_csv = MODELS_DIR / "validacion_silver_dfe.csv"
+if _dfe_csv.exists():
+    try:
+        import csv as _csv
+        with open(_dfe_csv, encoding="utf-8", newline="") as _fh:
+            _fila = next(_csv.DictReader(_fh))
+        GOV_SUITE = {
+            "nombre": _fila["suite_name"], "fecha": _fila["fecha"],
+            "registros": int(_fila["dataframe_rows"]),
+            "total": int(_fila["total_expectations"]),
+            "passed": int(_fila["total_passed"]), "failed": int(_fila["total_failed"]),
+            "pass_rate": float(_fila["pass_rate"]), "duracion_s": float(_fila["duration_seconds"]),
+        }
+        GOV_SUITE_FUENTE = "leído de validacion_silver_dfe.csv"
+    except (KeyError, ValueError, StopIteration, OSError):
+        # Un CSV con otro esquema o truncado no debe tumbar la página: se ignora y se
+        # mantienen los valores de respaldo, que son los publicados en la memoria.
+        pass
 # Las 15 expectativas, con la descripción literal que devuelve el runner.
 GOV_EXPECTATIVAS = [
     ("Completitud", "TARGET", "como máximo 0 nulos"),
@@ -1516,10 +1557,14 @@ if page == "Resumen":
         # El color va SOLO en el filete y en la muestra sólida. El nombre y el numeral van
         # en tinta: los tonos cálidos de la paleta dan entre 1,3:1 y 2,0:1 sobre blanco y
         # como texto serían ilegibles. El numeral refuerza el orden sin depender del color.
+        #
+        # Las descripciones son deliberadamente de UNA línea: el detalle de cada control
+        # (expectativas, filtros, linaje) vive en la página Gobernanza y no debe contarse
+        # dos veces. Aquí solo se nombra qué hace cada capa; el enlace de abajo lleva al resto.
         layers = [
-            ("01", "Bronze", "Ingesta desde AWS S3 (boto3) sin transformación. Preserva la fuente de verdad original.", RAMP[2]),
-            ("02", "Silver", "Limpieza, imputación (mediana/moda), winsorización IQR y validación con dataframe-expectations.", RAMP[3]),
-            ("03", "Gold", "Escalado, codificación, partición 80/20 estratificada. Listo para modelado.", RAMP[4]),
+            ("01", "Bronze", "Ingesta desde AWS S3 sin transformación. Preserva la fuente de verdad.", RAMP[2]),
+            ("02", "Silver", "Limpieza, imputación, winsorización y validación de calidad.", RAMP[3]),
+            ("03", "Gold", "Escalado, codificación y partición estratificada. Listo para modelar.", RAMP[4]),
         ]
         for num, name, desc, color in layers:
             st.markdown(f"""
@@ -1535,6 +1580,13 @@ if page == "Resumen":
                 </div>
             </div>
             """, unsafe_allow_html=True)
+        # Salto a Gobernanza reutilizando el mismo mecanismo que el toggle de la sidebar:
+        # option_menu vive en un iframe y no lee session_state.page por su cuenta, así que
+        # hay que empujarle el índice con manual_select (menu_force_index se consume al leerse).
+        if st.button("Ver los controles de calidad y linaje  →", key="ir_gobernanza"):
+            st.session_state.page = "Gobernanza"
+            st.session_state.menu_force_index = _MENU_OPTIONS.index("Gobernanza")
+            st.rerun()
 
     with col2:
         st.markdown('<div class="section-title">Distribución variable objetivo (DIQ010)</div>', unsafe_allow_html=True)
@@ -1853,10 +1905,12 @@ elif page == "Gobernanza":
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
-            '<div class="clinical-note">Las cifras de esta página se han transcrito de las salidas '
-            'ejecutadas de los notebooks del repositorio y de <code>TECHNICAL_NOTES.md</code>; ninguna '
-            'es estimada. La aplicación no puede consultarlas en vivo porque Streamlit Community Cloud '
-            'solo accede al repositorio, no a Unity Catalog Volumes.</div>', unsafe_allow_html=True)
+            f'<div class="clinical-note">Las cifras de esta página proceden de las salidas ejecutadas '
+            f'de los notebooks del repositorio y de <code>TECHNICAL_NOTES.md</code>; ninguna es '
+            f'estimada. La aplicación no puede consultarlas en vivo porque Streamlit Community Cloud '
+            f'solo accede al repositorio, no a Unity Catalog Volumes.<br><br>'
+            f'Resumen de la suite de calidad: <b>{GOV_SUITE_FUENTE}</b>.</div>',
+            unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 3 — RESULTS

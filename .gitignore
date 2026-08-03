@@ -54,3 +54,8 @@ Thumbs.db
 # Excepción: los modelos ONNX y arrays .npy del Live Predictor SÍ deben subir
 !streamlit/models/*.onnx
 !streamlit/models/*.npy
+
+# Excepción: el resumen de la suite de calidad que genera el NB07. No son datos NHANES
+# (son 9 cifras agregadas de la validación), y la página Gobernanza lo lee si está
+# presente en vez de llevar las cifras transcritas a mano.
+!streamlit/models/validacion_silver_dfe.csv
