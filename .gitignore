@@ -59,3 +59,9 @@ Thumbs.db
 # (son 9 cifras agregadas de la validación), y la página Gobernanza lo lee si está
 # presente en vez de llevar las cifras transcritas a mano.
 !streamlit/models/validacion_silver_dfe.csv
+
+# Excepción: los "golden sets" que generan el NB04 y el NB05 — 25 filas del test con la
+# probabilidad que produjo el modelo entrenado. Sirven para que el dashboard verifique de
+# punta a punta su propio camino de inferencia (escalado incluido) contra los notebooks.
+# Son 25 de 7.831 registros ya anonimizados por NHANES, sin SEQN ni identificadores.
+!streamlit/models/golden_*.npz
