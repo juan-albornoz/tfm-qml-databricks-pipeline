@@ -15,14 +15,19 @@ en la pagina Results.
 """
 
 import base64
+import html
 import io
 import json
+import re
 import textwrap
 from pathlib import Path
+from typing import TypedDict
+from urllib.parse import quote_plus
 
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components   # solo para fijar <html lang>; ver más abajo
 from PIL import Image
 from streamlit_option_menu import option_menu
 
@@ -60,6 +65,96 @@ def _b64_image_autocrop(path: str, pad: int = 16) -> str:
     buf = io.BytesIO()
     img.crop(box).save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
+
+# ─────────────────────────────────────────────────────────────────────────
+# TIRA DE TECNOLOGÍAS (página Resumen)
+# ─────────────────────────────────────────────────────────────────────────
+# EL ORDEN ES EL DEL PIPELINE, no el alfabético ni el de importancia: la tira se lee como
+# se ejecuta el proyecto. AWS guarda el origen; Delta Lake sostiene las tres capas que
+# Spark escribe; ONNX serializa lo ya entrenado; GitHub y Streamlit son la entrega. Así
+# cuenta la misma historia que el bloque Medallón de encima, pero de un vistazo.
+#
+# AWS va con UNA sola entrada (el logotipo corporativo) y no con los iconos de servicio de
+# S3 e IAM: en una tira que resume el proyecto entero, dos de las doce casillas para dos
+# servicios del mismo proveedor desequilibraban la lectura. El detalle de qué servicio hace
+# qué está en Gobernanza, que es donde se puede explicar.
+#
+# Cada entrada es (fichero, nombre). El nombre no se traduce —son marcas— y viaja en alt y
+# title: da el tooltip y deja la tira utilizable con lector de pantalla, que si no
+# encontraría una docena de imágenes sin nombre.
+#
+# Los ficheros que todavía no están se SALTAN en silencio, igual que hace shap_summary_image
+# con las figuras del beeswarm: la tira se completa sola en cuanto se añadan, sin tocar código.
+TECH_STACK = [
+    ("tech-aws.svg",          "Amazon Web Services"),
+    ("tech-databricks.png",   "Databricks"),
+    ("tech-spark.png",        "Apache Spark"),
+    ("tech-delta-lake.png",   "Delta Lake"),
+    ("tech-python.png",       "Python"),
+    ("tech-scikit-learn.png", "scikit-learn"),
+    # Los tres modelos, en el orden de MODEL_ORDER, y cada uno detrás del framework que lo
+    # implementa: scikit-learn → SVM-RBF, Qiskit → QSVM. LightGBM es las dos cosas a la vez.
+    # SVM-RBF y QSVM no son productos y no tienen marca: el primero lleva un icono propio y
+    # el segundo el logotipo del TFM, el mismo de la barra lateral.
+    ("tech-lightgbm.svg",     "LightGBM"),
+    ("tech-svm.png",          "SVM-RBF"),
+    ("tech-qiskit.svg",       "Qiskit"),
+    ("tech-qsvm.png",         "QSVM"),
+    ("tech-onnx.svg",         "ONNX"),
+    # Git y GitHub son dos cosas distintas y van seguidas en ese orden: el control de
+    # versiones primero y el alojamiento después, que es como se usan.
+    ("tech-git.png",          "Git"),
+    ("tech-github.svg",       "GitHub"),
+    ("tech-streamlit.svg",    "Streamlit"),
+]
+TECH_ALTO_BASE = 32.0   # alto en pantalla de un isotipo cuadrado
+TECH_ALTO_MIN = 21.0    # suelo para el más apaisado
+
+# Marcas que existen de verdad en disco, y cuántas van por fila. La tira se pinta en DOS
+# filas equilibradas, así que la anchura de columna es la mitad del recuento redondeando
+# hacia arriba: con 14 marcas salen 7 y 7. Se calcula en vez de escribir un 7 fijo para que
+# siga partiendo en dos filas parejas si mañana entra o sale alguna.
+TECH_N = sum(1 for fichero, _ in TECH_STACK if (ASSETS_DIR / fichero).exists())
+TECH_POR_FILA = (TECH_N + 1) // 2
+
+
+@st.cache_data
+def _tech_alto(ruta: str) -> float:
+    """Alto en pantalla del logo, normalizado por ÁREA ÓPTICA y no por caja.
+
+    A igual altura, un logotipo apaisado ocupa mucha más superficie que un isotipo
+    cuadrado y desequilibra la fila: el de GitHub mide 3,7:1 y se leería como casi cuatro
+    veces el de Qiskit. Igualando el área —alto = base / √proporción— los doce pesan lo
+    mismo a la vista, que es lo que se pidió. El suelo evita que aplicar la regla a
+    rajatabla deje el más apaisado en un hilo ilegible.
+    """
+    p = Path(ruta)
+    if p.suffix.lower() == ".svg":
+        # El tamaño intrínseco de un SVG es su viewBox; width/height pueden no estar.
+        vb = re.search(r'viewBox="\s*([-\d.eE]+)[,\s]+([-\d.eE]+)[,\s]+([-\d.eE]+)[,\s]+([-\d.eE]+)',
+                       p.read_text(encoding="utf-8"))
+        ancho, alto = (float(vb.group(3)), float(vb.group(4))) if vb else (1.0, 1.0)
+    else:
+        with Image.open(p) as im:
+            ancho, alto = im.size
+    proporcion = (ancho / alto) if alto else 1.0
+    return max(TECH_ALTO_MIN, TECH_ALTO_BASE / (proporcion ** 0.5))
+
+
+def tech_strip():
+    """Pinta la tira. Se llama desde Resumen, ya con el tema resuelto."""
+    piezas = []
+    for fichero, nombre in TECH_STACK:
+        ruta = ASSETS_DIR / fichero
+        if not ruta.exists():
+            continue
+        mime = "svg+xml" if ruta.suffix.lower() == ".svg" else "png"
+        piezas.append(
+            f'<div class="tech-chip" title="{nombre}">'
+            f'<img src="data:image/{mime};base64,{_b64_image(str(ruta))}" alt="{nombre}" '
+            f'style="height:{_tech_alto(str(ruta)):.1f}px;"></div>')
+    if piezas:
+        st.markdown(f'<div class="tech-strip">{"".join(piezas)}</div>', unsafe_allow_html=True)
 
 # initial_sidebar_state="auto": expandida en escritorio, COLAPSADA en móvil. Con "expanded" se quedaba
 # abierta también en el teléfono, comiéndose 270 de los ~390 px de pantalla.
@@ -254,6 +349,26 @@ SHADOW = ("0 1px 2px rgba(0,0,0,0.30), 0 6px 20px -6px rgba(0,0,0,0.50)" if _is_
 SHADOW_HOVER = ("0 2px 4px rgba(0,0,0,0.35), 0 16px 34px -10px rgba(0,0,0,0.62)" if _is_dark
                 else "0 2px 4px rgba(11,26,38,0.05), 0 16px 32px -10px rgba(11,26,38,0.13)")
 
+# ── Relieve del buscador (neumorfismo) ────────────────────────────────────────
+# Dos sombras opuestas en vez de una: la oscura abajo-derecha y la clara arriba-izquierda
+# simulan un único foco alto a la izquierda, y la pastilla lee como EXTRUIDA de la barra en
+# lugar de apoyada encima. El efecto solo funciona si la pieza comparte color con su fondo
+# —una caja de otro color vuelve a leerse como caja—, así que NEU_BG se separa de sidebar_bg
+# lo justo para que el relieve tenga de dónde salir, y el contorno lo dibujan las sombras.
+# La asimetría entre temas no es un descuido: en claro el papel tiene recorrido hacia el
+# blanco y la luz puede ir casi opaca (0,92), mientras que en oscuro cualquier blanco por
+# encima del 4-5% sobre #0E1116 se lee como niebla gris y no como luz. Allí el relieve lo
+# sostiene la sombra negra, que sí tiene todo el rango por delante.
+# NEU_INSET es el mismo relieve del revés (hundido) y marca el estado activo: es el gesto
+# propio de este lenguaje —el control se PULSA— y evita añadir un cerco de color que
+# rompería el monocromo.
+NEU_BG     = "#151920" if _is_dark else "#EDEDEC"
+NEU_RAISED = ("5px 5px 11px rgba(0,0,0,0.55), -5px -5px 11px rgba(255,255,255,0.045)" if _is_dark
+              else "5px 5px 11px rgba(11,26,38,0.14), -5px -5px 11px rgba(255,255,255,0.92)")
+NEU_INSET  = ("inset 3px 3px 7px rgba(0,0,0,0.62), inset -3px -3px 7px rgba(255,255,255,0.05)"
+              if _is_dark else
+              "inset 3px 3px 7px rgba(11,26,38,0.16), inset -3px -3px 7px rgba(255,255,255,0.95)")
+
 # ── Luz del lienzo: dos halos en las esquinas superiores ──────────────────────
 # En OSCURO la luz se hace sumando color: sobre un fondo casi negro un ámbar al 12% sube
 # la luminancia y el ojo lo lee como un halo. En CLARO ese mismo gesto no funciona — la
@@ -399,6 +514,19 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 .st-key-toggle_sidebar button p {{
     font-size:17px !important; line-height:1 !important; font-weight:800 !important;
 }}
+/* La cursiva del rótulo lleva el nombre accesible del botón ("Colapsar la barra lateral"):
+   se recorta, no se apaga. display:none y visibility:hidden lo borrarían también del árbol de
+   accesibilidad —justo lo que se quiere conservar—, y font-size:0 deja un nodo de tamaño cero
+   que cada lector trata a su manera. El recorte de 1px es el patrón estándar para esto: sigue
+   siendo texto renderizado, así que se anuncia, pero no ocupa ni se ve. En absolute, además,
+   sale del flujo y la flecha se queda centrada en su círculo de 24px como estaba. */
+.st-key-toggle_sidebar button p em {{
+    position:absolute !important;
+    width:1px !important; height:1px !important;
+    margin:-1px !important; padding:0 !important;
+    overflow:hidden !important; clip-path:inset(50%) !important;
+    white-space:nowrap !important;
+}}
 /* Cápsula-interruptor de tema: fija al fondo del viewport (ancho = ancho actual de la sidebar),
    así queda siempre visible sin depender del scroll interno, colapsada o no. */
 .st-key-theme_toggle {{
@@ -470,6 +598,88 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     box-shadow: 0 0 0 1.5px {C_PRIMARY}66, 0 1px 3px rgba(20,30,40,0.18) !important;
     cursor:default !important;
 }}
+/* ── Reloj: fecha y hora, a la izquierda de las banderas ──────────────────────
+   Comparte la franja de las banderas (top:14px, alto 18px) y se alinea al mismo eje
+   vertical, así los tres elementos leen como una sola tira de cabecera y no como piezas
+   sueltas. La bandera ES ocupa de right:56 a right:82, de modo que el reloj cierra en 94:
+   doce píxeles de aire, el mismo respiro que hay entre las dos banderas.
+   El contenido lo escribe un <script> en el documento padre (ver bloque RELOJ más abajo);
+   aquí solo vive su aspecto, que así hereda el tema como cualquier otra regla.
+   pointer-events:none porque es información, no un control: no debe capturar el cursor
+   ni interponerse en un clic dirigido a lo que tenga debajo. */
+#tfm-reloj {{
+    position:fixed; top:14px; right:94px; height:18px;
+    display:flex; align-items:center; gap:6px;
+    z-index:1001; pointer-events:none; user-select:none;
+    font-size:11.5px; line-height:1; white-space:nowrap;
+}}
+#tfm-reloj .r-fecha {{
+    font-family:{FONT_SANS}; color:{t['text_muted']};
+    letter-spacing:0.02em;
+}}
+#tfm-reloj .r-sep {{ color:{t['text_muted']}; opacity:0.45; }}
+/* La hora en mono y con cifras tabulares: sin tabular-nums el ancho de cada dígito cambia
+   y el reloj «baila» un par de píxeles a cada minuto, que en un elemento fijo se nota
+   mucho más que en una tabla. Va un punto más marcada que la fecha porque es el dato que
+   se consulta; la fecha acompaña. */
+#tfm-reloj .r-hora {{
+    font-family:{FONT_MONO}; color:{t['text_secondary']};
+    font-weight:500; font-variant-numeric:tabular-nums;
+    letter-spacing:0.04em;
+}}
+/* Tira de tecnologías (Resumen).
+   LA PASTILLA ES CLARA EN LOS DOS TEMAS a propósito, y no es un descuido: la mitad de estas
+   marcas son monocromas oscuras —el logotipo de GitHub es #11110F y el de Qiskit #010101, y
+   el texto de Spark y de scikit-learn tampoco aguanta— así que sobre el fondo carbón
+   desaparecerían. Recolorearlas no es una opción: las guías de marca lo prohíben. Se les da
+   entonces el fondo claro para el que fueron diseñadas y la marca viaja intacta; en tema
+   oscuro la pastilla baja un punto de blanco para no deslumbrar sobre el carbón.
+   El alto de cada imagen lo calcula _tech_alto() por área óptica — ver allí el porqué. */
+/* Rejilla de ancho completo, no una fila suelta: las pastillas se reparten TODO el ancho de
+   la página en columnas iguales. Con auto-fit las columnas sobrantes se colapsan y las que
+   quedan se estiran para ocupar el hueco, así la banda llena la línea sea cual sea el número
+   de marcas. Mismo recurso (auto-fit + minmax) que ya usa el bloque "Cómo funciona" del
+   Circuito Cuántico.
+   POR DEFECTO reparte por ancho (auto-fit), que es lo único que se adapta al contenedor real.
+   SOLO con la ventana bien ancha se fija el número exacto de columnas ({TECH_POR_FILA}), que es
+   lo que produce las DOS FILAS PAREJAS de {TECH_POR_FILA}: dejarlo en manos de auto-fit las
+   partiría por donde cupieran, no por la mitad.
+   El umbral se mide sobre el VIEWPORT pero lo que importa es el CONTENEDOR, y la barra lateral
+   se lleva 270px: a 1100px de ventana el contenido son 660px, donde las columnas fijas
+   aplastaban las pastillas. De ahí que la regla exacta empiece en 1400 y no en 1024. */
+.tech-strip {{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(72px, 1fr));
+    gap:10px; align-items:center; margin-top:4px;
+}}
+@media (min-width: 1400px) {{
+    .tech-strip {{ grid-template-columns:repeat({TECH_POR_FILA}, minmax(0, 1fr)); }}
+}}
+.tech-chip {{
+    display:flex; align-items:center; justify-content:center;
+    /* Alto subido de 46 a 52: al estirarse a ancho completo las pastillas pasan de ~66 px a
+       ~125 px de ancho, y con el alto anterior quedaban como cápsulas aplastadas. */
+    height:52px; padding:0 11px; box-sizing:border-box;
+    background:{'#E9E9EC' if _is_dark else '#F7F7F8'};
+    border:1px solid rgba(28,31,38,{0.16 if _is_dark else 0.09});
+    border-radius:9px;
+    transition: transform 0.14s ease, box-shadow 0.16s ease;
+}}
+.tech-chip:hover {{ transform:translateY(-2px); box-shadow:0 4px 12px rgba(20,30,40,0.16); }}
+.tech-chip img {{ display:block; width:auto; max-width:100%; object-fit:contain; }}
+/* Los dos componentes que solo llevan <script> —el que fija <html lang> y el que escribe el
+   reloj— no pintan nada y sus iframes sobran. Se colapsan con el MISMO recurso que las
+   banderas —display:contents en los envoltorios y position:fixed en el elemento—, así no
+   cuentan como ítem del flex ni abren un hueco sobre el titular. No se usa display:none a
+   propósito: un iframe así puede no llegar a ejecutar su script, y aquí el script ES todo
+   el contenido. */
+.st-key-lang_attr, .st-key-lang_attr div[data-testid="stIFrame"],
+.st-key-lang_attr div[data-testid="stElementContainer"],
+.st-key-reloj, .st-key-reloj div[data-testid="stIFrame"],
+.st-key-reloj div[data-testid="stElementContainer"] {{ display:contents !important; }}
+.st-key-lang_attr iframe, .st-key-reloj iframe {{
+    position:fixed !important; width:0 !important; height:0 !important;
+    border:0 !important; opacity:0 !important; pointer-events:none !important;
+}}
 /* Footer fijo al fondo de la sidebar (por debajo de la cápsula de tema) */
 .sidebar-footer {{
     position:fixed; bottom:0; left:0; width:{SIDEBAR_WIDTH};
@@ -484,10 +694,168 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 /* El option_menu vive en un iframe con fondo propio: igualarlo al de la sidebar (sin caja/sombra
    propia — ya tiene el mismo fondo, así que se funde visualmente con el resto de la sidebar) */
 section[data-testid="stSidebar"] iframe {{ background-color:{t['sidebar_bg']} !important; }}
+/* ── Ancho del iframe del menú ────────────────────────────────────────────────
+   Streamlit dimensiona el iframe de un componente a partir del ancho de su bloque
+   contenedor y se lo clava como atributo `width`. Con la barra colapsada ese cálculo
+   daba 23 px (medido por CDP) dentro de una barra de 84: el iframe lleva overflow:clip,
+   así que el icono —18 px que empiezan en x=18— se cortaba en x=23. Eso, y no un
+   line-height, era el recorte: por la DERECHA, no por abajo.
+   Se corrige en los dos escalones: se le devuelve al contenido de la barra el ancho
+   completo (su relleno lateral de 20 px se reparte ya en cada bloque) y se obliga al
+   iframe a ocuparlo. Solo en modo colapsado — en modo ancho el cálculo de Streamlit es
+   correcto y no hay nada que forzar. */
+{'''section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {
+    padding-left:0 !important; padding-right:0 !important;
+}
+section[data-testid="stSidebar"] iframe[data-testid="stCustomComponentV1"] {
+    width:100% !important; min-width:100% !important; max-width:100% !important;
+}''' if narrow else ''}
 section[data-testid="stSidebar"] div[data-testid="stIFrame"],
 section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
     background-color:{t['sidebar_bg']} !important;
 }}
+/* El menú arranca separado del buscador que ahora tiene encima: sin este aire, la caja de
+   búsqueda y el primer ítem del menú se tocaban y se leían como un solo bloque. */
+section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
+    margin-top:14px !important;
+}}
+/* ── Buscador de la sidebar ──────────────────────────────────────────────────
+   Pastilla en relieve (ver NEU_* arriba): terminaciones ovaladas, sin borde, y el contorno
+   dibujado solo por las dos sombras. Reposo = extruida; foco = hundida. El radio va en
+   999px y no en un valor fijo para que las tapas sigan siendo semicírculos exactos aunque
+   cambie el alto — es lo que separa una pastilla de un rectángulo muy redondeado. */
+.st-key-nav_search {{ margin-top:2px; }}
+/* Lupa del modo colapsado: la MISMA pastilla reducida a círculo. En 84 px no cabe caja de
+   texto, así que la entrada se repliega a su icono y al pulsarla despliega la barra (la
+   lógica vive en el bloque BUSCADOR). Conserva los 38 px de los iconos del menú de debajo
+   para que la columna siga leyéndose alineada. El rótulo del botón es un espacio en blanco
+   (la etiqueta real viaja en el tooltip), así que se anula su hueco. */
+.st-key-search_expand button {{
+    width:38px !important; height:38px !important; min-height:38px !important;
+    padding:0 !important; margin:2px auto 0 !important;
+    border-radius:999px !important; border:none !important;
+    background:{NEU_BG} !important; color:{t['text_secondary']} !important;
+    box-shadow:{NEU_RAISED} !important;
+    transition: box-shadow 0.18s ease, color 0.18s ease !important;
+}}
+/* Se hunde al pasar por encima y se queda hundida al pulsar: el mismo par reposo/activo de
+   la caja expandida, para que colapsar la barra no cambie el lenguaje del control. */
+.st-key-search_expand button:hover {{
+    box-shadow:{NEU_INSET} !important; color:{C_PRIMARY} !important;
+    background:{NEU_BG} !important;
+}}
+.st-key-search_expand button:active {{ box-shadow:{NEU_INSET} !important; }}
+.st-key-search_expand button p {{ font-size:0 !important; margin:0 !important; }}
+.st-key-search_expand button span[data-testid="stIconMaterial"] {{
+    font-size:18px !important; margin:0 !important; color:inherit !important;
+}}
+.st-key-nav_search div[data-baseweb="input"],
+.st-key-nav_search div[data-baseweb="base-input"] {{
+    background:{NEU_BG} !important;
+    border-radius:999px !important;
+}}
+/* El alto se fija aquí y el relleno se reparte a mano: 16px a la izquierda (0,42 × alto) es
+   lo que hace falta para que el texto no se meta en la curva de la tapa, y 14px a la derecha
+   dejan al icono a la misma distancia óptica del extremo. Con menos, la pastilla se lee
+   apretada; con más, en 270px de barra el hueco de escritura se queda corto. */
+.st-key-nav_search div[data-baseweb="input"] {{
+    display:flex !important; align-items:center !important;
+    height:38px !important; min-height:38px !important;
+    padding:0 14px 0 16px !important;
+    border:none !important;
+    box-shadow:{NEU_RAISED} !important;
+    transition: box-shadow 0.18s ease !important;
+}}
+.st-key-nav_search div[data-baseweb="input"]:focus-within {{
+    box-shadow:{NEU_INSET} !important;
+}}
+/* La lupa a la DERECHA como en la referencia. Streamlit la inyecta como startEnhancer de
+   BaseWeb, o sea primer hijo del contenedor flex; no hay parámetro para moverla, así que se
+   reordena con `order` en vez de reimplementar el widget con HTML suelto (que perdería el
+   binding de session_state del que dependen el vaciado por callback y el colapso). */
+.st-key-nav_search [data-testid="stTextInputIcon"] {{
+    order:2 !important; margin:0 0 0 8px !important; padding:0 !important;
+    color:{t['text_muted']} !important;
+    transition: color 0.18s ease !important;
+}}
+.st-key-nav_search div[data-baseweb="input"]:focus-within [data-testid="stTextInputIcon"] {{
+    color:{C_PRIMARY} !important;
+}}
+.st-key-nav_search div[data-baseweb="base-input"] {{
+    flex:1 1 auto !important; min-width:0 !important; padding:0 !important;
+}}
+.st-key-nav_search input {{
+    font-family:{FONT_SANS} !important; font-size:12.5px !important;
+    letter-spacing:0.05em !important;
+    color:{t['text']} !important; background:transparent !important;
+    padding:0 !important; height:auto !important;
+}}
+/* La referencia pone su placeholder en versalita muy espaciada, y ahí NO se la sigue: su
+   "SEARCH…" son seis letras y el nuestro son treinta y una ("Buscar en el panel o en la
+   web…", que dice a propósito que la caja busca en los dos sitios). Con caja alta y 0,11em
+   esa frase pide ~260px y en la pastilla solo hay ~174 de texto — 270 de barra menos 40 de
+   relleno, menos el interior y la lupa. Se conserva el aire de la referencia con un
+   espaciado corto, y el ellipsis asegura que si el idioma alarga la frase degrade en puntos
+   suspensivos en vez de cortarse a hachazo, igual que las filas de resultados. */
+.st-key-nav_search input {{
+    text-overflow:ellipsis !important;
+}}
+.st-key-nav_search input::placeholder {{
+    color:{t['text_muted']} !important;
+    letter-spacing:0.04em !important;
+    font-size:11.5px !important;
+    opacity:1 !important;
+}}
+/* El foco de teclado global (regla `input:focus-visible` de más arriba) dibuja un rectángulo
+   de 8px de radio que en una pastilla se ve como un cerco desalineado. Aquí se sustituye por
+   un aro que sigue la forma, sobre el estado hundido. El :has() acota el aro al foco POR
+   TECLADO: al hacer clic basta con el hundido y la lupa en ámbar. */
+.st-key-nav_search input:focus-visible {{ outline:none !important; }}
+.st-key-nav_search div[data-baseweb="input"]:has(input:focus-visible) {{
+    box-shadow:{NEU_INSET}, 0 0 0 2px {C_PRIMARY} !important;
+}}
+/* Resultados: lista de opciones, no botonera. Se anula el centrado que la sidebar
+   impone a todos sus botones y se les quita la caja — un borde por resultado sería
+   siete cajas apiladas donde solo hace falta una zona de hover. */
+.st-key-nav_search_results {{ gap:1px !important; margin-top:6px; }}
+.st-key-nav_search_results div[data-testid="stButton"] {{
+    display:block !important; width:100% !important;
+}}
+.st-key-nav_search_results button {{
+    width:100% !important; min-height:0 !important;
+    padding:7px 10px !important; margin:0 !important;
+    text-align:left !important; justify-content:flex-start !important;
+    background:transparent !important; border:1px solid transparent !important;
+    border-radius:8px !important;
+    transition: background-color 0.13s ease, color 0.13s ease !important;
+}}
+.st-key-nav_search_results button:hover {{
+    background:{t['sidebar_active']} !important;
+    border-color:{t['border']} !important;
+}}
+.st-key-nav_search_results button p {{
+    font-size:12.5px !important; font-weight:400 !important; line-height:1.35 !important;
+    color:{t['text_secondary']} !important;
+    /* Un rótulo largo se recorta con puntos suspensivos en vez de partirse en dos
+       líneas: la lista tiene que conservar el mismo alto por fila para leerse. */
+    white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important;
+    display:block !important; text-align:left !important;
+}}
+.st-key-nav_search_results button:hover p {{ color:{t['text']} !important; }}
+.search-none {{
+    font-size:12px; color:{t['text_muted']}; padding:6px 10px 2px; line-height:1.4;
+}}
+/* Salida a la web: se separa de los resultados locales con un filete, porque es una
+   acción de otra naturaleza — abandona la aplicación. */
+a.search-web {{
+    display:flex; align-items:center; gap:6px;
+    margin-top:6px; padding:8px 10px 2px;
+    border-top:1px solid {t['border']};
+    font-size:12.5px; color:{t['text_secondary']}; text-decoration:none !important;
+    transition: color 0.13s ease;
+}}
+a.search-web:hover {{ color:{C_PRIMARY}; }}
+a.search-web .search-web-ext {{ font-size:11px; opacity:0.75; }}
 /* El menú (option_menu) remonta el iframe entero al colapsar/descolapsar (key distinta para narrow
    vs. ancho — necesario para que reaplique sus estilos, ver comentario junto a esa key), así que el
    texto no puede "encogerse" con una transición: aparece/desaparece de golpe con el nuevo iframe. Un
@@ -701,6 +1069,11 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
    El título sube en la misma proporción (13 → 14.5) para no aplanar la jerarquía. */
 .gov-prose {{ font-size:15px; color:{t['text_secondary']}; line-height:1.7; text-align:justify; }}
 .kpi-model.gov-prose-title {{ font-size:14.5px; }}
+/* Los dos párrafos de "Cómo funciona" (Circuito Cuántico). Mismo criterio que .lead-card p:
+   el realce de los <b> lo pone el CSS y no un style incrustado en cada uno, así el texto
+   llega de i18n como prosa limpia y se revisa de corrido en los dos idiomas. */
+.qc-prose {{ font-size:15px; color:{t['text_secondary']}; line-height:1.75; margin:0; text-align:justify; }}
+.qc-prose b {{ color:{t['text']}; font-weight:600; }}
 /* Contenedores de gráficas Plotly con la misma profundidad sutil Y el mismo hover de elevación que
    las tarjetas .kpi-card / .info-card, para que TODAS las tarjetas reaccionen igual al pasar el ratón. */
 div[data-testid="stPlotlyChart"] {{
@@ -768,6 +1141,12 @@ div[data-testid="stPlotlyChart"] .gtitle {{ font-weight:400 !important; }}
 /* Variante cuántica: en Circuito Cuántico el filete va en oro, el tono reservado al
    componente cuántico en toda la aplicación (QSVM, vector de estado en la esfera). */
 .stat-card.quantum::before {{ background:linear-gradient(90deg, {C_QUANTUM}, {C_QUANTUM}00 85%); }}
+/* ...y el contenido se ancla ARRIBA, no abajo. El flex-end de .stat-card alinea las cifras entre
+   sí solo mientras todas las etiquetas ocupen las mismas líneas —que es lo que pasa en Gobernanza →
+   Calidad del dato—. Aquí no: "Qubits (feature_dimension)" envuelve a tres líneas y "Entanglement"
+   a una, así que cada cifra caía a una altura distinta. Anclando arriba, las cuatro cifras (y la
+   primera línea de cada etiqueta) quedan a la misma altura sea cual sea el largo del texto. */
+.stat-card.quantum {{ justify-content:flex-start; }}
 /* ═══════════════ TÍTULOS DE SECCIÓN ═══════════════
    Recurso editorial clásico: el título ocupa lo que necesita y un filete fino recorre el
    resto del ancho hasta el margen, marcando el arranque de bloque sin cargar la página. */
@@ -989,7 +1368,12 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
         padding-left:1.25rem !important; padding-right:1.25rem !important;
     }}
-    .compare-grid {{ grid-template-columns:repeat(2, minmax(0, 1fr)); }}
+    /* El !important NO es decorativo: las filas de 4 KPIs (Gobernanza → Calidad del dato y Circuito
+       Cuántico) declaran su repeat(4, ...) en un style EN LÍNEA, que gana a cualquier selector sin
+       !important. Sin esto la regla no llegaba a aplicarse nunca en esas dos filas y seguían a cuatro
+       columnas hasta los 768 px: con la sidebar todavía fija en 270 px, cuatro tarjetas de ~135 px.
+       Las filas que ya declaran repeat(2, ...) en línea no cambian; las de 3 por defecto bajan a 2. */
+    .compare-grid {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }}
 }}
 
 /* ═══════════════ MÓVIL (≤ 768 px) ═══════════════
@@ -1036,6 +1420,12 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     }}
     .st-key-lang_es button {{ right:44px !important; }}
     .st-key-lang_en button {{ right:14px !important; }}
+    /* El reloj sigue a las banderas a su nueva posición y se queda SOLO con la hora: en un
+       teléfono la franja superior es estrecha y la fecha es el dato prescindible de los dos
+       —quien mira un reloj de cabecera mira la hora—. Con la bandera ES ahora en right:44 y
+       23px de ancho, el reloj cierra en 77 y conserva sus diez píxeles de aire. */
+    #tfm-reloj {{ top:10px; right:77px; height:16px; font-size:11px; }}
+    #tfm-reloj .r-fecha, #tfm-reloj .r-sep {{ display:none; }}
     /* Contenido: menos padding lateral y sin el tope de ancho */
     div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
         max-width:100% !important; padding-top:2.5rem !important;
@@ -1046,6 +1436,10 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     div[data-testid="stColumn"] {{ flex:1 1 100% !important; min-width:100% !important; }}
     /* Rejilla de tarjetas comparativas: una por fila */
     .compare-grid {{ grid-template-columns:1fr !important; }}
+    /* La tira de tecnologías NO se apila de una en una —serían {TECH_N} filas—: se aprieta a
+       pastillas más pequeñas y sigue repartiendo por ancho. */
+    .tech-strip {{ grid-template-columns:repeat(auto-fit, minmax(58px, 1fr)) !important; gap:8px; }}
+    .tech-chip {{ height:46px; padding:0 8px; }}
     /* Al apilarse (teléfono) la columna es de ancho completo; el alto ya lo fija la figura Plotly */
     .st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] {{ height:auto !important; }}
     /* Cabecera proporcionada a la pantalla del teléfono */
@@ -1065,7 +1459,7 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     /* .cm-title queda FUERA de esta reducción: su pareja visual es el título de las curvas ROC,
        que lo pinta Plotly en píxeles y no baja en móvil. Si encogiera solo este, el nombre del
        modelo volvería a descuadrar entre las dos secciones justo en pantalla estrecha. */
-    .section-sub, .clinical-note, .gov-prose {{ font-size:12.5px; }}
+    .section-sub, .clinical-note, .gov-prose, .qc-prose {{ font-size:12.5px; }}
     .kpi-value {{ font-size:14px; }}
     /* .kpi-model fuera de la reducción por el mismo motivo que .cm-title: es el nombre del
        modelo, y su pareja —el título de la curva ROC— la pinta Plotly en píxeles y no encoge.
@@ -1108,23 +1502,23 @@ button[data-testid="stExpandSidebarButton"]:hover {{
 # QSVM corta en decision_function > 0, que ni siquiera es una probabilidad. Como accuracy,
 # F1-macro y MCC dependen del umbral y el AUC no, hay que decirlo allí donde se comparan.
 # "umbral_p" es el equivalente en escala de probabilidad; None = no aplica.
+# El RÓTULO del umbral ("p ≥ 0,50") y su procedencia ya no viven aquí: el primero lleva un
+# separador decimal que depende del idioma y la segunda es prosa. Los pinta thr_text() /
+# S("res_thr_src") a partir de umbral_p, que es el dato.
 MODELS = {
     "lightgbm": {"label": "LightGBM", "color": SERIES["lightgbm"], "auc": 0.9485, "f1_macro": 0.6523,
                  "accuracy": 0.7243, "mcc": 0.4566, "cm": {"tn": 924, "fp": 423, "fn": 9, "tp": 211},
-                 "umbral": "p ≥ 0,50", "umbral_p": 0.50, "umbral_valor": 0.50,
-                 "umbral_src": "predict_proba()[:,1] >= 0.5"},
+                 "umbral_p": 0.50, "umbral_valor": 0.50},
     "svm_rbf": {"label": "SVM-RBF", "color": SERIES["svm_rbf"], "auc": 0.9377, "f1_macro": 0.8243,
                 "accuracy": 0.9075, "mcc": 0.6539, "cm": {"tn": 1250, "fp": 97, "fn": 48, "tp": 172},
                 # El corte real del SVM es el signo de decision_function, que no se persistió.
                 # Su equivalente en la escala de probabilidad guardada cae entre 0,221729 (último
                 # score clasificado como negativo) y 0,225167 (primero como positivo): se toma el
                 # punto medio para que la reconciliación no dependa de redondeos.
-                "umbral": "p ≈ 0,22", "umbral_p": 0.2234, "umbral_valor": 0.22344799236138158,
-                "umbral_src": "SVC.predict() — signo de decision_function"},
+                "umbral_p": 0.2234, "umbral_valor": 0.22344799236138158},
     "qsvm": {"label": "QSVM", "color": SERIES["qsvm"], "auc": 0.5493, "f1_macro": 0.4669,
              "accuracy": 0.8602, "mcc": 0.0625, "cm": {"tn": 1347, "fp": 0, "fn": 219, "tp": 1},
-             "umbral": "df > 0", "umbral_p": None, "umbral_valor": 0.0,
-             "umbral_src": "decision_function > 0 (no es probabilidad)"},
+             "umbral_p": None, "umbral_valor": 0.0},
 }
 MODEL_ORDER = ["lightgbm", "svm_rbf", "qsvm"]
 
@@ -1144,31 +1538,21 @@ MODEL_ORDER = ["lightgbm", "svm_rbf", "qsvm"]
 # recalculó sobre el dataframe ya filtrado y su contador de partida quedó desplazado. Los
 # 4 registros descartados se confirman con el value_counts de la propia salida
 # (6.510 + 1.099 + 222 = 7.831).
-GOV_EMBUDO = [
-    ("Bronze — 3 ciclos unidos", 29400, None,
-     "27 ficheros XPT · join por SEQN · 162 columnas comunes a los tres ciclos"),
-    ("Filtro edad ≥ 18 años", 17961, 11439, "Restricción a población adulta"),
-    ("Filtro ayuno — LBXGLU no nulo", 7835, 10126,
-     "Proxy del subgrupo en ayunas: PHAFSTMN no es consistente entre ciclos"),
-    ("Filtro DIQ010 válido", 7831, 4,
-     "Descarta los códigos 7 «no sabe» y 9 «rehúsa responder», y los nulos"),
-]
-# Operaciones de transformación registradas en las capas Silver y Gold.
-GOV_SILVER_OPS = [
-    ("Variables DIQ excluidas por leakage", "6", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
-    ("Columnas sparse eliminadas", "66", "Umbral de >80 % de valores ausentes"),
-    ("Variables winsorizadas", "67", "Recorte de outliers por IQR × 3"),
-    ("Missing tras imputación", "0", "De 75.855 a 0 en el dataset SVM/QSVM (mediana + moda)"),
-]
+#
+# Aquí quedan SOLO los conteos; el nombre de la etapa y su explicación viven en
+# i18n["gov_embudo"] y se emparejan por posición al pintar. Es la misma división que ya
+# usaba la arquitectura Medallón de Resumen: la cifra es un dato verificado y no puede
+# divergir entre idiomas, el texto sí cambia.
+GOV_EMBUDO_N = [(29400, None), (17961, 11439), (7835, 10126), (7831, 4)]
+# Valor de cada operación de Silver / Gold, en el orden de i18n["gov_silver_ops"] y
+# ["gov_gold_ops"]. La partición se compone con mil() al pintarla porque su separador de
+# millar depende del idioma; el resto son enteros pequeños que se escriben igual en ambos.
+#
 # Los conteos del notebook (106, 90) son COLUMNAS del DataFrame e incluyen TARGET; las
 # features son una menos. Antes la tarjeta mezclaba ambos criterios y la resta no cerraba:
 # 106 − 16 = 90 ≠ 89. Ahora se nombran los dos como features (105 → 89) y cuadra.
-GOV_GOLD_OPS = [
-    ("Features tras codificación", "105", "One-hot de 5 variables categóricas sobre 84 features (106 columnas con TARGET)"),
-    ("Descartadas por correlación", "16", "Umbral r > 0,90 entre pares de predictores"),
-    ("Features finales", "89", "Conjunto con el que se entrenan los tres modelos"),
-    ("Partición estratificada", "6.264 / 1.567", "80/20 · 14,03 % positivos en train, 14,04 % en test"),
-]
+GOV_SILVER_VALS = ["6", "66", "67", "0"]
+GOV_GOLD_VALS = ["105", "16", "89", None]   # None = la partición, que se formatea aparte
 
 # Suite dataframe-expectations 0.7.0 sobre la capa Silver.
 # Valores de respaldo: son los que la suite produjo el 22/06/2026, transcritos de la salida.
@@ -1181,7 +1565,7 @@ GOV_SUITE = {
 # basta copiar validacion_silver_dfe.csv desde el volumen a streamlit/models/ (el .gitignore
 # tiene la excepción para que suba, como ya la tienen los .onnx y los .npy).
 # Si no está, se usan los valores de arriba y la página se comporta igual que antes.
-GOV_SUITE_FUENTE = "valores verificados del notebook"
+GOV_SUITE_FUENTE = "gov_suite_src_nb"      # clave i18n, no el rótulo: se traduce al pintarlo
 _dfe_csv = MODELS_DIR / "validacion_silver_dfe.csv"
 if _dfe_csv.exists():
     try:
@@ -1195,29 +1579,14 @@ if _dfe_csv.exists():
             "passed": int(_fila["total_passed"]), "failed": int(_fila["total_failed"]),
             "pass_rate": float(_fila["pass_rate"]), "duracion_s": float(_fila["duration_seconds"]),
         }
-        GOV_SUITE_FUENTE = "leído de validacion_silver_dfe.csv"
+        GOV_SUITE_FUENTE = "gov_suite_src_csv"
     except (KeyError, ValueError, StopIteration, OSError):
         # Un CSV con otro esquema o truncado no debe tumbar la página: se ignora y se
         # mantienen los valores de respaldo, que son los publicados en la memoria.
         pass
-# Las 15 expectativas, con la descripción literal que devuelve el runner.
-GOV_EXPECTATIVAS = [
-    ("Completitud", "TARGET", "como máximo 0 nulos"),
-    ("Completitud", "LBXGH", "como máximo 0 nulos"),
-    ("Completitud", "LBXGLU", "como máximo 0 nulos"),
-    ("Completitud", "RIDAGEYR", "como máximo 0 nulos"),
-    ("Completitud", "BMXBMI", "como máximo 0 nulos"),
-    ("Rangos clínicos", "RIDAGEYR", "mínimo entre 18 y 25"),
-    ("Rangos clínicos", "RIDAGEYR", "máximo entre 70 y 120"),
-    ("Rangos clínicos", "LBXGH", "mínimo entre 3,0 y 6,0"),
-    ("Rangos clínicos", "LBXGH", "máximo entre 8,0 y 20,0"),
-    ("Rangos clínicos", "LBXGLU", "mínimo entre 30 y 80"),
-    ("Rangos clínicos", "LBXGLU", "máximo entre 150 y 500"),
-    ("Rangos clínicos", "BMXBMI", "mínimo entre 10,0 y 18"),
-    ("Rangos clínicos", "BMXBMI", "máximo entre 40,0 y 80"),
-    ("Volumen", "DataFrame", "al menos 7.000 filas"),
-    ("Volumen", "DataFrame", "como máximo 9.000 filas"),
-]
+# Las 15 expectativas (dimensión, columna, regla con la descripción literal que devuelve el
+# runner) están en i18n["gov_expectativas"]: son texto de punta a punta, y sus umbrales
+# llevan separador decimal, que también cambia de idioma.
 
 # Historial Delta de la capa Gold. Se muestran las 6 versiones más recientes
 # de las 10 registradas; el resto se purga a las 168 h por retención de Delta.
@@ -1230,147 +1599,70 @@ GOV_DELTA_HISTORY = [
     (4, "2026-06-21 06:04:25", "WRITE", 7831, 754078),
 ]
 
-# La cadena de custodia contra la fuga de información, en el orden en que actúa.
-GOV_LEAKAGE = [
-    ("01", "Exclusión en Silver",
-     "Se eliminan 6 variables DIQ de tratamiento y seguimiento antes de winsorizar: son "
-     "consecuencia del diagnóstico, no predictores de él.", None),
-    ("02", "Verificación cruzada",
-     "Se comprueba que ninguna DIQ sobrevive en los 2 Parquet de Silver ni en los 13 de "
-     "Gold. Resultado: 15/15 artefactos limpios.", None),
-    ("03", "Filtro defensivo del QSVM",
-     "Segunda barrera antes de la selección por Random Forest. No descarta ninguna columna "
-     "(89 de 89 pasan) — precisamente la prueba de que la primera barrera funcionó.", None),
-    ("04", "Guarda de pesos de muestreo",
-     "Detiene el pipeline si aparece cualquier peso de muestreo distinto del conocido. "
-     "WTINT2YR sí llega al modelado y está documentado en la decisión 10.", None),
-]
+# La cadena de custodia contra la fuga de información, en el orden en que actúa. El numeral
+# es estructura (la secuencia de barreras) y no viaja con la traducción; el nombre y la
+# descripción de cada barrera están en i18n["gov_leakage"], emparejados por posición.
+GOV_LEAKAGE_N = ["01", "02", "03", "04"]
 
-# Escalado anti-leakage del StandardScaler en la capa Gold.
-GOV_SCALER = [
-    ("Ajuste", "Solo sobre train", "fit_transform en train · transform en test"),
-    ("Columnas evaluadas", "66", "Con varianza > 0"),
-    ("Columnas constantes", "23", "Varianza 0 — ver decisión 08"),
-    ("Media ≈ 0 · desv. ≈ 1", "Verificado", "Assert sobre todas las columnas con dispersión"),
-]
+# Escalado anti-leakage del StandardScaler en la capa Gold: i18n["gov_scaler"], completo
+# (etiqueta, valor y detalle) porque dos de los cuatro valores son texto, no cifras.
 
-# Inventario de frameworks por capa. El primer elemento de cada lista es el framework
-# que vertebra la capa; el resto, los que lo acompañan.
+# Inventario de frameworks por capa. El primer elemento de cada lista de badges es el
+# framework que vertebra la capa; el resto, los que lo acompañan. Nombre de capa y badges
+# son nombres propios y no se traducen; el rol y la nota salen de i18n["gov_stack"], en
+# este mismo orden.
 # Color del filete: las TRES CAPAS de datos son una progresión de refinamiento y toman
 # pasos de la rampa secuencial (igual que la arquitectura Medallón); los TRES MODELOS son
 # identidades y toman su color de SERIES, el mismo que llevan en el resto de la aplicación.
 GOV_STACK = [
-    ("Bronze", "ingesta", RAMP[1],
-     ["boto3", "pyreadstat 1.3.5", "Delta Lake", "Databricks Secrets", "PySpark"],
-     "boto3 sustituye a spark.conf, bloqueado en Serverless (decisión 01). Tres asserts "
-     "de integridad: 27/27 ficheros, el join por SEQN no duplica filas, y Delta cuadra "
-     "con pandas."),
-    ("Silver", "calidad", RAMP[2],
-     ["dataframe-expectations 0.7.0", "pandas", "NumPy", "PyArrow", "Delta Lake"],
-     "El framework de calidad del TFM. Great Expectations es incompatible con el "
-     "entorno (decisión 03). Suite de 15 expectativas en 3 dimensiones, con evidencia "
-     "persistida en CSV."),
-    ("Gold", "preparación", RAMP[3],
-     ["scikit-learn", "StandardScaler", "RandomForest", "joblib", "Delta time travel"],
-     "Escalado ajustado solo sobre train, partición estratificada con semilla fija y "
-     "exportación del contrato de serving (scaler y medianas en JSON)."),
-    ("LightGBM", "modelo", SERIES["lightgbm"],
-     ["LightGBM", "SHAP TreeExplainer", "skl2onnx", "onnxmltools", "GridSearchCV"],
-     "Interpretabilidad exacta por algoritmo polinomial sobre las 1.567 instancias de "
-     "test, y verificación de que el ONNX reproduce el PKL al 100 %."),
-    ("SVM-RBF", "modelo", SERIES["svm_rbf"],
-     ["scikit-learn SVC", "SHAP KernelExplainer", "shap.kmeans", "skl2onnx"],
-     "SHAP agnóstico al modelo, con coste de horas: se calcula una vez sobre 200 "
-     "instancias y se persiste en disco para reutilizarlo."),
-    ("QSVM", "modelo", SERIES["qsvm"],
+    ("Bronze", RAMP[1],
+     ["boto3", "pyreadstat 1.3.5", "Delta Lake", "Databricks Secrets", "PySpark"]),
+    ("Silver", RAMP[2],
+     ["dataframe-expectations 0.7.0", "pandas", "NumPy", "PyArrow", "Delta Lake"]),
+    ("Gold", RAMP[3],
+     ["scikit-learn", "StandardScaler", "RandomForest", "joblib", "Delta time travel"]),
+    ("LightGBM", SERIES["lightgbm"],
+     ["LightGBM", "SHAP TreeExplainer", "skl2onnx", "onnxmltools", "GridSearchCV"]),
+    ("SVM-RBF", SERIES["svm_rbf"],
+     ["scikit-learn SVC", "SHAP KernelExplainer", "shap.kmeans", "skl2onnx"]),
+    ("QSVM", SERIES["qsvm"],
      ["Qiskit 2.5.0", "qiskit-machine-learning 0.9.0", "qiskit-algorithms 0.4.0",
-      "ZZFeatureMap", "FidelityQuantumKernel"],
-     "Sin soporte ONNX: el formato no admite operaciones cuánticas (decisión 05). La "
-     "trazabilidad recae en un CSV de métricas con los 14 campos de configuración."),
+      "ZZFeatureMap", "FidelityQuantumKernel"]),
 ]
 
 # Registro de decisiones — las 11 limitaciones de TECHNICAL_NOTES.md §2, resumidas.
 # "critical" marca las que condicionan la arquitectura; "warning", las asumidas y
 # documentadas sin corregir; "good", las resueltas sin residuo.
-GOV_DECISIONES = [
-    ("01", "critical", "spark.conf bloqueado en Serverless",
-     "La configuración de credenciales AWS por spark.conf.set devuelve CONFIG_NOT_AVAILABLE, "
-     "el mecanismo estándar para conectar Spark con S3.",
-     "boto3 como cliente alternativo. S3 queda como almacenamiento de origen y Unity Catalog "
-     "Volumes como capa de procesamiento."),
-    ("02", "critical", "MLflow bloqueado en Serverless",
-     "La integración nativa de MLflow está deshabilitada en la capa gratuita: no hay registro "
-     "de experimentos, métricas ni artefactos.",
-     "Doble mecanismo sustitutivo: los transaction logs de Delta Lake aportan versión, "
-     "timestamp y métricas de operación; y cada notebook persiste sus métricas en CSV."),
-    ("03", "critical", "Great Expectations incompatible",
-     "Requiere una combinación de pandas/numpy que choca con las versiones fijadas del "
-     "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
-     "dataframe-expectations 0.7.0 como alternativa compatible. 15 expectativas sobre Silver "
-     "en tres dimensiones. Resultado 15/15, pass rate 1,0."),
-    ("04", "warning", "QSVM — coste computacional O(n²)",
-     "Sobre las 6.264 instancias de train, la matriz de kernel exigiría ~39 millones de "
-     "evaluaciones del circuito. Con 1.500 el kernel agota la memoria.",
-     "Entrenamiento sobre muestra estratificada de 500 instancias (~22 min) preservando el "
-     "ratio 86/14. La evaluación sí usa el test completo, para que las métricas comparen."),
-    ("05", "warning", "QSVM — sin soporte ONNX nativo",
-     "El formato ONNX no admite operaciones cuánticas: ni skl2onnx ni onnxmltools pueden "
-     "serializar un kernel basado en simulación de estados.",
-     "Serialización con joblib. El modelo requiere el entorno Qiskit para inferencia, por lo "
-     "que el QSVM no entra en el Predictor en Vivo."),
-    ("06", "warning", "Versiones de Qiskit no fijables",
-     "immutable_package_constraints.txt de Databricks bloquea la instalación de versiones "
-     "concretas, así que no hay reproducibilidad exacta de versión.",
-     "El pipeline corre con las versiones del entorno (2.5.0 / 0.9.0 / 0.4.0), cuya API es "
-     "compatible, y quedan registradas en una verificación explícita al inicio de la ejecución."),
-    ("07", "good", "Pérdida de variables por duración de sesión",
-     "Las operaciones largas (22 min de entrenamiento, 132 de predicción) pueden agotar la "
-     "sesión serverless y llevarse las variables en memoria.",
-     "Persistencia inmediata tras cada operación costosa y modo TRAINING_MODE que recarga "
-     "desde disco en ejecuciones posteriores."),
-    ("08", "warning", "Winsorización aplicada a categóricas codificadas",
-     "NHANES codifica numéricamente muchas categóricas. Si más del 75 % comparte valor, "
-     "IQR = 0, los límites colapsan y clip() convierte la variable en constante. "
-     "10 columnas quedaron colapsadas así.",
-     "Se documenta sin modificar: corregirlo alteraría Silver, Gold y los tres modelos. Las "
-     "columnas constantes no sesgan —el modelo no extrae señal de ellas—, pero pierden "
-     "información. Corrección identificada como trabajo futuro."),
-    ("09", "warning", "Correlación calculada antes de particionar",
-     "El filtro r > 0,90 se calcula sobre el dataset completo, así que las 16 columnas "
-     "descartadas se deciden usando también las observaciones de test.",
-     "Se documenta sin modificar. No afecta al escalado ni a la selección de features del "
-     "QSVM, ambos ajustados solo sobre train, pero la selección deja de ser estrictamente "
-     "ciega al test."),
-    ("10", "warning", "Peso de muestreo WTINT2YR entre las features",
-     "El join intracíclico duplica WTSAF2YR en tres columnas. WTINT2YR no está en la lista "
-     "de exclusión y sobrevive al filtro de correlación: es una de las 89 features.",
-     "Se documenta sin modificar y se añade un assert que detecta la aparición de cualquier "
-     "OTRO peso. Un peso muestral no es una variable clínica: no filtra el objetivo, pero "
-     "deja al modelo apoyarse en el diseño de la encuesta."),
-    ("11", "good", "El QSVM serializado no es recargable entre versiones",
-     "El pickle arrastra el ZZFeatureMap con sus ParameterExpression. Si Qiskit cambia de "
-     "versión, la deserialización falla — y Serverless actualiza sin aviso.",
-     "La carga va envuelta en try/except: si falla, TRAINING_MODE pasa a True y el notebook "
-     "re-entrena en lugar de abortar. Queda operativo en los tres escenarios posibles."),
+# Referencia y nivel de cada decisión, en el orden de i18n["gov_decisiones"]. El título,
+# el problema y la solución son texto y viven allí; el nivel es estructura (elige el color
+# de STATUS y la etiqueta Arquitectura/Asumida/Resuelta) y se queda aquí.
+GOV_DECISIONES_META = [
+    ("01", "critical"), ("02", "critical"), ("03", "critical"), ("04", "warning"),
+    ("05", "warning"), ("06", "warning"), ("07", "good"), ("08", "warning"),
+    ("09", "warning"), ("10", "warning"), ("11", "good"),
 ]
 
+# Ranking SHAP de cada modelo: (código NHANES, valor). El código es el identificador oficial
+# de la variable y es lo que se pinta en el eje; su glosa sale de i18n["var_short"] y solo
+# aparece en el hover, así que aquí no hace falta repetirla — antes viajaba en la tupla y
+# habría obligado a duplicar los 40 valores para tener la lista en inglés.
 SHAP_LIGHTGBM = [
-    ("LBXGH", "HbA1c", 1.1243), ("RIDAGEYR", "Edad", 0.4654), ("LBXGLU", "Glucosa ayunas", 0.3161),
-    ("LBDLDL", "Colesterol LDL", 0.2542), ("BMXWAIST", "Circunf. cintura", 0.2012), ("WTINT2YR", "Peso muestral*", 0.1274),
-    ("BMXARML", "Long. brazo", 0.0911), ("BMXLEG", "Long. pierna", 0.0872), ("BMXBMI", "IMC", 0.0799),
-    ("PAD680", "Act. sedentaria", 0.0634), ("PAD645", "Act. moderada", 0.0450), ("PAQ640", "Fortalecim. muscular", 0.0345),
-    ("BMXWT", "Peso corporal", 0.0336), ("LBXIN", "Insulina", 0.0273), ("INDHHIN2", "Ingresos hogar", 0.0264),
-    ("DMDYRSUS", "Años en EEUU", 0.0215), ("BMXARMC", "Circunf. brazo", 0.0174), ("PAQ670", "Act. vigorosa", 0.0170),
-    ("BPXSY1", "Presión sistólica", 0.0165), ("PAD630", "Act. mod. recreativa", 0.0158),
+    ("LBXGH", 1.1243), ("RIDAGEYR", 0.4654), ("LBXGLU", 0.3161),
+    ("LBDLDL", 0.2542), ("BMXWAIST", 0.2012), ("WTINT2YR", 0.1274),
+    ("BMXARML", 0.0911), ("BMXLEG", 0.0872), ("BMXBMI", 0.0799),
+    ("PAD680", 0.0634), ("PAD645", 0.0450), ("PAQ640", 0.0345),
+    ("BMXWT", 0.0336), ("LBXIN", 0.0273), ("INDHHIN2", 0.0264),
+    ("DMDYRSUS", 0.0215), ("BMXARMC", 0.0174), ("PAQ670", 0.0170),
+    ("BPXSY1", 0.0165), ("PAD630", 0.0158),
 ]
 SHAP_SVMRBF = [
-    ("LBXGH", "HbA1c", 0.1017), ("LBXGLU", "Glucosa ayunas", 0.0436), ("LBDLDL", "Colesterol LDL", 0.0219),
-    ("RIDAGEYR", "Edad", 0.0141), ("BMXLEG", "Long. pierna", 0.0107), ("BMXWAIST", "Circunf. cintura", 0.0062),
-    ("DMDHHSZE", "Tamaño hogar (niños)", 0.0054), ("PAD680", "Act. sedentaria", 0.0042), ("LBXIN", "Insulina", 0.0037),
-    ("DMDYRSUS", "Años en EEUU", 0.0025), ("BPXDI1", "Presión diastólica", 0.0023), ("LBXTR", "Triglicéridos", 0.0022),
-    ("BMXWT", "Peso corporal", 0.0021), ("DMDMARTL_1", "Estado civil (casado)", 0.0020), ("DMDMARTL_5", "Estado civil (nunca casado)", 0.0018),
-    ("BPXPLS", "Pulso", 0.0017), ("DMDEDUC2_3", "Educación (nivel 3)", 0.0017), ("SDMVSTRA", "Estrato muestral", 0.0017),
-    ("DMDMARTL_2", "Estado civil (viudo)", 0.0017), ("DMDHHSZB", "Tamaño hogar (adultos)", 0.0016),
+    ("LBXGH", 0.1017), ("LBXGLU", 0.0436), ("LBDLDL", 0.0219),
+    ("RIDAGEYR", 0.0141), ("BMXLEG", 0.0107), ("BMXWAIST", 0.0062),
+    ("DMDHHSZE", 0.0054), ("PAD680", 0.0042), ("LBXIN", 0.0037),
+    ("DMDYRSUS", 0.0025), ("BPXDI1", 0.0023), ("LBXTR", 0.0022),
+    ("BMXWT", 0.0021), ("DMDMARTL_1", 0.0020), ("DMDMARTL_5", 0.0018),
+    ("BPXPLS", 0.0017), ("DMDEDUC2_3", 0.0017), ("SDMVSTRA", 0.0017),
+    ("DMDMARTL_2", 0.0017), ("DMDHHSZB", 0.0016),
 ]
 
 # Las 8 features seleccionadas por Random Forest para el QSVM (y usadas en Bloch Sphere / Live Predictor)
@@ -1385,16 +1677,46 @@ SHAP_SVMRBF = [
 # el notebook ni con RF_TOP8_IMPORTANCE de más abajo: la misma magnitud aparecía con dos
 # valores en la misma aplicación. Ahora ambos salen de la misma fuente — ver
 # RF_TOP8_IMPORTANCE, que se deriva de aquí en vez de repetirse a mano.
-QSVM_FEATURES = {
-    "LBXGH":    {"label": "HbA1c",               "unit": "%",       "range": (4.0, 15.0),  "default": 5.7,  "importance": 0.2454, "step": 0.1, "fmt": "%.1f"},
-    "LBXGLU":   {"label": "Glucosa en ayunas",    "unit": "mg/dL",   "range": (50, 300),     "default": 100,  "importance": 0.1855, "step": 1.0, "fmt": "%d"},
-    "RIDAGEYR": {"label": "Edad",                 "unit": "años",    "range": (18, 80),      "default": 45,   "importance": 0.0323, "step": 1.0, "fmt": "%d"},
-    "LBDLDL":   {"label": "Colesterol LDL",       "unit": "mg/dL",   "range": (40, 250),     "default": 110,  "importance": 0.0318, "step": 1.0, "fmt": "%d"},
-    "BMXWAIST": {"label": "Circunf. cintura",     "unit": "cm",      "range": (60, 150),     "default": 95,   "importance": 0.0283, "step": 1.0, "fmt": "%d"},
-    "LBXIN":    {"label": "Insulina",             "unit": "µU/mL",   "range": (2, 60),       "default": 10,   "importance": 0.0265, "step": 1.0, "fmt": "%d"},
-    "BMXLEG":   {"label": "Long. pierna",         "unit": "cm",      "range": (30, 50),      "default": 40,   "importance": 0.0225, "step": 1.0, "fmt": "%d"},
-    "BMXBMI":   {"label": "IMC",                  "unit": "kg/m²",   "range": (15, 60),      "default": 27,   "importance": 0.0221, "step": 0.1, "fmt": "%.1f"},
+#
+# El rótulo de cada variable sale de i18n["qsvm_labels"] (ver q_label más abajo). La UNIDAD
+# sí se queda aquí porque siete de las ocho son símbolos internacionales que no se traducen
+# (%, mg/dL, cm, µU/mL, kg/m²); la única palabra, "años", pasa por i18n["qsvm_units"].
+#
+# El TypedDict declara la forma de cada entrada: como este dict se lee por clave en media
+# docena de sitios (sliders del Live Predictor, esfera de Bloch, RF_TOP8_IMPORTANCE), una
+# errata como v["rango"] o v["importancia"] no daría error hasta ejecutar esa página
+# concreta. Declarada la forma, el editor la marca al escribirla y autocompleta las claves.
+# Los valores NO cambian: es solo la anotación.
+class QFeature(TypedDict):
+    unit: str                     # símbolo de la unidad, sin traducir salvo "años"
+    range: tuple[float, float]    # (mínimo, máximo) del slider, en unidades clínicas
+    default: float                # valor de partida del slider
+    importance: float             # ranking Random Forest, celda 20 de notebook_03_gold
+    step: float                   # paso del slider (0,1 con decimal; 1 para enteras)
+    fmt: str                      # formato de st.slider para el valor mostrado
+
+
+QSVM_FEATURES: dict[str, QFeature] = {
+    "LBXGH":    {"unit": "%",       "range": (4.0, 15.0),  "default": 5.7,  "importance": 0.2454, "step": 0.1, "fmt": "%.1f"},
+    "LBXGLU":   {"unit": "mg/dL",   "range": (50, 300),     "default": 100,  "importance": 0.1855, "step": 1.0, "fmt": "%d"},
+    "RIDAGEYR": {"unit": "años",    "range": (18, 80),      "default": 45,   "importance": 0.0323, "step": 1.0, "fmt": "%d"},
+    "LBDLDL":   {"unit": "mg/dL",   "range": (40, 250),     "default": 110,  "importance": 0.0318, "step": 1.0, "fmt": "%d"},
+    "BMXWAIST": {"unit": "cm",      "range": (60, 150),     "default": 95,   "importance": 0.0283, "step": 1.0, "fmt": "%d"},
+    "LBXIN":    {"unit": "µU/mL",   "range": (2, 60),       "default": 10,   "importance": 0.0265, "step": 1.0, "fmt": "%d"},
+    "BMXLEG":   {"unit": "cm",      "range": (30, 50),      "default": 40,   "importance": 0.0225, "step": 1.0, "fmt": "%d"},
+    "BMXBMI":   {"unit": "kg/m²",   "range": (15, 60),      "default": 27,   "importance": 0.0221, "step": 0.1, "fmt": "%.1f"},
 }
+
+
+def q_label(code):
+    """Rótulo traducido de una de las 8 variables del QSVM (sliders y selectores)."""
+    return S("qsvm_labels")[code]
+
+
+def q_unit(code):
+    """Unidad traducida. Solo "años" tiene entrada en el mapa; el resto pasan tal cual."""
+    u = QSVM_FEATURES[code]["unit"]
+    return S("qsvm_units").get(u, u)
 
 # Ranking RF para el gráfico "8 features seleccionadas" (Circuito Cuántico). Se DERIVA de
 # QSVM_FEATURES en vez de repetirse: una sola fuente para el mismo dato, así no pueden
@@ -1702,39 +2024,9 @@ def reconciliar_metricas():
     return out
 
 # Descripción breve de cada variable NHANES (para los tooltips de las gráficas SHAP). Basado en el
-# Anexo C del TFM (Diccionario de Variables NHANES Utilizadas en el Pipeline).
-VAR_DESC = {
-    "LBXGH":      "Hemoglobina glicosilada (HbA1c): glucosa media de los últimos 2-3 meses. Marcador diagnóstico primario de diabetes (ADA: ≥ 6,5 %).",
-    "RIDAGEYR":   "Edad del participante en el momento de la exploración (años).",
-    "LBXGLU":     "Glucosa en plasma en ayunas: marcador bioquímico del control glucémico (mg/dL).",
-    "LBDLDL":     "Colesterol LDL calculado: fracción del colesterol ligada a riesgo cardiovascular (mg/dL).",
-    "BMXWAIST":   "Circunferencia de cintura: adiposidad abdominal asociada a resistencia a la insulina (cm).",
-    "WTINT2YR":   "Factor de expansión muestral de la entrevista NHANES. Artefacto del diseño muestral, no una variable clínica.",
-    "BMXARML":    "Longitud del brazo (acromion → olécranon): medida antropométrica (cm).",
-    "BMXLEG":     "Longitud máxima de la pierna (rodilla → suelo): medida antropométrica (cm).",
-    "BMXBMI":     "Índice de Masa Corporal (peso/talla²): adiposidad corporal global (kg/m²).",
-    "PAD680":     "Minutos de actividad sedentaria al día (tiempo sentado o recostado).",
-    "PAD645":     "Minutos semanales de actividad física moderada (trabajo + recreación).",
-    "PAQ640":     "Días por semana con actividades de fortalecimiento muscular.",
-    "BMXWT":      "Peso corporal total (kg).",
-    "LBXIN":      "Insulina sérica en ayunas: marcador de resistencia a la insulina (µU/mL).",
-    "INDHHIN2":   "Nivel de ingresos del hogar (variable socioeconómica categórica).",
-    "DMDYRSUS":   "Número de años de residencia en Estados Unidos.",
-    "BMXARMC":    "Circunferencia media del brazo: medida antropométrica (cm).",
-    "PAQ670":     "Minutos semanales de actividad recreativa vigorosa.",
-    "BPXSY1":     "Presión arterial sistólica, primera medición (mmHg).",
-    "PAD630":     "Minutos semanales de actividad física moderada de recreación.",
-    "DMDHHSZE":   "Composición del hogar: número de niños en el hogar.",
-    "BPXDI1":     "Presión arterial diastólica, primera medición (mmHg).",
-    "LBXTR":      "Triglicéridos séricos: marcador del perfil lipídico (mg/dL).",
-    "DMDMARTL_1": "Estado civil = casado (variable dummy tras one-hot encoding).",
-    "DMDMARTL_5": "Estado civil = nunca casado (variable dummy tras one-hot encoding).",
-    "BPXPLS":     "Pulso: frecuencia cardíaca en reposo (latidos/min).",
-    "DMDEDUC2_3": "Nivel educativo intermedio (bachillerato/GED): variable dummy tras one-hot encoding.",
-    "SDMVSTRA":   "Estrato de varianza del diseño muestral NHANES (variable metodológica, no clínica).",
-    "DMDMARTL_2": "Estado civil = viudo (variable dummy tras one-hot encoding).",
-    "DMDHHSZB":   "Composición del hogar: número de adultos en el hogar.",
-}
+# Anexo C del TFM (Diccionario de Variables NHANES Utilizadas en el Pipeline). El texto vive en
+# i18n porque es prosa, no dato: aquí solo se resuelve al idioma activo.
+VAR_DESC = S("var_desc")
 
 def _wrap_hover(text, width=54):
     return "<br>".join(textwrap.wrap(text, width=width))
@@ -1766,16 +2058,80 @@ with st.sidebar:
     if "page" not in st.session_state:
         st.session_state.page = i18n.PAGE_KEYS[0]
 
+    # Sin tooltip, pero con nombre accesible. El globito con "Expandir"/"Colapsar" repetía en
+    # palabras lo que la flecha ya dice —apunta siempre al lado al que se moverá la barra—,
+    # así que se va; lo que no puede irse es el nombre del botón, porque un <button> cuyo
+    # único contenido es "‹" no se anuncia como nada.
+    #
+    # st.button no acepta aria-label y el help de Streamlit tampoco servía: se traduce en un
+    # aria-describedby que solo existe mientras el globito está abierto, o sea una DESCRIPCIÓN
+    # ocasional, nunca el nombre. Así que el nombre se construye con el propio rótulo: la
+    # palabra viaja dentro en cursiva —el único envoltorio que el markdown de st.button deja
+    # crear— y el CSS la recorta. El ojo ve la flecha; el lector de pantalla lee la frase.
     if narrow:
-        if st.button("›", key="toggle_sidebar", help=S("sidebar_expand")):
+        if st.button(f"› *{S('sidebar_expand')}*", key="toggle_sidebar"):
             st.session_state.sidebar_narrow = False
             st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
     else:
-        if st.button("‹", key="toggle_sidebar", help=S("sidebar_collapse")):
+        if st.button(f"‹ *{S('sidebar_collapse')}*", key="toggle_sidebar"):
             st.session_state.sidebar_narrow = True
             st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
+
+    # ── BUSCADOR ────────────────────────────────────────────────────────────
+    # Busca primero DENTRO del panel (páginas, secciones y las ocho variables clínicas,
+    # índice derivado del propio catálogo i18n) y ofrece siempre, debajo, lanzar la misma
+    # consulta a la web en una pestaña nueva. Las dos cosas en la misma caja: quien escribe
+    # "ZZFeatureMap" quiere ir al Circuito Cuántico, y quien escribe "hemoglobina glicada"
+    # quiere una definición — no tiene por qué saber de antemano cuál de las dos es.
+    #
+    # En los 84 px del modo colapsado una caja de texto no cabe —un buscador que no deja leer
+    # lo que escribes es peor que no tenerlo—, pero desaparecer del todo tampoco vale: la
+    # entrada sigue estando, reducida a su lupa, y pulsarla despliega la barra con la caja ya
+    # puesta. Mismo gesto que hace el propio menú al colapsarse: se queda el icono.
+    if narrow:
+        if st.button(" ", key="search_expand", icon=":material/search:", help=S("search_expand")):
+            st.session_state.sidebar_narrow = False
+            st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
+            st.rerun()
+    else:
+        def _ir_a_resultado(_pagina):
+            """Navega a la página del resultado y vacía la caja.
+
+            Va como CALLBACK y no como código tras el `if st.button(...)`: el valor de un
+            widget solo puede tocarse desde un callback (fuera lanza StreamlitAPIException),
+            y sin vaciar la caja la lista de resultados seguiría abierta empujando el menú
+            hacia abajo después de haber navegado.
+            """
+            st.session_state.page = _pagina
+            st.session_state.menu_force_index = i18n.PAGE_KEYS.index(_pagina)
+            st.session_state.nav_search = ""
+
+        _q = (st.text_input(S("search_label"), key="nav_search", placeholder=S("search_ph"),
+                            icon=":material/search:", label_visibility="collapsed") or "").strip()
+        if _q:
+            _hits = i18n.search(_q, LANG)
+            with st.container(key="nav_search_results"):
+                for _i, _h in enumerate(_hits):
+                    # El rótulo de la página va en el tooltip y no en el propio botón: en
+                    # 270 px de ancho, "Curva de respuesta · Predictor en Vivo" se parte en
+                    # dos líneas y la lista deja de leerse como lista.
+                    st.button(_h["label"], key=f"nav_hit_{_i}", width="stretch",
+                              on_click=_ir_a_resultado, args=(_h["page"],),
+                              help=None if _h["kind"] == 0 else S("search_in").format(
+                                  p=_MENU_OPTIONS[i18n.PAGE_KEYS.index(_h["page"])]))
+                if not _hits:
+                    st.markdown(f'<div class="search-none">{S("search_none")}</div>',
+                                unsafe_allow_html=True)
+                # Enlace en crudo y no st.link_button: aquí hace falta target="_blank"
+                # explícito (la consulta se abre FUERA, no reemplazando el panel) y
+                # rel="noopener" para no ceder window.opener al buscador.
+                st.markdown(
+                    f'<a class="search-web" target="_blank" rel="noopener noreferrer" '
+                    f'href="https://www.google.com/search?q={quote_plus(_q)}">'
+                    f'{html.escape(S("search_web").format(q=_q))}'
+                    f'<span class="search-web-ext">↗</span></a>', unsafe_allow_html=True)
 
     # streamlit-option-menu renderiza dentro de un iframe: el CSS del documento principal
     # (st.markdown) no puede alcanzar sus elementos internos. Por eso el modo narrow se logra
@@ -1790,9 +2146,32 @@ with st.sidebar:
                        "--hover-color": t["sidebar_active"]}
     nav_link_selected_style = {"background-color": t["sidebar_active"], "color": t["text"], "font-weight": "600",
                                 "border-left": f"2px solid {C_PRIMARY}", "border-radius": "0 9px 9px 0"}
+    # El icono va en el acento de marca, no en el color del rótulo. C_PRIMARY es justo lo que
+    # la paleta reserva al cromo de navegación (ver su bloque más arriba), y el icono es además
+    # lo ÚNICO que queda visible con la barra colapsada, donde el rótulo se apaga a font-size:0.
+    # El rótulo no se toca —sigue en text_secondary—: así el color distingue glifo de texto en
+    # vez de repetirlos, y la jerarquía del ítem la siguen marcando peso, fondo y filete.
+    # Contraste sobre sidebar_bg: 9,33:1 en oscuro y 4,08:1 en claro, por encima del 3:1 que
+    # WCAG 1.4.11 pide a un elemento gráfico de interfaz.
+    icon_style = {"font-size": "15px", "color": C_PRIMARY}
     if narrow:
-        nav_link_style.update({"font-size": "0px", "text-align": "center", "padding": "12px 0"})
-        nav_link_selected_style.update({"font-size": "0px", "text-align": "center", "padding": "12px 0"})
+        # El componente pinta cada ítem como <a class="nav-link"><i class="icon bi-…"></i> Rótulo</a>,
+        # y el rótulo es un NODO DE TEXTO SUELTO, sin envoltorio propio. Como el dict "styles" solo
+        # llega al <a> y al <i>, la única forma de ocultar el texto es font-size:0 en el <a> — y ahí
+        # estaba el recorte de los iconos: con font-size 0 la caja de línea del <a> mide 0, el glifo
+        # se dibuja desde una línea base sin altura y se cortaba por la mitad inferior (se veía el
+        # tejado de la casa sin paredes, el escudo sin punta).
+        #
+        # La solución es sacar el glifo del flujo de línea: el <a> pasa a ser flex y el <i> a caja
+        # de bloque con ALTURA PROPIA, así su tamaño ya no depende de un line-height heredado que
+        # vale cero. El font-size:0 sigue borrando el rótulo, que es lo que se quería.
+        _centrado = {"font-size": "0px", "line-height": "0", "padding": "11px 0",
+                     "display": "flex", "align-items": "center", "justify-content": "center"}
+        nav_link_style.update(_centrado)
+        nav_link_selected_style.update(_centrado)
+        icon_style.update({"font-size": "18px", "line-height": "1", "height": "22px", "width": "100%",
+                           "margin": "0", "display": "flex", "align-items": "center",
+                           "justify-content": "center"})
 
     # manual_select fuerza al componente a saltar a un indice concreto, pero es un disparo "de un
     # solo uso": si se reenvia en cada rerun (incluido el propio rerun que dispara un clic del
@@ -1821,8 +2200,15 @@ with st.sidebar:
         # mostrando los siete rotulos del idioma con el que se monto.
         key=f"main_menu_{st.session_state.theme}_{narrow}_{LANG}",
         styles={
-            "container": {"padding": "0", "background-color": t["sidebar_bg"], "border-radius": "0"},
-            "icon": {"font-size": "15px", "color": t["text_secondary"]},
+            # "0!important" y no "0": el componente pone estos estilos EN LÍNEA sobre un div que
+            # además lleva la clase Bootstrap `p-3`, y `.p-3` declara `padding:1rem!important`,
+            # que gana a un estilo en línea normal. El resultado es que el menú ha llevado
+            # siempre 16 px de relleno a cada lado sin que se notara… hasta colapsar la barra:
+            # con 84 px, esos 32 px se comían el ancho entero y el icono se salía del iframe.
+            # Un !important en línea sí gana a un !important de clase.
+            "container": {"padding": "0!important", "background-color": t["sidebar_bg"],
+                          "border-radius": "0"},
+            "icon": icon_style,
             "nav-link": nav_link_style,
             "nav-link-selected": nav_link_selected_style,
         },
@@ -1842,8 +2228,14 @@ with st.sidebar:
     nav[role="navigation"] a.nav-link:hover:not(.active) span {{
         color:{t['text']} !important;
     }}
+    /* El icono activo sube al acento pareja: como ahora los siete van en C_PRIMARY, ese color
+       ya no distingue al seleccionado. C_DARK se separa en la dirección correcta en cada tema
+       —más brillante en oscuro (#F9C449), más profundo en claro (#6B4600)—, así que el ítem
+       activo gana peso en ambos. Contraste sobre el fondo del ítem activo: 9,15:1 y 5,94:1.
+       El !important sigue haciendo falta: nav-link-selected pinta color sobre el <a> y, sin
+       forzar, esa cascada se lleva por delante el color en línea del <i>. */
     nav[role="navigation"] a.nav-link.active i {{
-        color:{C_PRIMARY} !important;
+        color:{C_DARK} !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -1885,6 +2277,82 @@ if st.button(" ", key="lang_es", help=S("lang_es_help")) and LANG != "es":
 if st.button(" ", key="lang_en", help=S("lang_en_help")) and LANG != "en":
     st.session_state.lang = "en"
     st.rerun()
+
+# ── El idioma DECLARADO del documento ──
+# Streamlit escribe <html lang="en"> fijo y no lo toca al cambiar de bandera: con la app
+# en español el documento seguía declarando inglés. No es cosmético. El atributo lang es
+# lo que usan los lectores de pantalla para elegir voz y pronunciación (español leído con
+# voz inglesa es ininteligible), la separación silábica del navegador y su corrector; y
+# es el criterio WCAG 3.1.1 "Language of Page", de nivel A — el mínimo de conformidad.
+#
+# No hay ajuste de Streamlit para esto, y editar su index.html no vale: se pierde al
+# reinstalar y en Community Cloud no se puede tocar. La vía es el componente HTML, cuyo
+# iframe se sirve por srcdoc y comparte por tanto el origen de la página, así que puede
+# escribir en el documento padre.
+#
+# El valor va por json.dumps y no interpolado a pelo: es lo que separa "escribir una
+# cadena" de "inyectar lo que haya en session_state" dentro de un <script>.
+with st.container(key="lang_attr"):
+    components.html(
+        f"<script>window.parent.document.documentElement.lang = {json.dumps(LANG)};</script>",
+        height=0, width=0,
+    )
+
+# ── RELOJ ────────────────────────────────────────────────────────────────────
+# La hora la pone el NAVEGADOR, no Python: un datetime.now() del servidor se congelaría en el
+# instante del rerun —un reloj parado es peor que no tenerlo— y además en Community Cloud
+# marcaría la hora del contenedor (UTC), no la de quien mira la pantalla.
+#
+# Se reutiliza la misma vía que el atributo lang de aquí arriba: el iframe del componente se
+# sirve por srcdoc, comparte origen y puede escribir en el documento padre. El elemento se
+# crea vacío y su aspecto vive en la hoja de estilos (#tfm-reloj), no aquí, para que siga al
+# tema como cualquier otra regla en vez de llevar los colores incrustados en el script.
+#
+# El setInterval anterior se cancela SIEMPRE al arrancar: cada rerun recarga este iframe y
+# vuelve a ejecutar el script, así que sin cancelar quedarían intervalos vivos acumulándose
+# —uno por clic— todos escribiendo sobre el mismo nodo. El identificador se guarda en el
+# window padre porque es lo único que sobrevive a la recarga del iframe.
+#
+# Cada 15 s y no cada segundo: sin segundos en pantalla, un tic por segundo son 60 repintados
+# por minuto para que cambie un dígito cada 60. Con 15 s el minuto que se ve nunca va más de
+# un cuarto de minuto atrasado y el coste es cuatro repintados.
+with st.container(key="reloj"):
+    components.html(
+        f"""<script>
+(function () {{
+  var doc = window.parent.document;
+  var loc = {json.dumps("es-ES" if LANG == "es" else "en-GB")};
+  if (window.parent.__tfmRelojTick) {{ window.parent.clearInterval(window.parent.__tfmRelojTick); }}
+  var caja = doc.getElementById("tfm-reloj");
+  if (!caja) {{
+    caja = doc.createElement("div");
+    caja.id = "tfm-reloj";
+    // Las tres piezas se crean UNA vez y luego solo se les cambia el texto: reconstruir el
+    // innerHTML en cada tic tiraría los nodos y con ellos cualquier transición heredada.
+    ["r-fecha", "r-sep", "r-hora"].forEach(function (cls) {{
+      var s = doc.createElement("span");
+      s.className = cls;
+      caja.appendChild(s);
+    }});
+    doc.body.appendChild(caja);
+  }}
+  var fecha = caja.querySelector(".r-fecha");
+  var sep   = caja.querySelector(".r-sep");
+  var hora  = caja.querySelector(".r-hora");
+  function pinta() {{
+    var t = new Date();
+    fecha.textContent = t.toLocaleDateString(loc, {{ day: "numeric", month: "short", year: "numeric" }});
+    sep.textContent = "\\u00B7";
+    // hour12:false en los dos idiomas: el AM/PM cambia el ancho del reloj según la hora del
+    // día y en un elemento fijo eso se traduce en que la tira de cabecera se mueve sola.
+    hora.textContent = t.toLocaleTimeString(loc, {{ hour: "2-digit", minute: "2-digit", hour12: false }});
+  }}
+  pinta();
+  window.parent.__tfmRelojTick = window.parent.setInterval(pinta, 15000);
+}})();
+</script>""",
+        height=0, width=0,
+    )
 
 def header(eyebrow, title, subtitle):
     # Streamlit reutiliza los mismos nodos del DOM entre reruns (para no perder el estado de sliders/
@@ -1973,6 +2441,17 @@ def mil(n):
     s = f"{n:,}"
     return s.replace(",", ".") if LANG == "es" else s
 
+def thr_text(clave):
+    """Punto de corte de un modelo, con el decimal en el idioma activo.
+
+    El rótulo estaba escrito a mano en MODELS ("p ≥ 0,50") y se quedaba con la coma
+    española en la app inglesa — justo en el dato que la tarjeta destaca. Aquí se compone
+    desde umbral_p, que es la cifra verificada. None = el corte no es una probabilidad.
+    """
+    p = MODELS[clave]["umbral_p"]
+    plantilla = S("res_thr_label")[clave]
+    return plantilla.format(v=nf(p, 2)) if p is not None else plantilla
+
 GRID = hex_to_rgba(t["text_secondary"], 0.16)   # rejilla recesiva: se ve, no compite
 
 
@@ -1995,7 +2474,10 @@ def plotly_layout(fig, height=300, **kwargs):
     fig.update_layout(
         height=height, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family=PLOTLY_FONT, color=t["text_secondary"], size=12),
-        separators=",.",  # localización ES: coma decimal / punto de millar en ticks y hover
+        # Separadores de los ticks y del hover, en el idioma activo: ES usa coma decimal y
+        # punto de millar; EN, la convención inversa. Estaba fijo en ",." y las gráficas
+        # seguían dando "0,95" con la app en inglés, justo donde la cifra manda.
+        separators=",." if LANG == "es" else ".,",
         # barcornerradius es de layout (no de traza): redondea el extremo de dato de TODAS
         # las barras de la figura, verticales y horizontales.
         barcornerradius=4,
@@ -2126,25 +2608,29 @@ if page == "overview":
     )
     st.markdown(f'<div class="compare-grid">{_compare_cards}</div>', unsafe_allow_html=True)
 
+    # Cierre de la página: sobre qué está construido. Va al final y no al principio porque es
+    # una credencial, no una explicación — se mira después de saber qué es esto, y el enlace a
+    # Gobernanza de más arriba ya lleva a quien quiera el inventario razonado.
+    st.markdown(f'<div class="section-title" style="margin-top:26px;">{S("ov_tech_title")}</div>',
+                unsafe_allow_html=True)
+    st.markdown(f'<div class="section-sub">{S("ov_tech_sub")}</div>', unsafe_allow_html=True)
+    tech_strip()
+
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 2 — GOBERNANZA
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "governance":
-    header("Gobernanza · DataOps", "Gobernanza y Calidad del Dato",
-           "Los controles que sostienen el pipeline: qué se valida, qué se descarta y por qué, "
-           "qué queda registrado y con qué frameworks. Todas las cifras proceden de las salidas "
-           "ejecutadas de los notebooks.")
+    header(S("gov_eyebrow"), S("gov_title"), S("gov_subtitle"))
 
-    tab_calidad, tab_linaje, tab_stack = st.tabs(
-        ["Calidad del dato", "Linaje y trazabilidad", "Inventario de frameworks"])
+    tab_calidad, tab_linaje, tab_stack = st.tabs(S("gov_tabs"))
 
     # ─────────────────────────── TAB A — CALIDAD ───────────────────────────
     with tab_calidad:
         _kpis = [
-            (f"{GOV_SUITE['passed']}/{GOV_SUITE['total']}", "Expectativas superadas"),
-            (nf(GOV_SUITE["pass_rate"], 1), "Pass rate de la suite"),
-            (mil(GOV_SUITE["registros"]), "Registros validados"),
-            ("15/15", "Artefactos sin leakage"),
+            (f"{GOV_SUITE['passed']}/{GOV_SUITE['total']}", S("gov_kpi_expect")),
+            (nf(GOV_SUITE["pass_rate"], 1), S("gov_kpi_passrate")),
+            (mil(GOV_SUITE["registros"]), S("gov_kpi_records")),
+            ("15/15", S("gov_kpi_leakage")),
         ]
         st.markdown(
             '<div class="compare-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">'
@@ -2156,21 +2642,26 @@ elif page == "governance":
             + "</div>", unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Embudo de registros</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">De los 29.400 registros de Bronze sobreviven 7.831 a los '
-                     'filtros de cohorte de Silver. Cada escalón responde a un criterio explícito, no a una '
-                     'limpieza genérica.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("gov_funnel_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">'
+                    f'{S("gov_funnel_sub").format(bronze=mil(29400), silver=mil(7831))}</div>',
+                    unsafe_allow_html=True)
+
+        # Nombre y explicación de cada etapa llegan traducidos; los conteos, de GOV_EMBUDO_N.
+        # Se emparejan aquí por posición y el resto de la sección trabaja ya con la tupla unida.
+        _embudo = [(nom, val, perd, desc)
+                   for (nom, desc), (val, perd) in zip(S("gov_embudo"), GOV_EMBUDO_N)]
 
         _fcol, _ncol = st.columns([1.35, 1], gap="medium")
         with _fcol:
             # Las etapas son una PROGRESIÓN (cada una contiene a la siguiente): magnitud, no
             # identidad. Le corresponde la rampa secuencial, no colores categóricos. Se recorre
             # de RAMP[0] a RAMP[3] para que el refinamiento creciente se lea en el propio color.
-            _nombres = [e[0] for e in GOV_EMBUDO][::-1]
-            _valores = [e[1] for e in GOV_EMBUDO][::-1]
-            _colores = [RAMP[i] for i in range(len(GOV_EMBUDO))][::-1]
-            _hover = [_wrap_hover(e[3]) for e in GOV_EMBUDO][::-1]
-            _perdidos = [e[2] for e in GOV_EMBUDO][::-1]
+            _nombres = [e[0] for e in _embudo][::-1]
+            _valores = [e[1] for e in _embudo][::-1]
+            _colores = [RAMP[i] for i in range(len(_embudo))][::-1]
+            _hover = [_wrap_hover(e[3]) for e in _embudo][::-1]
+            _perdidos = [e[2] for e in _embudo][::-1]
             _etiquetas = [mil(v) for v in _valores]
 
             fig = go.Figure(go.Bar(
@@ -2180,7 +2671,8 @@ elif page == "governance":
                 textfont=dict(family=PLOTLY_MONO, size=12, color=t["text"]),
                 customdata=list(zip(_hover, [("—" if p is None else mil(p))
                                               for p in _perdidos])),
-                hovertemplate="<b>%{y}</b><br>Registros: %{x:,}<br>Descartados: %{customdata[1]}"
+                hovertemplate=f'<b>%{{y}}</b><br>{S("gov_hover_records")}: %{{x:,}}'
+                              f'<br>{S("gov_hover_dropped")}: %{{customdata[1]}}'
                               "<br>%{customdata[0]}<extra></extra>",
             ))
             # 272px = altura natural de la tarjeta vecina ("Registros descartados por filtro":
@@ -2199,31 +2691,29 @@ elif page == "governance":
                 f'<span class="kpi-value">'
                 f'{"—" if perdidos is None else "−" + mil(perdidos)}'
                 f'</span></div>'
-                for etapa, _v, perdidos, _d in GOV_EMBUDO)
+                for etapa, _v, perdidos, _d in _embudo)
             st.markdown(
-                f'<div class="info-card"><div class="kpi-model">Registros descartados por filtro</div>'
+                f'<div class="info-card"><div class="kpi-model">{S("gov_dropped_title")}</div>'
                 f'{_pasos}'
-                f'<div class="kpi-row"><span class="kpi-label">Partición Gold 80/20</span>'
-                f'<span class="kpi-value">6.264 / 1.567</span></div></div>',
+                f'<div class="kpi-row"><span class="kpi-label">{S("gov_split_label")}</span>'
+                f'<span class="kpi-value">{mil(6264)} / {mil(1567)}</span></div></div>',
                 unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Suite de validación — dataframe-expectations</div>',
+        st.markdown(f'<div class="section-title">{S("gov_suite_title")}</div>',
                      unsafe_allow_html=True)
-        # El separador de millar se sustituye SOLO en la cifra, no en la frase: aplicar el
-        # replace a la cadena entera se llevaría por delante las comas de la prosa.
-        _n_reg = mil(GOV_SUITE["registros"])
+        # Cada cifra se formatea por separado con mil()/nf(): aplicar un replace a la frase
+        # entera se llevaría por delante las comas de la prosa, y además el separador correcto
+        # depende del idioma.
         st.markdown(
-            f'<div class="section-sub">Suite <code>{GOV_SUITE["nombre"]}</code>, ejecutada el '
-            f'{GOV_SUITE["fecha"]} sobre los {_n_reg} registros de Silver en '
-            f'{nf(GOV_SUITE["duracion_s"], 4)} segundos. Great Expectations es incompatible con las '
-            f'versiones fijadas del runtime serverless: esta es la alternativa adoptada.</div>',
+            f'<div class="section-sub">{S("gov_suite_sub").format(nombre=GOV_SUITE["nombre"], fecha=GOV_SUITE["fecha"], registros=mil(GOV_SUITE["registros"]), duracion=nf(GOV_SUITE["duracion_s"], 4))}</div>',
             unsafe_allow_html=True)
 
+        _expectativas = S("gov_expectativas")
         _filas, _dim_previa = [], None
-        for dim, col, regla in GOV_EXPECTATIVAS:
+        for dim, col, regla in _expectativas:
             if dim != _dim_previa:
-                _n = sum(1 for d, _, _ in GOV_EXPECTATIVAS if d == dim)
+                _n = sum(1 for d, _, _ in _expectativas if d == dim)
                 _filas.append(f'<div class="gov-dim">{dim} · {_n}</div>')
                 _dim_previa = dim
             _filas.append(
@@ -2235,11 +2725,15 @@ elif page == "governance":
         st.markdown(f'<div class="info-card">{"".join(_filas)}</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Operaciones de calidad por capa</div>',
+        st.markdown(f'<div class="section-title">{S("gov_ops_title")}</div>',
                      unsafe_allow_html=True)
+        # La partición 80/20 es la única cifra de estas dos tarjetas con separador de millar,
+        # así que se compone aquí con mil() en vez de venir escrita en la lista de valores.
+        _gold_vals = [v if v is not None else f"{mil(6264)} / {mil(1567)}" for v in GOV_GOLD_VALS]
         _ocol1, _ocol2 = st.columns(2, gap="medium")
-        for _col, _titulo, _ops in ((_ocol1, "Silver — limpieza y saneamiento", GOV_SILVER_OPS),
-                                     (_ocol2, "Gold — preparación para modelado", GOV_GOLD_OPS)):
+        for _col, _titulo, _textos, _vals in (
+                (_ocol1, S("gov_silver_card"), S("gov_silver_ops"), GOV_SILVER_VALS),
+                (_ocol2, S("gov_gold_card"), S("gov_gold_ops"), _gold_vals)):
             with _col:
                 _rows = "".join(
                     f'<div class="kpi-row" style="align-items:flex-start;">'
@@ -2247,7 +2741,7 @@ elif page == "governance":
                     f'<span style="display:block;font-size:13.5px;color:{t["text_muted"]};'
                     f'line-height:1.5;margin-top:3px;">{det}</span></span>'
                     f'<span class="kpi-value">{val}</span></div>'
-                    for lab, val, det in _ops)
+                    for (lab, det), val in zip(_textos, _vals))
                 st.markdown(
                     f'<div class="info-card"><div class="kpi-model">'
                     f'<span class="kpi-dot" style="background:{C_PRIMARY};"></span>{_titulo}</div>'
@@ -2264,26 +2758,22 @@ elif page == "governance":
             _n_tot, _n_const = len(_sp_gov["features"]), len(_const)
             _n_efec = _n_tot - _n_const
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown('<div class="section-title">Features efectivas frente a features nominales</div>',
+            st.markdown(f'<div class="section-title">{S("gov_eff_title")}</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div class="section-sub">Contado sobre <code>scaler_correcto.json</code>: '
-                        f'{_n_const} de las {_n_tot} columnas tienen varianza cero y no aportan '
-                        f'información al modelo</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-sub">'
+                        f'{S("gov_eff_sub").format(const=_n_const, total=_n_tot)}</div>',
+                        unsafe_allow_html=True)
             st.markdown(f"""
             <div class="info-card">
-              <div class="kpi-row"><span class="kpi-label">Features nominales</span>
+              <div class="kpi-row"><span class="kpi-label">{S("gov_eff_nominal")}</span>
                    <span class="kpi-value">{_n_tot}</span></div>
-              <div class="kpi-row"><span class="kpi-label">Constantes (varianza = 0)</span>
+              <div class="kpi-row"><span class="kpi-label">{S("gov_eff_const")}</span>
                    <span class="kpi-value" style="color:{STATUS['warning']};">{_n_const}</span></div>
-              <div class="kpi-row"><span class="kpi-label">Features efectivas</span>
+              <div class="kpi-row"><span class="kpi-label">{S("gov_eff_effective")}</span>
                    <span class="kpi-value">{_n_efec}</span></div>
               <div style="margin-top:12px; padding-top:11px; border-top:1px solid {t['border']};
                           font-size:13px; color:{t['text_secondary']}; line-height:1.65; text-align:justify;">
-                Es el efecto colateral de la winsorización IQR × 3 de Silver, que se aplicó también a
-                variables categóricas codificadas numéricamente (respuestas 1/2, idioma de la entrevista,
-                códigos 7 y 9). Cuando más del 75 % de la muestra responde lo mismo, el recorte colapsa la
-                columna a un único valor. Las más recortadas en el notebook 02 —PAQ635, PAQ650, PAQ605,
-                DMDHHSZA, DMDCITZN, SIALANG— son exactamente las que aquí aparecen constantes.
+                {S("gov_eff_note")}
               </div>
               <div style="margin-top:10px; font-family:{FONT_MONO}; font-size:11.5px;
                           color:{t['text_muted']}; line-height:1.75; word-break:break-word;">
@@ -2294,9 +2784,8 @@ elif page == "governance":
 
     # ────────────────────── TAB B — LINAJE Y TRAZABILIDAD ──────────────────────
     with tab_linaje:
-        st.markdown('<div class="section-title">Trazabilidad sin MLflow</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">La restricción que más condiciona la arquitectura del '
-                     'pipeline, y su mitigación.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("gov_lin_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("gov_lin_sub")}</div>', unsafe_allow_html=True)
 
         # Rejilla de 2 en vez de st.columns: la limitación es más corta que su mitigación, y con
         # columnas la tarjeta izquierda quedaba visiblemente más baja. El estirado es nativo del
@@ -2307,30 +2796,20 @@ elif page == "governance":
             f'<div class="compare-grid" style="grid-template-columns:repeat(2, minmax(0, 1fr));">'
             f'<div class="info-card" style="border-top:2px solid {STATUS["critical"]};">'
             f'<div class="kpi-model gov-prose-title">'
-            f'<span class="kpi-dot" style="background:{STATUS["critical"]};"></span>Limitación</div>'
-            f'<div class="gov-prose">'
-            f'La integración nativa de <b style="color:{t["text"]};">MLflow</b> está deshabilitada '
-            f'en Databricks Serverless gratuito. Cualquier llamada a <code>mlflow.start_run()</code> '
-            f'o <code>mlflow.log_metric()</code> produce errores de autenticación: no hay registro '
-            f'de experimentos, métricas ni artefactos.</div></div>'
+            f'<span class="kpi-dot" style="background:{STATUS["critical"]};"></span>'
+            f'{S("gov_lin_limit_title")}</div>'
+            f'<div class="gov-prose">{S("gov_lin_limit_body")}</div></div>'
             f'<div class="info-card" style="border-top:2px solid {STATUS["good"]};">'
             f'<div class="kpi-model gov-prose-title">'
             f'<span class="kpi-dot" style="background:{STATUS["good"]};"></span>'
-            f'Mitigación — doble mecanismo</div>'
-            f'<div class="gov-prose">'
-            f'<b style="color:{t["text"]};">Transaction logs de Delta Lake</b> — cada escritura '
-            f'genera un registro ACID con versión, marca de tiempo y métricas de operación.<br><br>'
-            f'<b style="color:{t["text"]};">CSV de métricas por modelo</b> — cada notebook persiste '
-            f'sus resultados en Unity Catalog Volumes, y las figuras los leen de ahí en vez de '
-            f'llevarlos escritos a mano.</div></div>'
+            f'{S("gov_lin_mit_title")}</div>'
+            f'<div class="gov-prose">{S("gov_lin_mit_body")}</div></div>'
             f'</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Historial Delta — capa Gold</div>',
+        st.markdown(f'<div class="section-title">{S("gov_delta_title")}</div>',
                      unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">Seis versiones más recientes de las diez registradas. '
-                     'Delta purga las anteriores tras 168 h de retención, comportamiento esperado y no '
-                     'un fallo del pipeline.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("gov_delta_sub")}</div>', unsafe_allow_html=True)
         # Las dos cifras se formatean una a una con mil()/nf() en vez de aplicar un replace a
         # la fila entera: el replace global solo era seguro mientras el separador español
         # estuviera fijo, y ahora depende del idioma (además de que arrasaría cualquier coma
@@ -2339,23 +2818,20 @@ elif page == "governance":
             f'<tr><td class="num">{v}</td><td class="num">{ts}</td><td>{op}</td>'
             f'<td class="num">{mil(filas)}</td><td class="num">{nf(bytes_ / 1024, 0)} KB</td></tr>'
             for v, ts, op, filas, bytes_ in GOV_DELTA_HISTORY)
+        _cabeceras = "".join(f"<th>{c}</th>" for c in S("gov_delta_cols"))
         st.markdown(
             f'<div class="info-card"><div class="gov-table-wrap"><table class="gov-table">'
-            f'<thead><tr><th>Versión</th><th>Timestamp</th><th>Operación</th>'
-            f'<th>Filas</th><th>Tamaño</th></tr></thead><tbody>{_hist}</tbody></table></div></div>',
+            f'<thead><tr>{_cabeceras}</tr></thead><tbody>{_hist}</tbody></table></div></div>',
             unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Cadena de custodia contra la fuga de información</div>',
+        st.markdown(f'<div class="section-title">{S("gov_chain_title")}</div>',
                      unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">Cuatro barreras encadenadas. La tercera no descarta '
-                     'ninguna columna — y eso es exactamente lo que se quiere ver: prueba que las '
-                     'anteriores hicieron su trabajo.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("gov_chain_sub")}</div>', unsafe_allow_html=True)
         # Mismo componente que la arquitectura Medallón: numeral + acento lateral + descripción.
         # El acento sigue la rampa secuencial porque las barreras son una secuencia, no identidades.
-        for _i, (num, nombre, desc, codigo) in enumerate(GOV_LEAKAGE):
+        for _i, ((nombre, desc), num) in enumerate(zip(S("gov_leakage"), GOV_LEAKAGE_N)):
             _c = RAMP[_i + 1]
-            _code_html = (f'<div class="gov-code">{codigo}</div>' if codigo else "")
             st.markdown(
                 f'<div class="medallion-item" style="border-left-color:{_c};">'
                 f'<div style="display:flex;flex-direction:column;align-items:center;gap:6px;'
@@ -2366,7 +2842,7 @@ elif page == "governance":
                 f'<div style="min-width:0;">'
                 f'<div class="medallion-name" style="color:{t["text"]};">{nombre}</div>'
                 f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.6;text-align:justify;">{desc}</div>'
-                f'{_code_html}</div></div>', unsafe_allow_html=True)
+                f'</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         _scol1, _scol2 = st.columns([1, 1.15], gap="medium")
@@ -2377,37 +2853,25 @@ elif page == "governance":
                 f'<span style="display:block;font-size:13.5px;color:{t["text_muted"]};'
                 f'line-height:1.5;margin-top:3px;">{det}</span></span>'
                 f'<span class="kpi-value">{val}</span></div>'
-                for lab, val, det in GOV_SCALER)
+                for lab, val, det in S("gov_scaler"))
             st.markdown(
                 f'<div class="info-card"><div class="kpi-model">'
                 f'<span class="kpi-dot" style="background:{C_PRIMARY};"></span>'
-                f'Escalado sin fuga estadística</div>{_srows}</div>', unsafe_allow_html=True)
+                f'{S("gov_scaler_card")}</div>{_srows}</div>', unsafe_allow_html=True)
         with _scol2:
-            st.markdown(
-                '<div class="clinical-note">El <b>StandardScaler</b> se ajusta exclusivamente sobre '
-                '<b>train</b>: <code>fit_transform</code> en entrenamiento y <code>transform</code> en '
-                'test. Si se ajustara sobre el conjunto completo, la media y la desviación típica del '
-                'test se filtrarían al preprocesado y las métricas quedarían optimistas. La selección '
-                'de las 8 variables del QSVM sigue la misma regla — el Random Forest se entrena solo '
-                'con <code>X_train_svm_scaled</code>.<br><br>El filtro de correlación, en cambio, '
-                '<b>sí</b> se calcula antes de particionar. Está documentado y asumido en '
-                'la decisión 09.</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="clinical-note">{S("gov_scaler_note")}</div>',
+                        unsafe_allow_html=True)
 
         # Verificación end-to-end. Es el cierre del linaje: comprueba que ESTE dashboard
         # reproduce los modelos entrenados, no solo que sus cifras son coherentes entre sí.
         _gold = verificar_golden()
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Verificación end-to-end contra los modelos entrenados</div>',
+        st.markdown(f'<div class="section-title">{S("gov_e2e_title")}</div>',
                     unsafe_allow_html=True)
         if _gold["_estado"] == "ausente":
             st.markdown(
                 f'<div class="clinical-note">'
-                f'<b style="color:{STATUS["warning"]};">Sin verificar.</b> El conjunto de test no está en el '
-                f'repositorio, así que el dashboard no puede comprobar por sí solo que su camino de '
-                f'inferencia reproduzca lo que produjeron los modelos entrenados. Para cerrarlo, ejecuta '
-                f'las dos celdas de <code>notebooks/INSTRUCCIONES_exportar_golden_set.md</code> y copia '
-                f'<code>golden_lgbm.npz</code> y <code>golden_svm.npz</code> a <code>streamlit/models/</code>. '
-                f'Mientras falten, esta página no afirma nada que no haya podido comprobar.</div>',
+                f'{S("gov_e2e_missing").format(color=STATUS["warning"])}</div>',
                 unsafe_allow_html=True)
         else:
             _filas = ""
@@ -2415,22 +2879,25 @@ elif page == "governance":
                 _r = _gold.get(_k)
                 _lab = MODELS[_k]["label"]
                 if _r is None:
-                    _val, _col = "no disponible", t["text_muted"]
+                    _val, _col = S("gov_e2e_unavailable"), t["text_muted"]
                 elif _r["error"]:
                     _val, _col = _r["error"], STATUS["critical"]
                 elif _r["ok"]:
-                    _val, _col = f"{_r['n']} filas · dif. máx. {_r['max_dif']:.2e}", STATUS["good"]
+                    _val = S("gov_e2e_ok_val").format(n=_r["n"], dif=f"{_r['max_dif']:.2e}")
+                    _col = STATUS["good"]
                 else:
-                    _val, _col = f"DISCREPA · dif. máx. {_r['max_dif']:.2e}", STATUS["critical"]
-                _esc = "escala y llama al ONNX" if _cfg["escalar"] else "llama al ONNX sin escalar"
+                    _val = S("gov_e2e_bad_val").format(dif=f"{_r['max_dif']:.2e}")
+                    _col = STATUS["critical"]
+                _esc = S("gov_e2e_scaled") if _cfg["escalar"] else S("gov_e2e_raw")
                 _filas += (f'<div class="kpi-row" style="align-items:flex-start;">'
                            f'<span class="kpi-label" style="max-width:52%;">{_lab}'
                            f'<span style="display:block;font-size:13px;color:{t["text_muted"]};'
-                           f'line-height:1.5;margin-top:3px;">El dashboard {_esc}</span></span>'
+                           f'line-height:1.5;margin-top:3px;">'
+                           f'{S("gov_e2e_path").format(accion=_esc)}</span></span>'
                            f'<span class="kpi-value" style="color:{_col};">{_val}</span></div>')
-            _titulo = ("✓ Camino de inferencia verificado" if _gold["_estado"] == "ok"
-                       else "⚠ El camino de inferencia no reproduce los modelos")
-            _tcol = STATUS["good"] if _gold["_estado"] == "ok" else STATUS["critical"]
+            _ok = _gold["_estado"] == "ok"
+            _titulo = S("gov_e2e_ok_title") if _ok else S("gov_e2e_fail_title")
+            _tcol = STATUS["good"] if _ok else STATUS["critical"]
             st.markdown(f"""
             <div class="info-card">
               <div class="kpi-model"><span class="kpi-dot" style="background:{_tcol};"></span>
@@ -2438,21 +2905,19 @@ elif page == "governance":
               {_filas}
               <div style="margin-top:12px; padding-top:11px; border-top:1px solid {t['border']};
                           font-size:13px; color:{t['text_secondary']}; line-height:1.65; text-align:justify;">
-                Cada fila del <i>golden set</i> es una instancia real del test acompañada de la probabilidad
-                que devolvió el modelo entrenado en su notebook. El dashboard la pasa por su propio camino
-                —vector crudo, escalado solo del SVM, conversión a <code>float32</code>, sesión ONNX y
-                lectura del tensor de salida— y compara. Tolerancia {GOLDEN_TOL:.0e}; el ruido esperado por
-                trabajar en <code>float32</code> es de orden 10⁻⁷.
+                {S("gov_e2e_note").format(tol=f"{GOLDEN_TOL:.0e}")}
               </div>
             </div>
             """, unsafe_allow_html=True)
 
     # ──────────────────── TAB C — INVENTARIO DE FRAMEWORKS ────────────────────
     with tab_stack:
-        st.markdown('<div class="section-title">Frameworks por capa</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">El primer distintivo de cada tarjeta es el framework que '
-                     'vertebra la capa; el resto lo acompañan.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("gov_stack_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("gov_stack_sub")}</div>', unsafe_allow_html=True)
 
+        # Nombre de capa, color y badges son estructura (GOV_STACK); rol y nota, texto (i18n).
+        _stack = [(capa, rol, color, badges, nota)
+                  for (capa, color, badges), (rol, nota) in zip(GOV_STACK, S("gov_stack"))]
         for _inicio in (0, 3):
             _cards = "".join(
                 f'<div class="info-card" style="border-top:2px solid {color};">'
@@ -2466,46 +2931,39 @@ elif page == "governance":
                 + "".join(f'<span class="badge">{b}</span>' for b in badges) + "</div>"
                 f'<div style="font-size:12.5px;color:{t["text_secondary"]};line-height:1.65;text-align:justify;">{nota}</div>'
                 f'</div>'
-                for capa, rol, color, badges, nota in GOV_STACK[_inicio:_inicio + 3])
+                for capa, rol, color, badges, nota in _stack[_inicio:_inicio + 3])
             st.markdown(f'<div class="compare-grid">{_cards}</div>', unsafe_allow_html=True)
             if _inicio == 0:
                 st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Registro de decisiones</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">Las once limitaciones documentadas en TECHNICAL_NOTES, '
-                     'con su mitigación. Tres condicionan la arquitectura, seis se asumen y documentan '
-                     'sin corregir —porque hacerlo invalidaría los resultados ya obtenidos— y dos quedan '
-                     'resueltas sin residuo.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("gov_dec_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("gov_dec_sub")}</div>', unsafe_allow_html=True)
 
-        _ETIQUETA = {"critical": "Arquitectura", "warning": "Asumida", "good": "Resuelta"}
-        for ref, nivel, titulo, problema, solucion in GOV_DECISIONES:
+        _etiquetas_nivel = S("gov_dec_tags")
+        for (ref, nivel), (titulo, problema, solucion) in zip(GOV_DECISIONES_META, S("gov_decisiones")):
             _c = STATUS[nivel]
             with st.expander(f"{ref} · {titulo}"):
                 st.markdown(
                     f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
                     f'<span class="gov-dot" style="background:{_c};margin-left:0;"></span>'
-                    f'<span class="gov-state" style="color:{_c};">{_ETIQUETA[nivel]}</span></div>'
+                    f'<span class="gov-state" style="color:{_c};">{_etiquetas_nivel[nivel]}</span></div>'
                     f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.7;text-align:justify;">'
-                    f'<b style="color:{t["text"]};">Problema · </b>{problema}<br><br>'
-                    f'<b style="color:{t["text"]};">Solución adoptada · </b>{solucion}</div>',
+                    f'<b style="color:{t["text"]};">{S("gov_dec_problem")}</b>{problema}<br><br>'
+                    f'<b style="color:{t["text"]};">{S("gov_dec_solution")}</b>{solucion}</div>',
                     unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
-            f'<div class="clinical-note">Las cifras de esta página proceden de las salidas ejecutadas '
-            f'de los notebooks del repositorio y de <code>TECHNICAL_NOTES.md</code>; ninguna es '
-            f'estimada. La aplicación no puede consultarlas en vivo porque Streamlit Community Cloud '
-            f'solo accede al repositorio, no a Unity Catalog Volumes.<br><br>'
-            f'Resumen de la suite de calidad: <b>{GOV_SUITE_FUENTE}</b>.</div>',
+            f'<div class="clinical-note">'
+            f'{S("gov_footer_note").format(fuente=S(GOV_SUITE_FUENTE))}</div>',
             unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 3 — RESULTS
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "results":
-    header("Comparativa triangulada", "Resultados",
-           "LightGBM vs. SVM-RBF vs. QSVM sobre el mismo conjunto de test (1.567 instancias).")
+    header(S("res_eyebrow"), S("res_title"), S("res_subtitle").format(n=mil(1567)))
 
     cols = st.columns(3)
     for col, key in zip(cols, MODEL_ORDER):
@@ -2519,9 +2977,9 @@ elif page == "results":
                 <div class="kpi-row"><span class="kpi-label">F1-macro</span><span class="kpi-value">{nf(m['f1_macro'])}</span></div>
                 <div class="kpi-row"><span class="kpi-label">Accuracy</span><span class="kpi-value">{nf(m['accuracy'])}</span></div>
                 <div class="kpi-row"><span class="kpi-label">MCC</span><span class="kpi-value">{nf(m['mcc'])}</span></div>
-                <div class="kpi-row" title="{m['umbral_src']}">
-                    <span class="kpi-label" style="color:{t['text_muted']};">Umbral</span>
-                    <span class="kpi-value" style="color:{t['text_muted']};">{m['umbral']}</span></div>
+                <div class="kpi-row" title="{S("res_thr_src")[key]}">
+                    <span class="kpi-label" style="color:{t['text_muted']};">{S("res_threshold")}</span>
+                    <span class="kpi-value" style="color:{t['text_muted']};">{thr_text(key)}</span></div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -2532,29 +2990,20 @@ elif page == "results":
     # cifras transcritas, la página lo denuncia en vez de seguir mostrando números muertos.
     _rec = reconciliar_metricas()
     if _rec["_global"]:
-        _sello = (f'<span style="color:{STATUS["good"]}; font-weight:600;">✓ Reconciliadas</span> — '
-                  "las cuatro métricas de los tres modelos se han recalculado desde los scores por "
-                  "instancia y coinciden con las publicadas.")
+        _sello = S("res_reconciled").format(color=STATUS["good"])
     else:
-        _fallos = [f"{MODELS[k]['label']}: " + ("scores no disponibles" if v is None else "; ".join(v["detalle"]))
+        _fallos = [f"{MODELS[k]['label']}: " + (S("res_no_scores") if v is None else "; ".join(v["detalle"]))
                    for k, v in _rec.items() if k != "_global" and (v is None or not v["ok"])]
-        _sello = (f'<span style="color:{STATUS["warning"]}; font-weight:600;">⚠ Sin reconciliar</span> — '
-                  + " · ".join(_fallos))
+        _sello = S("res_unreconciled").format(color=STATUS["warning"], fallos=" · ".join(_fallos))
     st.markdown(f"""
     <div class="clinical-note" style="margin-top:14px;">
-    <b>Los tres modelos están medidos en umbrales distintos.</b> Cada uno usa su punto de corte natural
-    —LightGBM <code>predict_proba ≥ 0,50</code>; SVM-RBF el signo de <code>decision_function</code>, que
-    en la escala de probabilidad guardada equivale a ≈ 0,22; QSVM <code>decision_function &gt; 0</code>,
-    que no es una probabilidad—. Cada matriz reproduce exactamente en su propio umbral, pero
-    <b>solo el AUC-ROC es comparable entre modelos</b>: es la única de las cuatro métricas independiente
-    del punto de corte. A modo de referencia, el SVM-RBF evaluado a 0,50 como LightGBM daría accuracy
-    0,9190 pero solo 131 verdaderos positivos en lugar de 172.
+    {S("res_threshold_note")}
     <div style="margin-top:10px; padding-top:9px; border-top:1px solid {t['border']};">{_sello}</div>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Curvas ROC</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{S("res_roc_title")}</div>', unsafe_allow_html=True)
 
     def roc_curve_for_auc(auc, n=200):
         a = (1.0 / auc) - 1.0
@@ -2569,7 +3018,7 @@ elif page == "results":
     roc_data = {k: _load_roc_scores(ROC_PREFIX[k]) for k in MODEL_ORDER}
     all_real = all(sc is not None for sc, _ in roc_data.values())
     st.markdown(
-        f'<div class="section-sub">{"Curvas empíricas reales, punto a punto sobre las 1.567 instancias del test (mismos scores que reportan el AUC del TFM)." if all_real else "AUC exacto · forma reconstruida a partir del AUC donde no hay scores por instancia."}</div>',
+        f'<div class="section-sub">{S("res_roc_sub_real") if all_real else S("res_roc_sub_synth")}</div>',
         unsafe_allow_html=True)
 
     roc_cols = st.columns(3)
@@ -2600,8 +3049,8 @@ elif page == "results":
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Matrices de confusión</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Valores verificados contra el classification report de cada modelo, y recalculados desde los scores por instancia. Cada matriz corresponde al umbral indicado en su tarjeta</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{S("res_cm_title")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-sub">{S("res_cm_sub")}</div>', unsafe_allow_html=True)
 
     def cm_cell(val, total, tag, color):
         """Intensidad = proporción sobre la fila (magnitud): rampa de un solo tono, el del
@@ -2616,6 +3065,7 @@ elif page == "results":
                 f'<div class="cm-num">{val}</div>'
                 f'<div class="cm-tag" style="color:{sub};">{tag}</div></div>')
 
+    _cm_tags = S("res_cm_tags")
     cm_cols = st.columns(3)
     for col, key in zip(cm_cols, MODEL_ORDER):
         m = MODELS[key]
@@ -2627,29 +3077,24 @@ elif page == "results":
               <div class="cm-title"><span class="kpi-dot" style="background:{m['color']};"></span>{m['label']}</div>
               <div class="cm-grid">
                 <div></div>
-                <div class="cm-collabel">Pred.<br>No diabetes</div>
-                <div class="cm-collabel">Pred.<br>Diabetes</div>
-                <div class="cm-rowlabel">Real<br>No diab.</div>
-                {cm_cell(cm['tn'], r0, "VN", m['color'])}
-                {cm_cell(cm['fp'], r0, "FP", m['color'])}
-                <div class="cm-rowlabel">Real<br>Diabetes</div>
-                {cm_cell(cm['fn'], r1, "FN", m['color'])}
-                {cm_cell(cm['tp'], r1, "VP", m['color'])}
+                <div class="cm-collabel">{S("res_cm_pred_no")}</div>
+                <div class="cm-collabel">{S("res_cm_pred_yes")}</div>
+                <div class="cm-rowlabel">{S("res_cm_real_no")}</div>
+                {cm_cell(cm['tn'], r0, _cm_tags["tn"], m['color'])}
+                {cm_cell(cm['fp'], r0, _cm_tags["fp"], m['color'])}
+                <div class="cm-rowlabel">{S("res_cm_real_yes")}</div>
+                {cm_cell(cm['fn'], r1, _cm_tags["fn"], m['color'])}
+                {cm_cell(cm['tp'], r1, _cm_tags["tp"], m['color'])}
               </div>
             </div>
             """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Comparativa de métricas</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Las cuatro métricas se aplican sobre las 1.567 instancias. Accuracy, MCC y F1-macro sí penalizan el desbalance de clases — pero dependen del umbral, y cada modelo usa el suyo: compara con cautela todo lo que no sea el AUC-ROC</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{S("res_metrics_title")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-sub">{S("res_metrics_sub")}</div>', unsafe_allow_html=True)
     fig = go.Figure()
     metric_keys, metric_labels = ["auc", "f1_macro", "accuracy", "mcc"], ["AUC-ROC", "F1-macro", "Accuracy", "MCC"]
-    metric_desc = {
-        "auc": "Área bajo la curva ROC: capacidad de separar diabetes vs. no-diabetes. 0,5 = azar, 1 = perfecto.",
-        "f1_macro": "Media armónica de precisión y recall promediada por clase (sin ponderar). Penaliza el desbalance.",
-        "accuracy": "Proporción de aciertos totales. Con clases desbalanceadas puede reflejar solo la clase mayoritaria.",
-        "mcc": "Coef. de correlación de Matthews: calidad global robusta al desbalance. 0 = azar, 1 = perfecto.",
-    }
+    metric_desc = S("res_metric_desc")
     for key in MODEL_ORDER:
         m = MODELS[key]
         fig.add_trace(go.Bar(name=m["label"], x=metric_labels, y=[m[k] for k in metric_keys], marker_color=m["color"],
@@ -2674,10 +3119,7 @@ elif page == "results":
 
     st.markdown(f"""
     <div class="clinical-note" style="margin-top:6px;">
-    <b>Nota sobre el experimento QSVM.</b> El QSVM se entrenó sobre una muestra estratificada de 500 instancias
-    (coste O(n²) del kernel cuántico) y se evaluó sobre las 1.567 del test completo. AUC-ROC = 0,5493 indica que el
-    modelo apenas supera la clasificación aleatoria — Recall ≈ 0 para la clase diabetes (1 de 220), Accuracy = 0,8602 refleja
-    solo la proporción de la clase mayoritaria. El MCC ≈ 0 confirma ausencia de capacidad predictiva real.
+    {S("res_qsvm_note")}
     </div>
     """, unsafe_allow_html=True)
 
@@ -2685,16 +3127,20 @@ elif page == "results":
 # PAGINA 3 — SHAP ANALYSIS
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "shap":
-    header("Interpretabilidad", "Análisis SHAP",
-           "Importancia global de variables — TreeExplainer (LightGBM) vs. KernelExplainer (SVM-RBF).")
+    header(S("sh_eyebrow"), S("sh_title"), S("sh_subtitle"))
 
-    tab1, tab2 = st.tabs(["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"])
+    tab1, tab2 = st.tabs(S("sh_tabs"))
 
     def shap_chart(data, color, sample_note):
+        # El eje lleva el CÓDIGO NHANES (que no se traduce) y el hover, su glosa: por eso la
+        # lista de datos solo trae (código, valor) y el rótulo se resuelve aquí, en el idioma
+        # activo, en vez de venir incrustado en los datos.
         rev = list(reversed(data))
-        names = [code for code, label, _ in rev]
-        values = [v for _, _, v in rev]
-        customdata = [[code, label, _wrap_hover(VAR_DESC.get(code, label))] for code, label, _ in rev]
+        _short = S("var_short")
+        names = [code for code, _ in rev]
+        values = [v for _, v in rev]
+        customdata = [[code, _short.get(code, code), _wrap_hover(VAR_DESC.get(code, _short.get(code, code)))]
+                      for code, _ in rev]
         fig = go.Figure(go.Bar(
             x=values, y=names, orientation="h", marker_color=color, cliponaxis=False,
             # El valor va en monoespaciada y en tinta secundaria, no en el color de la barra:
@@ -2714,7 +3160,7 @@ elif page == "shap":
                                  fixedrange=True),
                       margin=dict(l=170, r=60, t=20, b=40))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        st.markdown(f'<div class="section-sub" style="margin-top:10px;">Pasa el cursor sobre cada barra para ver el significado de la variable. {sample_note}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub" style="margin-top:10px;">{S("sh_hint").format(nota=sample_note)}</div>', unsafe_allow_html=True)
 
     def shap_summary_image(filename, title, caption):
         # Los SHAP summary plot (beeswarm) requieren los valores SHAP por instancia, que no están
@@ -2738,53 +3184,35 @@ elif page == "shap":
     with tab1:
         st.markdown(f"""
         <div class="clinical-note" style="margin-bottom:14px;">
-        <b>LBXGH (HbA1c)</b> domina con amplia diferencia (SHAP medio = 1,1243), coherente con su papel como marcador
-        diagnóstico primario de diabetes tipo 2 (ADA: HbA1c ≥ 6,5%). <b>RIDAGEYR (edad, 0,4654)</b> refleja el aumento
-        de prevalencia con la edad. <b>LBXGLU</b> y <b>LBDLDL</b> completan el bloque bioquímico. <b>WTINT2YR</b>
-        (posición 6) es un artefacto del diseño muestral NHANES, no una variable clínica.
+        {S("sh_note_lgbm")}
         </div>
         """, unsafe_allow_html=True)
         # Cada pestaña usa el color de SU modelo (antes las dos iban en el mismo azul de marca):
         # así el ranking se lee sin ambigüedad como perteneciente a LightGBM o a SVM-RBF.
-        shap_chart(SHAP_LIGHTGBM, SERIES["lightgbm"], "Valores exactos (algoritmo polinomial) sobre las 1.567 instancias del test.")
-        shap_summary_image(
-            "SHAP Summary LGBM.png",
-            "SHAP Summary Plot — LightGBM (Figura 27)",
-            "Cada punto es una instancia del test; el color indica el valor de la variable (rojo alto, azul bajo) "
-            "y la posición horizontal su impacto en la predicción. LBXGH y RIDAGEYR dominan el modelo.",
-        )
+        shap_chart(SHAP_LIGHTGBM, SERIES["lightgbm"], S("sh_sample_lgbm"))
+        shap_summary_image("SHAP Summary LGBM.png", S("sh_fig_lgbm_title"), S("sh_fig_lgbm_cap"))
 
     with tab2:
         st.markdown(f"""
         <div class="clinical-note" style="margin-bottom:14px;">
-        El ranking de SVM-RBF coincide en las variables dominantes con LightGBM (<b>LBXGH</b>, <b>LBXGLU</b>,
-        <b>LBDLDL</b>, <b>RIDAGEYR</b>), lo que refuerza la validez clínica del hallazgo al ser independiente del
-        algoritmo, dotándolo de mayor robustez metodológica. KernelExplainer trata el modelo como caja negra,
-        aplicable a cualquier clasificador.
+        {S("sh_note_svm")}
         </div>
         """, unsafe_allow_html=True)
-        shap_chart(SHAP_SVMRBF, SERIES["svm_rbf"], "Valores aproximados por muestreo: fondo de 100 instancias, contribuciones sobre 200 instancias de test.")
-        shap_summary_image(
-            "SHAP Summary SVM.png",
-            "SHAP Summary Plot — SVM-RBF (Figura 31)",
-            "Cada punto es una instancia; color = valor de la variable, posición = impacto. "
-            "KernelExplainer sobre 200 instancias del test.",
-        )
+        shap_chart(SHAP_SVMRBF, SERIES["svm_rbf"], S("sh_sample_svm"))
+        shap_summary_image("SHAP Summary SVM.png", S("sh_fig_svm_title"), S("sh_fig_svm_cap"))
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 4 — QUANTUM CIRCUIT
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "circuit":
-    header("Componente cuántico", "Circuito Cuántico",
-           "Configuración del ZZFeatureMap y FidelityQuantumKernel implementados en Qiskit sobre Databricks CE.")
+    header(S("qc_eyebrow"), S("qc_title"), S("qc_subtitle"))
 
     # Misma construcción que los cuatro KPIs de Gobernanza → Calidad del dato: una sola .compare-grid
     # de cuatro columnas iguales en vez de st.columns. El grid estira las tarjetas a la misma altura
     # y reparte el ancho en fracciones, así que la fila se reescala entera con el zoom en lugar de
     # que cada columna crezca por su cuenta. Lo único propio de esta página es la clase .quantum,
     # que pinta el filete superior en oro.
-    _specs = [("8", "Qubits (feature_dimension)"), ("2", "Repeticiones (reps)"),
-              ("Linear", "Entanglement"), ("2.5.0", "Versión de Qiskit")]
+    _specs = zip(["8", "2", "Linear", "2.5.0"], S("qc_specs"))
     st.markdown(
         '<div class="compare-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">'
         + "".join(
@@ -2799,21 +3227,19 @@ elif page == "circuit":
     # texto apilado dejaría líneas incómodamente largas, y apilado-estrecho (como antes, dentro de
     # media página) dejaba la columna vecina con un hueco vacío grande por debajo.
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Cómo funciona</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{S("qc_how_title")}</div>', unsafe_allow_html=True)
+    # El realce de los <b> lo pone .qc-prose b en la hoja de estilos, no un style en línea:
+    # así los dos párrafos se leen como prosa en los dos idiomas y se revisan de corrido.
+    # El suelo de la pista va en min(320px, 100%), no en 320px a secas: auto-fit SIEMPRE coloca al
+    # menos una pista y esa pista conserva su mínimo, así que en un teléfono de 360-375px (ancho útil
+    # ~294-311px dentro de la tarjeta) los 320px desbordaban y sacaban scroll horizontal a toda la
+    # página. Con min() el suelo cede al ancho disponible cuando ya no cabe; por encima de 320px el
+    # comportamiento es idéntico al de antes.
     st.markdown(f"""
     <div class="info-card">
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:28px;">
-        <p style="font-size:15px; color:{t['text_secondary']}; line-height:1.75; margin:0; text-align:justify;">
-        El <b style="color:{t['text']}">ZZFeatureMap</b> codifica cada una de las 8 variables clínicas como un ángulo
-        de fase (puerta P) en un qubit independiente, tras crear superposición con puertas Hadamard. Su elemento
-        distintivo es el <b style="color:{t['text']}">entrelazamiento</b> entre pares de qubits mediante puertas que
-        dependen del producto cruzado de dos variables — correlaciones que el kernel RBF clásico no puede representar.
-        </p>
-        <p style="font-size:15px; color:{t['text_secondary']}; line-height:1.75; margin:0; text-align:justify;">
-        El <b style="color:{t['text']}">FidelityQuantumKernel</b> mide la similitud entre dos pacientes como la
-        fidelidad entre sus estados cuánticos: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. La implementación usa
-        <code>StatevectorSampler</code>, simulando el estado exacto sin ruido — resultados deterministas y reproducibles.
-        </p>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap:28px;">
+        <p class="qc-prose">{S("qc_how_p1")}</p>
+        <p class="qc-prose">{S("qc_how_p2")}</p>
     </div>
     </div>
     """, unsafe_allow_html=True)
@@ -2828,7 +3254,7 @@ elif page == "circuit":
     qc_row = st.container(key="qc_stats_row")
     col1, col2 = qc_row.columns([1.35, 1])
     with col1:
-        st.markdown('<div class="section-title">8 features seleccionadas (Random Forest)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("qc_feat_title")}</div>', unsafe_allow_html=True)
         # Datos propios de esta gráfica (no QSVM_FEATURES): esa lista alimenta también los sliders de
         # Esfera de Bloch y Predictor en Vivo, y la actualización pedida (BMXBMI sustituye a WTINT2YR,
         # sin variables DIQ) es solo para este ranking del Random Forest — no debe alterar esas páginas.
@@ -2859,7 +3285,7 @@ elif page == "circuit":
                       # en vez de dejarlas centradas con aire de sobra. Al ser el ancho de la tarjeta
                       # fijo, ese espacio liberado pasa directo al área de barras — se agrandan solas,
                       # de forma proporcional, sin tocar la tarjeta que las contiene.
-                      xaxis=dict(title=dict(text="Importancia RF", font=dict(size=13)),
+                      xaxis=dict(title=dict(text=S("qc_xaxis"), font=dict(size=13)),
                                  showgrid=True, gridcolor=GRID, range=[0, max(values) * 1.3], fixedrange=True),
                       # showgrid=False como en el embudo de Gobernanza: la rejilla del eje de
                       # categorías cruza el centro de cada fila y tacha la cifra del extremo.
@@ -2869,17 +3295,14 @@ elif page == "circuit":
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     with col2:
-        st.markdown('<div class="section-title">Entrenamiento y evaluación</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("qc_train_title")}</div>', unsafe_allow_html=True)
         # Lista vertical de KPIs (mismo patrón .kpi-row que Esfera de Bloch / Predictor en Vivo) en vez
         # de tarjetas en grilla: más compacta en una columna estrecha y de un vistazo. Incluye los dos
         # datos que antes solo estaban en la nota de texto (instancias del test y tiempo de inferencia).
-        tstats = [
-            ("Instancias entrenamiento", "500"),
-            ("Tiempo entrenamiento", "21,1 min"),
-            ("Instancias test", "1.567"),
-            ("Tiempo de inferencia", "144,5 min"),
-            ("Support vectors", "[425, 70]"),
-        ]
+        # Los tres valores con cifra pasan por nf()/mil(): "21,1 min" y "1.567" iban escritos a mano y
+        # se quedaban con el separador español al cambiar de idioma.
+        tstats = zip(S("qc_tstats"),
+                     ["500", f"{nf(21.1, 1)} min", mil(1567), f"{nf(144.5, 1)} min", "[425, 70]"])
         kpi_rows = "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span><span class="kpi-value">{v}</span></div>' for l, v in tstats)
         st.markdown(f'<div class="info-card">{kpi_rows}</div>', unsafe_allow_html=True)
 
@@ -2888,9 +3311,7 @@ elif page == "circuit":
     # si la nota se quedara dentro de col2, empujaría esa columna más abajo que la de la gráfica.
     st.markdown(f"""
     <div class="clinical-note" style="margin-top:16px;">
-    Por el coste O(n²) del kernel cuántico, el entrenamiento se limitó a una muestra estratificada de 500 instancias
-    (el límite operativo de Databricks CE serverless se sitúa ~500-1.000). La evaluación se hizo sobre el test
-    completo (1.567 instancias) por lotes de 100, con un tiempo total de predicción de 144,5 minutos.
+    {S("qc_note")}
     </div>
     """, unsafe_allow_html=True)
 
@@ -2898,8 +3319,8 @@ elif page == "circuit":
     # entrelazamiento apiladas, comprimirlo a la mitad de la página dejaría las etiquetas P(...) ilegibles.
     _circuit_path = FIGURES_DIR / "Circuito Cuantico 8qb.png"
     if _circuit_path.exists():
-        st.markdown('<div class="section-title" style="margin-top:20px;">Circuito cuántico completo (8 qubits)</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">ZZFeatureMap con reps=2: codificación (H + P) seguida de dos rondas de entrelazamiento lineal entre qubits adyacentes.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title" style="margin-top:20px;">{S("qc_circuit_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("qc_circuit_sub")}</div>', unsafe_allow_html=True)
         _circuit_b64 = _b64_image_autocrop(str(_circuit_path))
         st.markdown(f"""
         <div class="fig-card" style="padding:14px; max-width:900px; margin:0 auto;">
@@ -2911,19 +3332,19 @@ elif page == "circuit":
 # PAGINA 5 — BLOCH SPHERE EMULATOR
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "bloch":
-    header("Codificación cuántica", "Esfera de Bloch",
-           "Cómo el ZZFeatureMap codifica el valor de una variable clínica como estado cuántico |ψ⟩.")
+    header(S("bl_eyebrow"), S("bl_title"), S("bl_subtitle"))
 
     # Contenedor con clave (genera .st-key-bloch_row) para poder estirar la gráfica 3D hasta el alto
     # de la columna izquierda y que ambas tarjetas cierren alineadas abajo — ver CSS .st-key-bloch_row.
     bloch_row = st.container(key="bloch_row")
     col1, col2 = bloch_row.columns([1, 1.3])
     with col1:
-        var_code = st.selectbox("Variable clínica", list(QSVM_FEATURES.keys()),
-                                 format_func=lambda c: f"{c} — {QSVM_FEATURES[c]['label']}")
+        var_code = st.selectbox(S("bl_var"), list(QSVM_FEATURES.keys()),
+                                 format_func=lambda c: f"{c} — {q_label(c)}")
         v = QSVM_FEATURES[var_code]
         lo, hi = v["range"]
-        val = st.slider(f"Valor ({v['unit']})", float(lo), float(hi), float(v["default"]),
+        val = st.slider(S("bl_value").format(unidad=q_unit(var_code)),
+                        float(lo), float(hi), float(v["default"]),
                         step=v["step"], format=v["fmt"])
 
         x_norm = (val - lo) / (hi - lo)
@@ -2940,10 +3361,10 @@ elif page == "bloch":
 
         st.markdown(f"""
         <div class="info-card">
-            <div class="kpi-row"><span class="kpi-label">x normalizado</span><span class="kpi-value">{nf(x_norm, 3)}</span></div>
-            <div class="kpi-row"><span class="kpi-label">θ = x_norm·π</span><span class="kpi-value">{nf(theta, 3)} rad</span></div>
-            <div class="kpi-row"><span class="kpi-label">α (amplitud |0⟩)</span><span class="kpi-value">{nf(alpha, 3)}</span></div>
-            <div class="kpi-row"><span class="kpi-label">β (amplitud |1⟩)</span><span class="kpi-value">{nf(beta, 3)}</span></div>
+            <div class="kpi-row"><span class="kpi-label">{S("bl_xnorm")}</span><span class="kpi-value">{nf(x_norm, 3)}</span></div>
+            <div class="kpi-row"><span class="kpi-label">{S("bl_theta")}</span><span class="kpi-value">{nf(theta, 3)} {S("bl_rad")}</span></div>
+            <div class="kpi-row"><span class="kpi-label">{S("bl_alpha")}</span><span class="kpi-value">{nf(alpha, 3)}</span></div>
+            <div class="kpi-row"><span class="kpi-label">{S("bl_beta")}</span><span class="kpi-value">{nf(beta, 3)}</span></div>
             <div class="kpi-row"><span class="kpi-label">P(|0⟩)</span><span class="kpi-value">{pct(p0)}</span></div>
             <div class="kpi-row"><span class="kpi-label">P(|1⟩)</span><span class="kpi-value">{pct(p1)}</span></div>
         </div>
@@ -3020,15 +3441,7 @@ elif page == "bloch":
 
     st.markdown(f"""
     <div class="clinical-note">
-    <b>Analogía didáctica del principio de codificación angular</b>, no una réplica del circuito. Aquí el valor clínico
-    normalizado a [0,1] se convierte en el ángulo <b>polar</b> θ = x_norm·π, de modo que el vector recorre el meridiano
-    de |0⟩ a |1⟩ y P(|0⟩) varía de 100 % a 0 %: es la forma más legible de ver «un número se vuelve un estado».
-    <br><br>
-    El <b>ZZFeatureMap real</b> hace algo distinto: aplica H y después P(2·x<sub>i</sub>), y una puerta de fase tras una
-    Hadamard deja el estado <b>sobre el ecuador</b> —θ = π/2 fijo, P(|0⟩) = P(|1⟩) = 50 % siempre— codificando el dato en
-    el ángulo <b>azimutal</b> φ, no en el polar. Tampoco normaliza a [0,1]: usa el valor escalado directamente.
-    Por eso esta esfera ilustra el concepto, pero no reproduce paso a paso el circuito. El entrelazamiento
-    (puertas P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) solo es representable en el espacio conjunto de los 8 qubits — ver Circuito Cuántico.
+    {S("bl_note")}
     </div>
     """, unsafe_allow_html=True)
 
@@ -3036,9 +3449,7 @@ elif page == "bloch":
 # PAGINA 6 — LIVE PREDICTOR
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "predictor":
-    header("Inferencia interactiva", "Predictor en Vivo",
-           "Probabilidad de que un perfil clínico corresponda a una persona ya diagnosticada de "
-           "diabetes — LightGBM sobre las 8 variables de mayor importancia.")
+    header(S("lp_eyebrow"), S("lp_title"), S("lp_subtitle"))
 
     # QUÉ ESTIMA ESTE FORMULARIO (y qué NO). El target del pipeline es TARGET = (DIQ010 == 1),
     # es decir la respuesta a "¿un médico le ha dicho alguna vez que tiene diabetes?". Eso hace
@@ -3047,10 +3458,7 @@ elif page == "predictor":
     # (ver la nota de lectura más abajo). Toda la página se nombra en consecuencia.
     st.markdown(f"""
     <div class="clinical-note" style="margin-bottom:16px;">
-    <b>Qué estima este formulario.</b> El objetivo del pipeline es
-    <code>TARGET = (DIQ010 == 1)</code>, la respuesta a <i>«¿un médico le ha dicho alguna vez que
-    tiene diabetes?»</i>. El modelo, por tanto, <b>detecta diabetes ya diagnosticada</b>: no predice
-    quién la desarrollará. Es una tarea de detección concurrente, no de riesgo prospectivo.
+    {S("lp_what_note")}
     </div>
     """, unsafe_allow_html=True)
 
@@ -3059,27 +3467,11 @@ elif page == "predictor":
                       and _load_onnx_session("lgbm_final.onnx") is not None
                       and _load_onnx_session("svm_final.onnx") is not None)
 
-    if _models_ready:
-        st.markdown(f"""
-        <div class="clinical-note" style="margin-bottom:16px;">
-        <b>Inferencia real (ONNX).</b> Predicciones de LightGBM y SVM-RBF vía <code>onnxruntime</code>,
-        con el <code>StandardScaler</code> recuperado del pipeline Gold. Las 8 variables mostradas son las
-        de mayor importancia clínica; las 81 features restantes se fijan en la mediana del conjunto de
-        entrenamiento. QSVM no está disponible en tiempo real por el coste O(n²) del kernel cuántico:
-        predecir las 1.567 instancias del test costó 144,5 minutos.
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div class="clinical-note" style="margin-bottom:16px;">
-        ⚠ <b>Aviso técnico y clínico.</b> Este formulario no tiene conectados los modelos serializados reales
-        (<code>.onnx</code>) — coloca <code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>,
-        <code>scaler_correcto.json</code> y <code>medianas_correctas.json</code> en <code>streamlit/models/</code>.
-        La puntuación mostrada abajo es un <b>sustituto transparente</b>: una combinación ponderada por importancia
-        SHAP normalizada, solo para fines de maquetación. <b>No es la salida de ningún modelo entrenado</b> y no
-        debe citarse como resultado. QSVM tampoco está disponible en tiempo real (coste O(n²) del kernel cuántico).
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="clinical-note" style="margin-bottom:16px;">
+    {S("lp_real_note") if _models_ready else S("lp_proxy_note")}
+    </div>
+    """, unsafe_allow_html=True)
 
     # Rango de entrenamiento bajo cada slider. Los límites de los sliders son fisiológicos y
     # llegan mucho más lejos de lo que el modelo llegó a ver: con HbA1c el tope de 15 % está a
@@ -3099,20 +3491,25 @@ elif page == "predictor":
     for i, (code, v) in enumerate(items):
         with cols[i % 2]:
             lo, hi = v["range"]
-            inputs[code] = st.slider(f"{v['label']} ({v['unit']})", float(lo), float(hi), float(v["default"]),
+            inputs[code] = st.slider(f"{q_label(code)} ({q_unit(code)})",
+                                      float(lo), float(hi), float(v["default"]),
                                       step=v["step"], format=v["fmt"], key=f"lp_{code}")
             _pie = []
             if code in _ref:
                 _mu, _sd = _ref[code]
                 _dec = 1 if v["step"] < 1 else 0
-                _pie.append(f"Entrenamiento: {_mu:.{_dec}f} ± {_sd:.{_dec}f} "
-                            f"(±3 sd → {_mu - 3 * _sd:.{_dec}f} a {_mu + 3 * _sd:.{_dec}f})")
+                # Las cuatro cifras pasan por nf(): son magnitudes clínicas y el separador
+                # decimal tiene que seguir al idioma igual que en el resto de la página.
+                _pie.append(S("lp_train_range").format(
+                    mu=nf(_mu, _dec), sd=nf(_sd, _dec),
+                    lo=nf(_mu - 3 * _sd, _dec), hi=nf(_mu + 3 * _sd, _dec)))
                 _z = (inputs[code] - _mu) / _sd if _sd else 0.0
                 if abs(_z) > 3:
-                    _pie.append(f'<span style="color:{STATUS["warning"]};">⚠ z = {_z:+.1f} — '
-                                "fuera del rango entrenado: el modelo extrapola</span>")
+                    _pie.append(f'<span style="color:{STATUS["warning"]};">'
+                                + S("lp_extrapolates").format(z=f"{nf(_z, 1)}" if _z < 0 else f"+{nf(_z, 1)}")
+                                + "</span>")
             if code == "LBXGH":
-                _pie.append("Criterio ADA: &lt; 5,7 normal · 5,7–6,4 prediabetes · ≥ 6,5 diabetes")
+                _pie.append(S("lp_ada"))
             if _pie:
                 st.markdown(f'<div style="font-size:12px; color:{t["text_muted"]}; line-height:1.6; '
                             f'margin:-8px 0 14px;">{"<br>".join(_pie)}</div>', unsafe_allow_html=True)
@@ -3136,9 +3533,8 @@ elif page == "predictor":
     # probabilidad real de LightGBM y llamarla "sustituto" (como se hacía antes en los dos
     # ramales) contradecía al aviso de "Inferencia real" de arriba, en la misma pantalla.
     _es_real = _real is not None
-    _quien = "el modelo" if _es_real else "el sustituto"
-    _etiqueta_score = ("Probabilidad de diagnóstico existente" if _es_real
-                       else "Score de maquetación (sustituto)")
+    _quien = S("lp_who_model") if _es_real else S("lp_who_proxy")
+    _etiqueta_score = S("lp_score_real") if _es_real else S("lp_score_proxy")
 
     # Categoría interpretable respecto al umbral de decisión (50%, el de LightGBM). Se nombra
     # como COMPATIBILIDAD con un diagnóstico ya existente, no como "riesgo": el target del
@@ -3146,16 +3542,14 @@ elif page == "predictor":
     # alguien ya diagnosticado", no "esta persona va a desarrollar diabetes". Se conserva la
     # paleta de ESTADO (bien / atención / grave) y el nombre por texto además del color.
     if risk < 0.33:
-        cat, cat_color, interp = ("Baja", STATUS["good"],
-            f"El perfil queda claramente por debajo del umbral de decisión (50%): {_quien} lo "
-            "clasificaría como no diagnosticado.")
+        cat, cat_color = S("lp_cat_low"), STATUS["good"]
+        interp = S("lp_interp_low").format(quien=_quien)
     elif risk < 0.5:
-        cat, cat_color, interp = ("Intermedia", STATUS["warning"],
-            "El valor se aproxima al umbral de decisión (50%): zona de incertidumbre.")
+        cat, cat_color = S("lp_cat_mid"), STATUS["warning"]
+        interp = S("lp_interp_mid")
     else:
-        cat, cat_color, interp = ("Alta", STATUS["critical"],
-            f"El valor supera el umbral de decisión (50%): {_quien} clasificaría este perfil "
-            "como caso positivo.")
+        cat, cat_color = S("lp_cat_high"), STATUS["critical"]
+        interp = S("lp_interp_high").format(quien=_quien)
 
     st.markdown("<br>", unsafe_allow_html=True)
     # Score (izquierda) y velocímetro (derecha) viven dentro de UNA sola tarjeta: es el contenedor con
@@ -3175,7 +3569,7 @@ elif page == "predictor":
                       padding:6px 13px; border-radius:7px; background:{cat_color}1A;
                       border:1px solid {cat_color}40; color:{cat_color};">
                     <span style="width:7px; height:7px; border-radius:2px; background:{cat_color};"></span>
-                    Compatibilidad {cat}
+                    {S("lp_badge").format(cat=cat)}
                 </span>
             </div>
             <div style="font-size:12.5px; color:{t['text_secondary']}; margin-top:16px; line-height:1.65;">{interp}</div>
@@ -3242,7 +3636,7 @@ elif page == "predictor":
                           plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                           font=dict(family=PLOTLY_FONT, color=t["text"]))
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        st.markdown(f'<div class="section-sub" style="text-align:center; margin-top:-6px;">Compatibilidad con un diagnóstico existente: baja · intermedia · alta · &nbsp;umbral de decisión = 50%</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub" style="text-align:center; margin-top:-6px;">{S("lp_gauge_caption")}</div>', unsafe_allow_html=True)
 
     # Los DOS modelos, cada uno con SU umbral. Antes el SVM se calculaba y se descartaba
     # (`risk, _svm_prob = _real`) aunque el encabezado prometía ambos. Mostrarlo importa porque
@@ -3252,13 +3646,13 @@ elif page == "predictor":
         _umbral_svm = MODELS["svm_rbf"]["umbral_valor"]
         _filas_mod = [
             ("LightGBM", SERIES["lightgbm"], risk, MODELS["lightgbm"]["umbral_valor"],
-             MODELS["lightgbm"]["umbral"]),
-            ("SVM-RBF", SERIES["svm_rbf"], _svm_prob, _umbral_svm, MODELS["svm_rbf"]["umbral"]),
+             thr_text("lightgbm")),
+            ("SVM-RBF", SERIES["svm_rbf"], _svm_prob, _umbral_svm, thr_text("svm_rbf")),
         ]
         _cards = ""
         for _nom, _col, _p, _th, _thtxt in _filas_mod:
             _pos = _p >= _th
-            _est = "positivo" if _pos else "negativo"
+            _est = S("lp_positive") if _pos else S("lp_negative")
             _estc = STATUS["critical"] if _pos else STATUS["good"]
             _cards += (
                 f'<div class="info-card" style="border-top:2px solid {_col};">'
@@ -3266,24 +3660,21 @@ elif page == "predictor":
                 f'<span style="width:8px;height:8px;border-radius:2px;background:{_col};"></span>'
                 f'<span style="font-size:13.5px;font-weight:600;color:{t["text"]};">{_nom}</span></div>'
                 f'<div class="kpi-value-auc" style="font-size:30px;color:{t["text"]};">{pct(_p)}</div>'
-                f'<div class="kpi-row" style="margin-top:12px;"><span class="kpi-label">Su umbral</span>'
+                f'<div class="kpi-row" style="margin-top:12px;">'
+                f'<span class="kpi-label">{S("lp_own_threshold")}</span>'
                 f'<span class="kpi-value">{_thtxt}</span></div>'
-                f'<div class="kpi-row"><span class="kpi-label">Clasificaría como</span>'
+                f'<div class="kpi-row"><span class="kpi-label">{S("lp_would_classify")}</span>'
                 f'<span class="kpi-value" style="color:{_estc};">{_est}</span></div></div>')
         _dif = abs(risk - _svm_prob)
-        st.markdown('<div class="section-title" style="margin-top:22px;">Los dos modelos, lado a lado</div>',
+        st.markdown(f'<div class="section-title" style="margin-top:22px;">{S("lp_side_title")}</div>',
                     unsafe_allow_html=True)
-        st.markdown('<div class="section-sub">Cada probabilidad se juzga con el punto de corte de su '
-                    'propio modelo — no son intercambiables</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("lp_side_sub")}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="compare-grid" style="grid-template-columns:repeat(2, minmax(0, 1fr));">'
                     f'{_cards}</div>', unsafe_allow_html=True)
         if _dif > 0.25:
             st.markdown(
                 f'<div class="clinical-note" style="margin-top:12px;">'
-                f'<b>Los dos modelos discrepan {pct(_dif)} en este perfil.</b> Coinciden en los extremos '
-                f'—perfiles claramente sanos o claramente diabéticos— y divergen en la banda intermedia, '
-                f'que es justamente donde una estimación sería más útil. Tómalo como señal de '
-                f'incertidumbre, no como que uno de los dos acierte.</div>', unsafe_allow_html=True)
+                f'{S("lp_disagree").format(dif=pct(_dif))}</div>', unsafe_allow_html=True)
 
     # CURVA DE RESPUESTA. Un ensemble de árboles no produce una rampa: produce una escalera.
     # Sin verla, mover el slider 0,1 y que la probabilidad salte 17 puntos parece un fallo. Con
@@ -3293,10 +3684,10 @@ elif page == "predictor":
     # HbA1c con un decimal y LightGBM parte por el punto medio entre valores observados, así que
     # el modelo no distingue por debajo de 0,1 % y el slider nunca puede posarse en un umbral.
     if _real is not None:
-        st.markdown('<div class="section-title" style="margin-top:22px;">Curva de respuesta</div>',
+        st.markdown(f'<div class="section-title" style="margin-top:22px;">{S("lp_curve_title")}</div>',
                     unsafe_allow_html=True)
-        _cur_code = st.selectbox("Variable a recorrer", list(QSVM_FEATURES.keys()),
-                                 format_func=lambda c: f"{c} — {QSVM_FEATURES[c]['label']}",
+        _cur_code = st.selectbox(S("lp_curve_var"), list(QSVM_FEATURES.keys()),
+                                 format_func=lambda c: f"{c} — {q_label(c)}",
                                  key="lp_curva")
         _cv = QSVM_FEATURES[_cur_code]
         _clo, _chi = _cv["range"]
@@ -3307,33 +3698,151 @@ elif page == "predictor":
         if _bar is not None:
             _cl, _cs = _bar
             _fig = go.Figure()
-            # Bandas ADA solo donde significan algo: el eje X es HbA1c en esa variable.
+            _cur_label = q_label(_cur_code)
+            _cur_x = float(inputs[_cur_code])
+            _dec = 1 if _cv["step"] < 1 else 0          # decimales del slider, para chip y hover
+            # Bandas ADA solo donde significan algo: el eje X es HbA1c en esa variable. El tinte
+            # CRECE con la severidad en vez de ir las tres al mismo valor: así el fondo dice que
+            # las zonas están ORDENADAS en lugar de leerse como un bloque plano. Sigue siendo el
+            # gris de texto, no un color de estado — es marco, no serie. Con la mancha bajo la
+            # curva fuera (ver abajo), estas tres franjas son la ÚNICA estructura del lienzo y
+            # pueden pesar algo más sin ensuciar nada.
+            # Los rótulos NO van dentro del área de datos: van en una tira sobre el lienzo,
+            # centrados en su banda. Dentro chocaban dos veces — "prediabetes" anclado a la
+            # izquierda de una banda de 0,8 puntos se metía en "diabetes" ("prediabetediabetes"
+            # en la captura), y "diabetes" centrado caía justo sobre la meseta del 97 % de
+            # LightGBM y desaparecía. Fuera, la tira funciona como cabecera de zonas y no puede
+            # colisionar con ninguna curva, sea cual sea la forma de la respuesta.
             if _cur_code == "LBXGH":
-                for _a, _b, _txt in [(_clo, 5.7, "normal"), (5.7, 6.5, "prediabetes"), (6.5, _chi, "diabetes")]:
-                    _fig.add_vrect(x0=_a, x1=_b, fillcolor=hex_to_rgba(t["text_secondary"], 0.05),
-                                   line_width=0, layer="below",
-                                   annotation_text=_txt, annotation_position="top left",
-                                   annotation_font=dict(size=10.5, color=t["text_muted"]))
-                _fig.add_vline(x=6.5, line=dict(color=t["text_muted"], width=1, dash="dot"))
+                for (_a, _b), _txt, _al in zip([(_clo, 5.7), (5.7, 6.5), (6.5, _chi)],
+                                               S("lp_ada_bands"), (0.03, 0.065, 0.105)):
+                    _fig.add_vrect(x0=_a, x1=_b, fillcolor=hex_to_rgba(t["text_secondary"], _al),
+                                   line_width=0, layer="below")
+                    _fig.add_annotation(x=(_a + _b) / 2, yref="paper", y=1, yanchor="bottom", yshift=4,
+                                        text=_txt, showarrow=False,
+                                        font=dict(family=PLOTLY_FONT, size=10.5, color=t["text_muted"]))
+                # Las DOS fronteras ADA, no solo la de 6,5: si una linde se dibuja y la otra no,
+                # el ojo lee la banda intermedia como si empezara en el borde del eje.
+                for _bx in (5.7, 6.5):
+                    _fig.add_vline(x=_bx, layer="below",
+                                   line=dict(color=hex_to_rgba(t["text_secondary"], 0.32),
+                                             width=1, dash="dot"))
+            # Umbral de decisión, rotulado en el margen derecho (fuera del área de datos, donde
+            # no puede chocar con las curvas). Sin rótulo, la línea de puntos era un adorno.
+            # Dos detalles que costaron una captura cada uno:
+            #  · el desplazamiento va en PÍXELES (xshift), no en fracción de papel — con x=1,01
+            #    el rótulo se salía del lienzo y se recortaba a "umbra";
+            #  · el margen derecho lo comparte con las cifras de punta, así que si una punta cae
+            #    sobre el 50 % los dos se imprimen encima (pasa con Edad, que acaba en 48 %). Se
+            #    resuelven antes las puntas que se van a rotular y se aparta el umbral al lado
+            #    que queda libre.
+            _dos_puntas = abs(float(_cl[-1]) - float(_cs[-1])) >= 0.06
+            _puntas = [(_cl, SERIES["lightgbm"])] + ([(_cs, SERIES["svm_rbf"])] if _dos_puntas else [])
+            _cerca = min((float(_s[-1]) for _s, _ in _puntas), key=lambda v: abs(v - 0.5))
+            _thr_dy = 0 if abs(_cerca - 0.5) > 0.055 else (14 if _cerca < 0.5 else -14)
             _fig.add_hline(y=0.5, line=dict(color=hex_to_rgba(t["text_secondary"], 0.45), width=1, dash="dash"))
-            for _nom, _serie, _col in [("LightGBM", _cl, SERIES["lightgbm"]),
-                                       ("SVM-RBF", _cs, SERIES["svm_rbf"])]:
+            _fig.add_annotation(xref="paper", x=1, xshift=9, y=0.5, yshift=_thr_dy,
+                                xanchor="left", yanchor="middle",
+                                text=S("lp_curve_thr"), showarrow=False,
+                                font=dict(family=PLOTLY_FONT, size=10.5, color=t["text_muted"]))
+            # SIN mancha bajo la curva. Se probó al 12 % y fue un error de bulto: LightGBM se
+            # satura en ~97 % desde HbA1c 7, así que el relleno era una losa gris que cubría
+            # cuatro quintos del panel, se tragaba las bandas ADA y dejaba el SVM flotando sobre
+            # barro. Aquí el volumen lo da un HALO —la misma línea repetida debajo, ancha y casi
+            # transparente— que sigue el contorno de la escalera en vez de rellenar el hueco:
+            # cuesta la misma tinta en los tramos planos que en los peldaños y despega las
+            # curvas del fondo sin tapar nada. Los dos halos van primero para que ninguna línea
+            # nítida quede velada por el halo de la otra.
+            _capas = [("LightGBM", _cl, SERIES["lightgbm"], 9, 0.10),
+                      ("SVM-RBF", _cs, SERIES["svm_rbf"], 7, 0.07)]
+            for _nom, _serie, _col, _w, _a in _capas:
+                _fig.add_trace(go.Scatter(x=_vals, y=_serie, mode="lines",
+                                          line=dict(color=hex_to_rgba(_col, _a), width=_w, shape="hv"),
+                                          showlegend=False, hoverinfo="skip"))
+            for _nom, _serie, _col, _w, _a in _capas:
                 _fig.add_trace(go.Scatter(x=_vals, y=_serie, mode="lines", name=_nom,
                                           line=dict(color=_col, width=2, shape="hv"),
-                                          hovertemplate=f"{_cv['label']} %{{x}}<br>{_nom} %{{y:.1%}}<extra></extra>"))
-            _fig.add_trace(go.Scatter(x=[inputs[_cur_code]], y=[risk], mode="markers",
-                                      marker=dict(size=11, color=SERIES["lightgbm"],
+                                          hovertemplate="%{y:.1%}<extra>" + _nom + "</extra>"))
+            # Punta de cada curva rotulada en el margen: el tramo derecho suele ser una meseta
+            # larga y muda, y dos cifras ahí lo convierten en información y equilibran la
+            # composición. Si las dos puntas convergen (_dos_puntas) se rotula solo LightGBM:
+            # apiladas no se leen.
+            for _serie, _col in _puntas:
+                _yv = float(_serie[-1])
+                _fig.add_trace(go.Scatter(x=[_vals[-1]], y=[_yv], mode="markers",
+                                          marker=dict(size=8, color=_col,
+                                                      line=dict(color=t["surface"], width=2)),
+                                          cliponaxis=False, showlegend=False, hoverinfo="skip"))
+                _fig.add_annotation(x=_vals[-1], y=_yv, xanchor="left", xshift=10, yanchor="middle",
+                                    text=pct(_yv, 0), showarrow=False,
+                                    font=dict(family=PLOTLY_MONO, size=11.5, color=t["text_secondary"]))
+            # "Estás aquí". Único punto CÁLIDO de la figura, y a propósito: con dos series
+            # neutras (tinta y gris) todo lo demás es acromático, así que el ámbar de marca no
+            # compite con ninguna y da a la gráfica el foco que le faltaba. No es una tercera
+            # serie: es cromo de interfaz —el eco de la posición del slider—, el mismo papel que
+            # ya tiene en sliders y anillos de foco. El punto en sí conserva el color de
+            # LightGBM, que es de quien es el valor; lo cálido es el halo y la plomada.
+            _fig.add_trace(go.Scatter(x=[_cur_x, _cur_x], y=[0, risk], mode="lines",
+                                      line=dict(color=hex_to_rgba(C_PRIMARY, 0.50), width=1.5, dash="dot"),
+                                      showlegend=False, hoverinfo="skip"))
+            # Halo suave + ANILLO abierto. Con dos discos rellenos superpuestos el foco salía
+            # como una moneda marrón —el ámbar al 28 % sobre carbón es barro—; el anillo lo
+            # convierte en una diana nítida y el halo solo aporta la irradiación.
+            _fig.add_trace(go.Scatter(x=[_cur_x], y=[risk], mode="markers",
+                                      marker=dict(size=28, color=hex_to_rgba(P_AMBAR, 0.10),
+                                                  line=dict(width=0)),
+                                      showlegend=False, hoverinfo="skip"))
+            # En los símbolos "-open" el trazo lo pinta marker.COLOR, no marker.line.color: con
+            # el color puesto en line el anillo salía magenta (el primer color del ciclo por
+            # defecto de Plotly). line aquí solo fija el grosor.
+            _fig.add_trace(go.Scatter(x=[_cur_x], y=[risk], mode="markers",
+                                      marker=dict(size=19, symbol="circle-open", color=C_PRIMARY,
+                                                  line=dict(width=1.6)),
+                                      showlegend=False, hoverinfo="skip"))
+            # Anillo de 2 px en color de SUPERFICIE: el mecanismo del sistema para que una marca
+            # se despegue de lo que cruza. Nunca un borde de color, que añadiría tinta de dato.
+            _fig.add_trace(go.Scatter(x=[_cur_x], y=[risk], mode="markers",
+                                      marker=dict(size=12, color=SERIES["lightgbm"],
                                                   line=dict(color=t["surface"], width=2)),
                                       showlegend=False, hoverinfo="skip"))
-            plotly_layout(_fig, height=300, showlegend=True,
-                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+            # El valor actual, anclado al eje y con filete ámbar para que se lea como parte del
+            # mismo gesto que la plomada. Se ancla por el lado que no se sale del lienzo.
+            _frac = (_cur_x - _clo) / (_chi - _clo) if _chi > _clo else 0.5
+            _fig.add_annotation(x=_cur_x, y=0, yanchor="bottom", yshift=8,
+                                xanchor="left" if _frac < 0.07 else ("right" if _frac > 0.93 else "center"),
+                                text=f"{nf(_cur_x, _dec)} {q_unit(_cur_code)}", showarrow=False,
+                                font=dict(family=PLOTLY_MONO, size=11.5, color=t["text"]),
+                                bgcolor=t["surface"], bordercolor=C_PRIMARY, borderwidth=1, borderpad=4)
+            # Hover unificado + retícula: la pregunta de esta gráfica es "¿qué dicen LOS DOS en
+            # este valor?", y con un tooltip por traza había que apuntar a cada línea por
+            # separado. El margen derecho da sitio al umbral y a las dos cifras de punta.
+            # La leyenda baja al pie para dejar la franja superior entera a los rótulos de zona.
+            # El eje X se fija al rango exacto de la variable (sin el relleno automático de
+            # Plotly) para que las bandas lleguen de borde a borde en vez de dejar una cuña sin
+            # teñir a la derecha; los puntos de punta llevan cliponaxis=False y por eso no se
+            # cortan por la mitad al caer justo sobre el límite.
+            plotly_layout(_fig, height=360, showlegend=True, hovermode="x unified",
+                          margin=dict(l=48, r=76, t=30, b=74),
+                          legend=dict(orientation="h", yanchor="top", y=-0.26, xanchor="left", x=0,
                                       font=dict(family=PLOTLY_FONT, size=12.5, color=t["text"]),
                                       bgcolor="rgba(0,0,0,0)"),
-                          xaxis=dict(title=dict(text=f"{_cv['label']} ({_cv['unit']})", font=dict(size=13)),
-                                     showgrid=False, fixedrange=True),
-                          yaxis=dict(title=dict(text="Probabilidad", font=dict(size=13)),
+                          xaxis=dict(title=dict(text=f"{_cur_label} ({q_unit(_cur_code)})",
+                                                font=dict(size=13), standoff=10),
+                                     range=[_clo, _chi],
+                                     showgrid=False, fixedrange=True, hoverformat=f".{_dec}f",
+                                     showspikes=True, spikemode="across", spikesnap="data",
+                                     spikethickness=1, spikedash="dot",
+                                     spikecolor=hex_to_rgba(t["text_secondary"], 0.40)),
+                          yaxis=dict(title=dict(text=S("lp_curve_yaxis"), font=dict(size=13), standoff=8),
                                      range=[0, 1], showgrid=True, gridcolor=GRID, tickformat=".0%",
-                                     fixedrange=True))
+                                     tickvals=[0, 0.25, 0.5, 0.75, 1], fixedrange=True))
+            # Panel: el área de datos se separa un paso de la tarjeta. Es lo que faltaba para
+            # que las variables SIN bandas ADA (LDL, edad…) no parecieran una línea suelta en
+            # mitad de la nada — con el eje Y clavado en 0-100 % (que se mantiene, porque
+            # reescalarlo exageraría respuestas planas) media gráfica queda vacía por
+            # definición, y ese vacío tiene que leerse como lienzo, no como falta de algo.
+            # Va aquí y no en plotly_layout porque esa función ya fija plot_bgcolor.
+            _fig.update_layout(plot_bgcolor=hex_to_rgba(t["text_secondary"], 0.05))
             st.plotly_chart(_fig, width="stretch", config={"displayModeBar": False})
 
             # Peldaños reales de la configuración actual, contados sobre la propia curva.
@@ -3341,11 +3850,14 @@ elif page == "predictor":
                        if abs(_cl[i] - _cl[i - 1]) > 1e-9]
             _grandes = sorted(_saltos, key=lambda s: -abs(s[1]))[:3]
             _n_dist = len(set(np.round(_cl, 6)))
-            _txt_saltos = " · ".join(f"{_cv['fmt'] % v} ({d:+.1%})" for v, d in _grandes) or "ninguno"
+            # El valor va con el formato del propio slider (%d / %.1f) y luego por nf() para que
+            # su decimal siga al idioma; el salto, por pct() con signo explícito.
+            _txt_saltos = " · ".join(
+                f"{nf(v, 1 if _cv['step'] < 1 else 0)} ({'+' if d >= 0 else '−'}{pct(abs(d))})"
+                for v, d in _grandes) or S("lp_curve_none")
             st.markdown(
-                f'<div class="section-sub">LightGBM sobre esta variable devuelve <b>{_n_dist} valores '
-                f'distintos</b> en las {len(_vals)} posiciones del slider: es una escalera, no una rampa. '
-                f'Mayores peldaños: {_txt_saltos}. El punto marca tu valor actual.</div>',
+                f'<div class="section-sub">'
+                f'{S("lp_curve_note").format(n=_n_dist, total=len(_vals), saltos=_txt_saltos)}</div>',
                 unsafe_allow_html=True)
 
     # Nota de lectura: sin esto, dos de las ocho variables se interpretan al revés. Como el
@@ -3355,15 +3867,6 @@ elif page == "predictor":
     # medidos sobre los propios .onnx, no supuestos — ver INFORME_AUDITORIA_DASHBOARD.md §1.2.
     st.markdown(f"""
     <div class="clinical-note" style="margin-top:16px;">
-    <b>Cómo leer estos resultados.</b> Como el objetivo es un diagnóstico <i>ya emitido</i>, el modelo
-    aprende también el efecto del <b>tratamiento</b>, no solo el de la enfermedad. Eso invierte el sentido
-    clínico de dos variables:
-    <ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">
-      <li><b>Colesterol LDL</b> — a más LDL, <i>menor</i> probabilidad estimada (de 43% a 18% recorriendo
-          el slider). Los diagnosticados suelen estar tratados con estatinas.</li>
-      <li><b>Glucosa en ayunas</b> — la respuesta tiene forma de U: los valores muy bajos elevan la
-          estimación tanto como los altos, por las hipoglucemias de pacientes en tratamiento.</li>
-    </ul>
-    <div style="margin-top:10px;">Ninguna de las dos debe leerse como un factor de riesgo modificable.</div>
+    {S("lp_read_note")}
     </div>
     """, unsafe_allow_html=True)
