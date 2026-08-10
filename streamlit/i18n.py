@@ -132,7 +132,10 @@ STR = {
         "search_expand": "Buscar — despliega la barra",
         "search_in": "en {p}",
         "search_none": "Sin coincidencias en el panel.",
-        "search_web": "Buscar «{q}» en la web",
+        # Rótulo de la fila de fuentes académicas, no un enlace: los pulsables son los nombres
+        # que van debajo (ver SEARCH_SOURCES en app.py). Termina en dos puntos porque la frase
+        # la completa esa fila.
+        "search_web": "Buscar «{q}» en:",
         "theme_to_dark": "Cambiar a tema oscuro",
         "theme_to_light": "Cambiar a tema claro",
         "lang_es_help": "Ver la aplicación en español",
@@ -619,6 +622,20 @@ STR = {
         "bl_eyebrow": "Codificación cuántica",
         "bl_title": "Esfera de Bloch",
         "bl_subtitle": "Cómo el ZZFeatureMap codifica el valor de una variable clínica como estado cuántico |ψ⟩.",
+        # Nota de entrada de la página, en el mismo formato que lp_what_note: quien llega aquí
+        # puede venir del lado clínico y no tener por qué saber qué es una esfera de Bloch, y sin
+        # eso la figura es una bola con una flecha. Se explica con el bit clásico como punto de
+        # partida y se cierra atando el dibujo a lo que hace el deslizador de al lado, que es lo
+        # que convierte la explicación en algo que se puede comprobar moviendo el control.
+        "bl_what_note": ("<b>Qué es la esfera de Bloch.</b> Un bit clásico solo puede valer 0 o 1. "
+                         "Un qubit admite además cualquier mezcla de los dos, y esa mezcla no cabe "
+                         "en un único número: hace falta un mapa. La esfera de Bloch es ese mapa — "
+                         "cada estado posible de un qubit es un punto de la superficie de una esfera "
+                         "de radio 1. El polo norte es <b>|0⟩</b> y el polo sur <b>|1⟩</b>; entre "
+                         "ambos están las superposiciones, y cuanto más cerca queda la flecha de un "
+                         "polo, más probable es ese resultado al medir. Aquí el valor clínico se "
+                         "traduce en el ángulo θ, así que mover el deslizador hace girar la flecha "
+                         "por un meridiano, de |0⟩ a |1⟩."),
         "bl_var": "Variable clínica",
         "bl_value": "Valor ({unidad})",
         "bl_xnorm": "x normalizado",
@@ -637,6 +654,125 @@ STR = {
                     "ilustra el concepto, pero no reproduce paso a paso el circuito. El entrelazamiento (puertas "
                     "P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) solo es representable en el espacio conjunto de "
                     "los 8 qubits — ver Circuito Cuántico."),
+
+        # ── Página 6 · Esfera de Bloch → sección de entrelazamiento ──
+        # Continúa exactamente donde acaba bl_note: esa nota cierra diciendo que el
+        # entrelazamiento solo se representa en el espacio conjunto, y esta sección es esa
+        # frase convertida en figura. De ahí que el subtítulo la enuncie como un límite del
+        # mapa que la página acaba de enseñar, y no como un tema nuevo.
+        "bl_ent_title": "Entrelazamiento: dos qubits, un solo estado",
+        "bl_ent_sub": ("El límite de la esfera de arriba. Aplica las dos puertas y mira qué le pasa al "
+                       "estado local de cada qubit."),
+        "bl_ent_intro": ("<b>Dónde deja de servir la esfera de Bloch.</b> Con un qubit basta una esfera y una "
+                         "flecha. Con dos, la tentación es dibujar dos esferas — y para la mayoría de los "
+                         "estados funciona. Pero existe una familia de estados en los que <b>no queda flecha "
+                         "que dibujar</b>: el par tiene un estado perfectamente definido y ninguno de sus dos "
+                         "miembros lo tiene por separado. Eso es el entrelazamiento, y se construye con dos "
+                         "puertas. Aplícalas y sigue las tres cifras de la izquierda."),
+        "bl_ent_btn_h": "1 · Hadamard en q₀",
+        "bl_ent_btn_cnot": "2 · CNOT (control q₀ → objetivo q₁)",
+        "bl_ent_btn_reset": "Reiniciar a |00⟩",
+        # Una entrada por paso, en el orden en que se recorren. Dos o tres frases: lo justo
+        # para decir qué acaba de cambiar en las dos figuras de debajo, sin repetir lo que ya
+        # dicen los rótulos.
+        "bl_ent_step_note": [
+            ("<b>Punto de partida.</b> Dos qubits, los dos en |0⟩, sin ninguna puerta aplicada. El estado "
+             "conjunto es |00⟩ y todavía no tiene nada de cuántico: equivale exactamente a dos bits "
+             "clásicos puestos a cero. En la Q-sphere hay un único nodo, en el polo norte, que se lleva "
+             "toda la probabilidad."),
+            ("<b>Superposición, todavía sin entrelazar.</b> La Hadamard deja a q₀ a medio camino entre "
+             "|0⟩ y |1⟩, mientras q₁ sigue firme en |0⟩: el estado conjunto es (|00⟩ + |10⟩)/√2. Los dos "
+             "qubits siguen siendo <b>independientes</b> — cada uno tiene su propio estado puro y dos "
+             "esferas de Bloch bastarían para describirlos. Fíjate en que la longitud del vector local "
+             "sigue valiendo 1: hay flecha que dibujar."),
+            ("<b>Estado de Bell.</b> El CNOT voltea q₁ solo cuando q₀ vale 1; aplicado sobre una "
+             "superposición, eso ata los dos resultados en uno solo: (|00⟩ + |11⟩)/√2. Los nodos se han "
+             "ido a los polos y el ecuador ha quedado vacío. Y el mapa se rompe aquí: la longitud del "
+             "vector local acaba de caer a <b>0</b> — el qubit 0 ya no está en ningún punto de su esfera, "
+             "porque por separado <b>ya no tiene estado</b>."),
+        ],
+        "bl_ent_circuit_title": "Circuito",
+        "bl_ent_circuit_alt": "Circuito de dos qubits con las puertas aplicadas hasta ahora",
+        "bl_ent_qsphere_title": "Q-sphere del estado conjunto",
+        # Las tres dicen lo mismo desde tres ángulos (ver ent_local en app.py): se dejan las
+        # tres porque cada lector entra por una — la longitud se contrasta con la figura, la
+        # pureza es la magnitud estándar y la entropía es la que cita la literatura.
+        "bl_ent_kpi": ["Longitud del vector local |r| (q₀)", "Pureza Tr(ρ₀²)",
+                       "Entropía de entrelazamiento"],
+        "bl_ent_bits": "bits",
+        "bl_ent_hover_amp": "Amplitud:",
+        "bl_ent_hover_prob": "Probabilidad:",
+        "bl_ent_hover_shots": "mediciones",
+        "bl_ent_meas_title": "Medición",
+        "bl_ent_meas_sub": ("La Q-sphere enseña el estado; esto enseña lo único que se puede observar. "
+                            "Repite la tirada: la proporción es estable, el recuento exacto no."),
+        "bl_ent_meas_n": "Número de mediciones",
+        "bl_ent_meas_btn": "Simular mediciones",
+        "bl_ent_meas_empty": "Elige cuántas mediciones y pulsa «Simular mediciones».",
+        "bl_ent_meas_yaxis": "Veces obtenido",
+        "bl_ent_meas_note": [
+            ("Con los dos qubits en |0⟩ el resultado es <b>00</b> en todos los disparos. No hay nada que "
+             "sortear todavía: es el comportamiento de dos bits clásicos."),
+            ("Salen <b>00</b> y <b>10</b> a partes iguales: q₀ se comporta como una moneda al aire y q₁ "
+             "vale 0 pase lo que pase. Los dos resultados son <b>independientes</b> — saber uno no dice "
+             "nada del otro."),
+            ("<b>Solo salen 00 y 11</b>, cerca del 50 % cada uno. Las dos barras vacías son el dato: "
+             "<b>01 y 10 no aparecen nunca</b>, ni una vez en diez mil disparos. Cada qubit sigue dando "
+             "un resultado al azar, pero los dos dan <b>siempre el mismo</b>: medir uno determina el otro "
+             "al instante. Esa correlación perfecta es el entrelazamiento visto desde el laboratorio."),
+        ],
+        "bl_ent_impl_note": ("<b>Cómo está calculado.</b> Las cuatro amplitudes salen de álgebra lineal "
+                             "<b>exacta</b> en NumPy —las matrices de H⊗I y del CNOT aplicadas a |00⟩—, no de "
+                             "una aproximación, y las mediciones de un muestreo multinomial sobre |ψ|², que es "
+                             "lo que hace un simulador ideal sin ruido. El panel <b>no carga Qiskit</b>: el "
+                             "entorno que se despliega es Streamlit, NumPy, Plotly y ONNX Runtime, mientras "
+                             "que Qiskit vive en el pipeline de Databricks —donde se entrena el QSVM— y sus "
+                             "figuras llegan aquí ya renderizadas, como el circuito de 8 qubits de la página "
+                             "Circuito Cuántico. La convención de la base es la de libro de texto, |q₀q₁⟩ con "
+                             "q₀ a la izquierda; Qiskit numera al revés y escribiría «01» donde el paso "
+                             "intermedio de aquí escribe «10»."),
+
+        # ── Página 6 · Esfera de Bloch → el ZZFeatureMap real (8 qubits) ──
+        # Tercer y último escalón de la página. Aquí se deja el ejemplo de libro y se mide el
+        # circuito del TFM, así que el tono sube medio punto: sigue siendo divulgativo, pero
+        # ya puede dar por sabido lo que enseñan las dos secciones de arriba.
+        "bl_zz_title": "El ZZFeatureMap real: dónde ocurre el entrelazamiento",
+        "bl_zz_sub": ("Las mismas cifras, ahora sobre los 8 qubits del QSVM del TFM. Mueve el deslizador "
+                      "del principio de la página y mira qué qubits reaccionan."),
+        "bl_zz_intro": ("<b>De dos qubits a los ocho del modelo.</b> Cada qubit del ZZFeatureMap lleva "
+                        "<b>una variable clínica</b>: q₀ es la HbA1c, q₁ la glucosa, y así hasta el IMC. "
+                        "Con 256 amplitudes ya no hay figura del estado que se pueda mirar —ni Q-sphere ni "
+                        "histograma—, pero sí se pueden medir las <b>mismas dos magnitudes</b> de la "
+                        "sección anterior: cuánto estado propio le queda a cada qubit, y cuánta información "
+                        "comparte con cada uno de los demás. Eso ya no es un ejemplo de libro: es el "
+                        "circuito con el que se entrenó el modelo."),
+        "bl_zz_current": "Variable en juego: <b>{var} = {val} {unidad}</b>. Las otras siete, en su valor de referencia.",
+        "bl_zz_r_title": "Estado propio de cada qubit",
+        "bl_zz_r_xaxis": "|r| — 1 = conserva su estado · 0 = entrelazado del todo",
+        "bl_zz_mi_title": "Información mutua entre qubits",
+        "bl_zz_mi_cbar": "bits",
+        "bl_zz_note": ("<b>Cómo leer la matriz.</b> Cada celda dice cuánta información comparten dos "
+                       "qubits: cuanto más encendida, más atados están. Y salta a la vista que el color "
+                       "<b>se concentra en una banda junto a la diagonal</b> y las esquinas quedan vacías. "
+                       "No es casualidad: el ZZFeatureMap usa <code>entanglement=\"linear\"</code>, o sea "
+                       "que <b>solo hay puertas entre qubits vecinos</b>. Con reps=2 esa correlación llega "
+                       "como mucho a cuatro eslabones de distancia; más allá vale <b>cero exacto</b> "
+                       "(comprobado sobre 300 perfiles: a distancia ≥ 5 en la cadena, 0,0000 bits sin una "
+                       "sola excepción). La topología del circuito se dibuja sola.<br><br>"
+                       "Y hay una segunda cosa que se ve moviendo el deslizador de arriba: al cambiar "
+                       "<b>una</b> variable solo se mueven <b>su qubit y sus vecinos inmediatos</b>: los "
+                       "demás no cambian ni un decimal. Es el mismo hecho visto desde el otro lado — el "
+                       "cono de luz del circuito, en vivo."),
+        "bl_zz_caveat": ("<b>Una advertencia de lectura, y no menor.</b> El entrelazamiento <b>no crece con "
+                         "el valor clínico</b>: subiendo la HbA1c por su rango, |r| del primer qubit hace "
+                         "0,88 → 1,00 → 0,65 → 0,24 → 0,73 → 0,98 → 0,33. Sube y baja. La razón es que el "
+                         "dato entra como un <b>ángulo</b> de fase y los ángulos <b>dan la vuelta</b>: dos "
+                         "valores clínicos muy distintos pueden acabar en fases casi iguales. Con las "
+                         "features estandarizadas, un caso extremo llega a x ≈ 5, y el producto "
+                         "2·(π−xᵢ)(π−xⱼ) del término de entrelazamiento se pasa de 2π varias veces. Es una "
+                         "limitación conocida de la codificación angular sin acotar, y conviene tenerla "
+                         "presente antes de leer estas figuras como si midieran gravedad clínica: miden "
+                         "geometría del circuito, no riesgo."),
 
         # ── Página 7 · Predictor en Vivo ──
         "lp_eyebrow": "Inferencia interactiva",
@@ -746,7 +882,7 @@ STR = {
         "search_expand": "Search — expands the sidebar",
         "search_in": "in {p}",
         "search_none": "No matches in the dashboard.",
-        "search_web": "Search the web for “{q}”",
+        "search_web": "Search “{q}” in:",
         "theme_to_dark": "Switch to dark theme",
         "theme_to_light": "Switch to light theme",
         "lang_es_help": "View the application in Spanish",
@@ -1216,6 +1352,15 @@ STR = {
         "bl_eyebrow": "Quantum encoding",
         "bl_title": "Bloch Sphere",
         "bl_subtitle": "How the ZZFeatureMap encodes the value of a clinical variable as a quantum state |ψ⟩.",
+        "bl_what_note": ("<b>What the Bloch sphere is.</b> A classical bit can only be 0 or 1. "
+                         "A qubit also admits any mixture of the two, and that mixture does not fit "
+                         "into a single number: it needs a map. The Bloch sphere is that map — every "
+                         "possible state of one qubit is a point on the surface of a sphere of radius "
+                         "1. The north pole is <b>|0⟩</b> and the south pole <b>|1⟩</b>; the "
+                         "superpositions lie in between, and the closer the arrow sits to a pole, the "
+                         "likelier that outcome when measured. Here the clinical value is turned into "
+                         "the angle θ, so moving the slider swings the arrow along a meridian, from "
+                         "|0⟩ to |1⟩."),
         "bl_var": "Clinical variable",
         "bl_value": "Value ({unidad})",
         "bl_xnorm": "normalized x",
@@ -1235,6 +1380,109 @@ STR = {
                     "reproduce the circuit step by step. Entanglement (gates "
                     "P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) is only representable in the joint space of the "
                     "8 qubits—see Quantum Circuit."),
+
+        # ── Page 6 · Bloch Sphere → entanglement section ──
+        "bl_ent_title": "Entanglement: two qubits, a single state",
+        "bl_ent_sub": ("Where the sphere above stops working. Apply both gates and watch what happens to "
+                       "each qubit's local state."),
+        "bl_ent_intro": ("<b>Where the Bloch sphere stops working.</b> One qubit needs one sphere and one "
+                         "arrow. With two, the temptation is to draw two spheres—and for most states that "
+                         "works. But there is a family of states where <b>no arrow is left to draw</b>: the "
+                         "pair has a perfectly defined state and neither of its members has one on its own. "
+                         "That is entanglement, and it takes two gates to build. Apply them and follow the "
+                         "three figures on the left."),
+        "bl_ent_btn_h": "1 · Hadamard on q₀",
+        "bl_ent_btn_cnot": "2 · CNOT (control q₀ → target q₁)",
+        "bl_ent_btn_reset": "Reset to |00⟩",
+        "bl_ent_step_note": [
+            ("<b>Starting point.</b> Two qubits, both in |0⟩, no gates applied. The joint state is |00⟩ and "
+             "there is nothing quantum about it yet: it is exactly equivalent to two classical bits set to "
+             "zero. The Q-sphere shows a single node at the north pole, holding all the probability."),
+            ("<b>Superposition, not yet entangled.</b> The Hadamard leaves q₀ halfway between |0⟩ and |1⟩ "
+             "while q₁ stays firmly in |0⟩: the joint state is (|00⟩ + |10⟩)/√2. The two qubits are still "
+             "<b>independent</b>—each has its own pure state, and two Bloch spheres would describe them "
+             "perfectly well. Note that the local vector length is still 1: there is an arrow to draw."),
+            ("<b>Bell state.</b> CNOT flips q₁ only when q₀ is 1; applied to a superposition, that ties both "
+             "outcomes into one: (|00⟩ + |11⟩)/√2. The nodes have moved to the poles and the equator is "
+             "empty. And this is where the map breaks: the local vector length has just dropped to <b>0</b>—"
+             "qubit 0 is no longer at any point of its sphere, because on its own it <b>no longer has a "
+             "state</b>."),
+        ],
+        "bl_ent_circuit_title": "Circuit",
+        "bl_ent_circuit_alt": "Two-qubit circuit showing the gates applied so far",
+        "bl_ent_qsphere_title": "Q-sphere of the joint state",
+        "bl_ent_kpi": ["Local vector length |r| (q₀)", "Purity Tr(ρ₀²)", "Entanglement entropy"],
+        "bl_ent_bits": "bits",
+        "bl_ent_hover_amp": "Amplitude:",
+        "bl_ent_hover_prob": "Probability:",
+        "bl_ent_hover_shots": "measurements",
+        "bl_ent_meas_title": "Measurement",
+        "bl_ent_meas_sub": ("The Q-sphere shows the state; this shows the only thing that can be observed. "
+                            "Run it again: the proportion is stable, the exact counts are not."),
+        "bl_ent_meas_n": "Number of measurements",
+        "bl_ent_meas_btn": "Simulate measurements",
+        "bl_ent_meas_empty": "Choose how many measurements and press “Simulate measurements”.",
+        "bl_ent_meas_yaxis": "Times obtained",
+        "bl_ent_meas_note": [
+            ("With both qubits in |0⟩ the outcome is <b>00</b> on every shot. There is nothing to sample "
+             "yet: this is how two classical bits behave."),
+            ("<b>00</b> and <b>10</b> come out in equal parts: q₀ behaves like a coin toss and q₁ is 0 no "
+             "matter what. The two outcomes are <b>independent</b>—knowing one tells you nothing about the "
+             "other."),
+            ("<b>Only 00 and 11 appear</b>, close to 50% each. The two empty bars are the finding: <b>01 and "
+             "10 never come out</b>, not once in ten thousand shots. Each qubit still gives a random "
+             "outcome, but both give <b>always the same one</b>: measuring one determines the other "
+             "instantly. That perfect correlation is entanglement seen from the lab."),
+        ],
+        "bl_ent_impl_note": ("<b>How this is computed.</b> The four amplitudes come from <b>exact</b> linear "
+                             "algebra in NumPy—the H⊗I and CNOT matrices applied to |00⟩—not from an "
+                             "approximation, and the measurements from multinomial sampling over |ψ|², which "
+                             "is what an ideal noiseless simulator does. This dashboard <b>does not load "
+                             "Qiskit</b>: the deployed environment is Streamlit, NumPy, Plotly and ONNX "
+                             "Runtime, while Qiskit lives in the Databricks pipeline—where the QSVM is "
+                             "trained—and its figures arrive here already rendered, like the 8-qubit circuit "
+                             "on the Quantum Circuit page. The basis convention is the textbook one, |q₀q₁⟩ "
+                             "with q₀ on the left; Qiskit numbers the other way and would write “01” where "
+                             "the intermediate step here writes “10”."),
+
+        # ── Page 6 · Bloch Sphere → the real ZZFeatureMap (8 qubits) ──
+        "bl_zz_title": "The real ZZFeatureMap: where entanglement actually happens",
+        "bl_zz_sub": ("The same figures, now over the 8 qubits of the TFM's QSVM. Move the slider at the "
+                      "top of the page and watch which qubits react."),
+        "bl_zz_intro": ("<b>From two qubits to the model's eight.</b> Each qubit of the ZZFeatureMap "
+                        "carries <b>one clinical variable</b>: q₀ is HbA1c, q₁ glucose, and so on up to "
+                        "BMI. With 256 amplitudes there is no picture of the state left to look at—neither "
+                        "Q-sphere nor histogram—but the <b>same two quantities</b> from the previous "
+                        "section can still be measured: how much of its own state each qubit keeps, and how "
+                        "much information it shares with every other one. This is no longer a textbook "
+                        "example: it is the circuit the model was trained with."),
+        "bl_zz_current": "Variable in play: <b>{var} = {val} {unidad}</b>. The other seven at their reference value.",
+        "bl_zz_r_title": "Each qubit's own state",
+        "bl_zz_r_xaxis": "|r| — 1 = keeps its own state · 0 = fully entangled",
+        "bl_zz_mi_title": "Mutual information between qubits",
+        "bl_zz_mi_cbar": "bits",
+        "bl_zz_note": ("<b>How to read the matrix.</b> Each cell says how much information two qubits "
+                       "share: the brighter, the more tightly bound. And it jumps out that the colour "
+                       "<b>concentrates in a band along the diagonal</b> while the corners stay empty. "
+                       "That is no accident: the ZZFeatureMap uses <code>entanglement=\"linear\"</code>, "
+                       "meaning <b>there are only gates between neighbouring qubits</b>. With reps=2 that "
+                       "correlation reaches at most four links away; beyond that it is <b>exactly zero</b> "
+                       "(checked over 300 profiles: at distance ≥ 5 along the chain, 0.0000 bits without a "
+                       "single exception). The circuit's topology draws itself.<br><br>"
+                       "And there is a second thing you can see by moving the slider above: changing "
+                       "<b>one</b> variable moves only <b>its qubit and its immediate neighbours</b>—the "
+                       "rest do not shift by a single decimal. It is the same fact from the other side: "
+                       "the circuit's light cone, live."),
+        "bl_zz_caveat": ("<b>A reading caveat, and not a minor one.</b> Entanglement <b>does not grow with "
+                         "the clinical value</b>: raising HbA1c across its range, |r| for the first qubit "
+                         "goes 0.88 → 1.00 → 0.65 → 0.24 → 0.73 → 0.98 → 0.33. Up and down. The reason is "
+                         "that the datum enters as a phase <b>angle</b>, and angles <b>wrap around</b>: two "
+                         "very different clinical values can land on nearly identical phases. With "
+                         "standardized features an extreme case reaches x ≈ 5, and the entangling term's "
+                         "product 2·(π−xᵢ)(π−xⱼ) passes 2π several times over. This is a known limitation "
+                         "of unbounded angle encoding, and worth keeping in mind before reading these "
+                         "figures as if they measured clinical severity: they measure circuit geometry, "
+                         "not risk."),
 
         # ── Page 7 · Live Predictor ──
         "lp_eyebrow": "Interactive inference",
@@ -1349,7 +1597,11 @@ SEARCH_ALIAS = {
     "circuit":    ["Qiskit", "ZZFeatureMap", "qubit", "kernel cuantico", "quantum kernel",
                    "circuito", "circuit", "puerta", "gate", "entrelazamiento",
                    "entanglement", "IBM"],
-    "bloch":      ["Bloch", "esfera", "sphere", "estado", "state", "amplitud", "amplitude"],
+    "bloch":      ["Bloch", "esfera", "sphere", "estado", "state", "amplitud", "amplitude",
+                   "entrelazamiento", "entanglement", "Bell", "Q-sphere", "qsphere", "CNOT",
+                   "Hadamard", "medicion", "measurement", "superposicion", "superposition",
+                   "ZZFeatureMap", "informacion mutua", "mutual information", "matriz densidad",
+                   "density matrix", "8 qubits", "cono de luz", "light cone"],
     "predictor":  ["ONNX", "inferencia", "inference", "umbral", "threshold", "slider",
                    "prediccion", "prediction", "what-if", "simulador", "simulator"],
 }

@@ -43,6 +43,22 @@ ASSETS_DIR = Path(__file__).parent / "assets"
 FIGURES_DIR = Path(__file__).parent.parent / "figures"
 MODELS_DIR = Path(__file__).parent / "models"
 
+# Salida del buscador de la barra lateral (ver bloque BUSCADOR) hacia FUERA del panel.
+# Lo que se consulta desde un panel de TFM son conceptos con literatura detrás —"ZZFeatureMap",
+# "hemoglobina glicada"—, así que la salida no va a un buscador general: ahí la primera página
+# son blogs, cursos y tiendas, y lo que hace falta es algo citable. Los tres destinos cubren las
+# dos mitades del trabajo sin obligar a elegir de antemano, que es justo lo que la caja promete:
+# Scholar como red académica general, arXiv para el lado cuántico/ML —donde el preprint ES la
+# fuente y se adelanta años a la revista— y PubMed para el lado clínico de NHANES. Van de más
+# general a más específico, que es también el orden en que se abandonan si el primero no da nada.
+# La consulta se interpola con quote_plus: codifica el espacio como "+", válido en la query
+# string de los tres, y evita que unas comillas o un "&" del usuario partan la URL.
+SEARCH_SOURCES = (
+    ("Scholar", "https://scholar.google.com/scholar?q={q}"),
+    ("arXiv",   "https://arxiv.org/search/?searchtype=all&query={q}"),
+    ("PubMed",  "https://pubmed.ncbi.nlm.nih.gov/?term={q}"),
+)
+
 @st.cache_data
 def _b64_image(path: str) -> str:
     return base64.b64encode(Path(path).read_bytes()).decode()
@@ -114,6 +130,8 @@ TECH_ALTO_MIN = 21.0    # suelo para el más apaisado
 # filas equilibradas, así que la anchura de columna es la mitad del recuento redondeando
 # hacia arriba: con 14 marcas salen 7 y 7. Se calcula en vez de escribir un 7 fijo para que
 # siga partiendo en dos filas parejas si mañana entra o sale alguna.
+# Este número manda SIEMPRE, a cualquier ancho de ventana y a cualquier zoom: el CSS lo usa
+# como número exacto de columnas y encoge las pastillas en lugar de reagrupar filas.
 TECH_N = sum(1 for fichero, _ in TECH_STACK if (ASSETS_DIR / fichero).exists())
 TECH_POR_FILA = (TECH_N + 1) // 2
 
@@ -149,12 +167,22 @@ def tech_strip():
         if not ruta.exists():
             continue
         mime = "svg+xml" if ruta.suffix.lower() == ".svg" else "png"
+        # El alto de _tech_alto() ya NO va en px sino multiplicado por --tech-u, la unidad de
+        # escala que define .tech-strip y que encoge con el ancho real de la tira: con la
+        # rejilla fija en TECH_POR_FILA columnas, un px absoluto aquí dejaría los logos del
+        # tamaño de escritorio dentro de pastillas ya estrechadas y se saldrían de la caja.
+        # Va el calc() entero en el style —y no un `--th` que el CSS multiplicaría— porque una
+        # propiedad estándar sobrevive seguro al saneado del HTML; una custom property en un
+        # atributo style depende de qué haga con ella el sanitizador de turno.
         piezas.append(
             f'<div class="tech-chip" title="{nombre}">'
             f'<img src="data:image/{mime};base64,{_b64_image(str(ruta))}" alt="{nombre}" '
-            f'style="height:{_tech_alto(str(ruta)):.1f}px;"></div>')
+            f'style="height:calc({_tech_alto(str(ruta)):.1f} * var(--tech-u));"></div>')
     if piezas:
-        st.markdown(f'<div class="tech-strip">{"".join(piezas)}</div>', unsafe_allow_html=True)
+        # El envoltorio no es decorativo: es el elemento que se MIDE (container-type) para que
+        # las cqw de dentro se refieran al hueco real de la tira y no al viewport.
+        st.markdown(f'<div class="tech-strip-wrap"><div class="tech-strip">{"".join(piezas)}</div></div>',
+                    unsafe_allow_html=True)
 
 # initial_sidebar_state="auto": expandida en escritorio, COLAPSADA en móvil. Con "expanded" se quedaba
 # abierta también en el teléfono, comiéndose 270 de los ~390 px de pantalla.
@@ -207,8 +235,17 @@ st.set_page_config(page_title="QML DataOps", page_icon="◆", layout="wide", ini
 #   validador.
 # ─────────────────────────────────────────────────────────────────────────
 
+# La app ABRE EN OSCURO. Es solo el valor de partida, no una restricción: la cápsula-interruptor
+# del pie de la sidebar (st.button key="theme_toggle") sigue alternando en los dos sentidos y el
+# tema claro se conserva entero —T(), las rampas, las sombras y el tratamiento de las figuras
+# mantienen sus dos ramas, aquí no se ha quitado ninguna—.
+# El cambio se hace AQUÍ y no en el base de .streamlit/config.toml a propósito: ese ajuste es del
+# servidor, se aplica de una vez para todas las sesiones y no lo puede revertir el interruptor, así
+# que poner base="dark" ahí teñiría de oscuro los widgets nativos también en tema claro y dejaría
+# la opción clara a medias. El precio de hacerlo en session_state es un parpadeo claro en la
+# primera pintura, antes de que entre el <style> de abajo.
 if "theme" not in st.session_state:
-    st.session_state.theme = "light"
+    st.session_state.theme = "dark"
 if "sidebar_narrow" not in st.session_state:
     st.session_state.sidebar_narrow = False
 if "lang" not in st.session_state:
@@ -227,6 +264,63 @@ def S(key):
     """
     catalogo = i18n.STR[LANG]
     return catalogo[key] if key in catalogo else i18n.STR["es"][key]
+
+# Clave donde tabs_i18n() guarda la posición del tab abierto. El sufijo la mantiene lejos
+# del espacio de nombres de las claves de widget: si alguna vez coincidieran, Streamlit la
+# trataría como estado de widget y la podaría igual que a la otra, que es justo el fallo
+# del que viene todo esto.
+_POS_TAB = "{}__pos_tab"
+
+def _recuerda_tab(catalogo, key):
+    """Apunta la posición del tab que se acaba de abrir. Callback de tabs_i18n().
+
+    Va aquí y no en el cuerpo de la página porque el cambio de tab no pasa por el script:
+    el callback es el único momento en que Streamlit garantiza que session_state[key] ya
+    tiene el rótulo NUEVO. Se guarda el índice y no el rótulo, porque el rótulo deja de
+    existir en cuanto se cambia de idioma.
+    """
+    rotulos = S(catalogo)
+    abierto = st.session_state.get(key)
+    if abierto in rotulos:
+        st.session_state[_POS_TAB.format(key)] = rotulos.index(abierto)
+
+def tabs_i18n(catalogo, key):
+    """st.tabs que NO se rebobina al cambiar de idioma.
+
+    El rótulo de un tab es su nombre para Streamlit, y al cambiar de idioma cambian los
+    tres a la vez, así que el widget se da por nuevo y vuelve al primero: quien estaba
+    leyendo "Inventario de frameworks" y pulsaba la bandera aparecía de golpe en
+    "Calidad del dato". Lo que se conserva aquí es la POSICIÓN, que es lo único que
+    significa lo mismo en los dos idiomas.
+
+    NO SIRVE guardarla en el estado del propio widget, que fue el primer intento. El
+    botón de la bandera vive ANTES del reparto de páginas y termina en st.rerun(), que
+    aborta la pasada: la página nunca llega a dibujarse, el widget no se registra, y
+    Streamlit borra su estado por «stale» (on_script_finished → _remove_stale_widgets).
+    Y no vale confiar en que el rerun lo libre de la poda: en exec_code.py la excepción
+    de rerun pone premature_stop=False justamente para que la limpieza SÍ corra. Cuando
+    esta función volvía a mirar el estado del widget, ya no había nada que traducir.
+
+    Por eso la posición vive en una clave PROPIA de session_state. Esa poda solo alcanza
+    a las entradas cuya clave es un id de widget (is_element_id), de modo que una clave
+    nuestra sobrevive al st.rerun() de la bandera. La escribe el callback de on_change,
+    que es además la razón de que on_change no pueda quitarse: la documentación de
+    st.tabs dice que el tab activo solo llega a session_state con "rerun" o con un
+    callable, y con el "ignore" de serie el servidor ni siquiera sabe cuál está abierto.
+    A cambio, cambiar de tab pasa a ser un rerun en vez de un gesto solo del navegador;
+    sale barato porque el contenido de esta página ya viene de funciones cacheadas.
+    """
+    rotulos = S(catalogo)
+    pos = st.session_state.get(_POS_TAB.format(key), 0)
+    if not isinstance(pos, int) or not 0 <= pos < len(rotulos):
+        pos = 0
+    # Red de seguridad: si el estado del widget sobreviviera con un rótulo del OTRO
+    # idioma, st.tabs recibiría un valor que no está entre sus opciones. Se descarta y
+    # manda `default`, que es la vía documentada para fijar el tab inicial.
+    if st.session_state.get(key) is not None and st.session_state[key] not in rotulos:
+        del st.session_state[key]
+    return st.tabs(rotulos, key=key, default=rotulos[pos],
+                   on_change=_recuerda_tab, args=(catalogo, key))
 
 def _flag_uri(lang):
     """SVG de bandera como data-URI en base64, listo para background-image.
@@ -349,6 +443,19 @@ SHADOW = ("0 1px 2px rgba(0,0,0,0.30), 0 6px 20px -6px rgba(0,0,0,0.50)" if _is_
 SHADOW_HOVER = ("0 2px 4px rgba(0,0,0,0.35), 0 16px 34px -10px rgba(0,0,0,0.62)" if _is_dark
                 else "0 2px 4px rgba(11,26,38,0.05), 0 16px 32px -10px rgba(11,26,38,0.13)")
 
+# ── Brillo de tarjeta: luz cenital, no un color ───────────────────────────────
+# Un degradado vertical brevísimo sobre la superficie. Es lo que separa una tarjeta "plana
+# con borde" —el aspecto de panel de 2015— de una que parece tener materia: sugiere que la
+# luz cae desde arriba, igual que ya lo sugieren las sombras.
+# Va en blanco/negro con alfa y NO en un tono de la paleta a propósito: cualquier color
+# desplazaría el matiz del fondo de la tarjeta y arrastraría con él el contraste de TODO el
+# texto que lleva encima, que está medido y documentado. Con blanco o negro translúcidos solo
+# se mueve la luminosidad, y en una cantidad (3,5% y 2,5%) que no llega a tocar ningún ratio.
+# En oscuro la luz suma por arriba; en claro no hay recorrido hacia el blanco desde el blanco,
+# así que el volumen se consigue al revés, sombreando muy levemente por abajo.
+CARD_SHEEN = ("linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0) 45%)" if _is_dark
+              else "linear-gradient(180deg, rgba(11,26,38,0) 55%, rgba(11,26,38,0.025))")
+
 # ── Relieve del buscador (neumorfismo) ────────────────────────────────────────
 # Dos sombras opuestas en vez de una: la oscura abajo-derecha y la clara arriba-izquierda
 # simulan un único foco alto a la izquierda, y la pastilla lee como EXTRUIDA de la barra en
@@ -397,6 +504,34 @@ VELO_SIDEBAR = (f"linear-gradient(180deg, {C_PRIMARY}14, transparent 42%)" if _i
 
 narrow = st.session_state.sidebar_narrow
 SIDEBAR_WIDTH = "84px" if narrow else "270px"
+
+
+def _flecha_mask(*trazos: str) -> str:
+    """url() de máscara con esos trazos, sobre el lienzo 24×24 de siempre.
+
+    Va como MÁSCARA y no como <img>: el relleno lo pone background-color, así que el icono es
+    currentColor y hereda gratis el color del botón —incluido el paso a C_PRIMARY del :hover,
+    con su transición—. Con una imagen habría que servir una versión por tema y otra por estado.
+    Y va EN LÍNEA (data:) y no como fichero en assets/ porque son tres trazos: un .svg suelto
+    sería una petición más y un asset que mantener a mano cada vez que se toque la paleta.
+    El stroke es negro y da igual cuál sea: de una máscara solo cuenta el alfa.
+    """
+    d = "".join(f"%3Cpath d='{t}'/%3E" for t in trazos)
+    return ('url("data:image/svg+xml,'
+            "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' "
+            "stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E"
+            f'{d}%3C/svg%3E")')
+
+
+# La flecha del toggle de la sidebar: asta con punta y TOPE, el mismo gesto espejado en los dos
+# sentidos. Un chevron suelto («‹», lo que había antes) solo dice "hacia allá"; este dice hasta
+# dónde, que es lo que de verdad hace el panel — se va contra su tope y se para.
+#   colapsar  → punta a la izquierda y tope a la derecha, el borde de la barra yéndose
+#   expandir  → el espejo exacto: tope a la izquierda y punta a la derecha
+# La dirección se elige aquí, en Python, y no con una clase extra en el HTML: `narrow` ya está
+# en ámbito —lo usa también SIDEBAR_WIDTH— y el CSS se regenera entero en cada rerun.
+FLECHA_TOGGLE = (_flecha_mask("M3 5v14", "M21 12H7", "m15 18 6-6-6-6") if narrow
+                 else _flecha_mask("m9 6-6 6 6 6", "M3 12h14", "M21 19V5"))
 # Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si usáramos
 # un azul fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
 # En claro NO se usa RAMP[0]: ese paso está calibrado para pintar DATO sobre blanco y como
@@ -511,8 +646,19 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 .st-key-toggle_sidebar button:hover {{
     color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
 }}
+/* La flecha la dibuja el ::before, no un carácter en el rótulo: ver FLECHA_TOGGLE, donde se
+   elige el sentido y se explica por qué va como máscara. El <p> solo tiene que centrarla.
+   El background-color es lo que se ve —la máscara solo recorta—, y al ser currentColor la flecha
+   entra sola en la transición de color del botón y en el C_PRIMARY del :hover de aquí debajo. */
 .st-key-toggle_sidebar button p {{
-    font-size:17px !important; line-height:1 !important; font-weight:800 !important;
+    display:flex !important; align-items:center; justify-content:center;
+    line-height:1 !important;
+}}
+.st-key-toggle_sidebar button p::before {{
+    content:""; display:block; width:15px; height:15px;
+    background-color:currentColor;
+    -webkit-mask:{FLECHA_TOGGLE} center / contain no-repeat;
+    mask:{FLECHA_TOGGLE} center / contain no-repeat;
 }}
 /* La cursiva del rótulo lleva el nombre accesible del botón ("Colapsar la barra lateral"):
    se recorta, no se apaga. display:none y visibility:hidden lo borrarían también del árbol de
@@ -606,25 +752,38 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
    El contenido lo escribe un <script> en el documento padre (ver bloque RELOJ más abajo);
    aquí solo vive su aspecto, que así hereda el tema como cualquier otra regla.
    pointer-events:none porque es información, no un control: no debe capturar el cursor
-   ni interponerse en un clic dirigido a lo que tenga debajo. */
+   ni interponerse en un clic dirigido a lo que tenga debajo. Eso evita que estorbe al ratón,
+   pero no a la vista: siendo fijo, el texto de la página le pasa POR DEBAJO y las dos cosas
+   se cruzan. Por eso su opacidad no se fija aquí — la lleva el scroll, desde el bloque RELOJ.
+   Las banderas no entran en el fundido: son control, no adorno, y tienen que seguir ahí.
+   will-change avisa al compositor de que esa opacidad va a cambiar en cada scroll, para que
+   promocione la capa una vez en lugar de replantear la tira de cabecera a cada fotograma.
+   Tamaño, peso y color viven en el CONTENEDOR y en ninguna de las dos piezas: así fecha y hora
+   son iguales por construcción y no por dos números que haya que mantener a la vez. Ninguna de
+   las dos puede redeclarar font-weight — quien lo haga se sale de la negrita común. */
 #tfm-reloj {{
     position:fixed; top:14px; right:94px; height:18px;
     display:flex; align-items:center; gap:6px;
     z-index:1001; pointer-events:none; user-select:none;
-    font-size:11.5px; line-height:1; white-space:nowrap;
+    font-size:11.5px; font-weight:600; line-height:1; white-space:nowrap;
+    color:{t['text_secondary']};
+    will-change:opacity;
 }}
 #tfm-reloj .r-fecha {{
-    font-family:{FONT_SANS}; color:{t['text_muted']};
+    font-family:{FONT_SANS};
     letter-spacing:0.02em;
 }}
-#tfm-reloj .r-sep {{ color:{t['text_muted']}; opacity:0.45; }}
+/* El separador sí baja de tono: es puntuación, no dato. Sin esto, con las dos piezas ya en
+   negrita, el punto medio se lee como un tercer carácter en vez de como la junta entre ambas. */
+#tfm-reloj .r-sep {{ color:{t['text_muted']}; opacity:0.5; }}
 /* La hora en mono y con cifras tabulares: sin tabular-nums el ancho de cada dígito cambia
    y el reloj «baila» un par de píxeles a cada minuto, que en un elemento fijo se nota
-   mucho más que en una tabla. Va un punto más marcada que la fecha porque es el dato que
-   se consulta; la fecha acompaña. */
+   mucho más que en una tabla. Ya NO lleva peso ni color propios: los tenía para destacar
+   sobre una fecha apagada, y ahora que las dos van en la misma negrita ese font-weight:500
+   habría hecho lo contrario de lo que parece —dejar la hora MÁS fina que la fecha—, porque
+   pisaba el 600 del contenedor. */
 #tfm-reloj .r-hora {{
-    font-family:{FONT_MONO}; color:{t['text_secondary']};
-    font-weight:500; font-variant-numeric:tabular-nums;
+    font-family:{FONT_MONO}; font-variant-numeric:tabular-nums;
     letter-spacing:0.04em;
 }}
 /* Tira de tecnologías (Resumen).
@@ -635,37 +794,51 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
    entonces el fondo claro para el que fueron diseñadas y la marca viaja intacta; en tema
    oscuro la pastilla baja un punto de blanco para no deslumbrar sobre el carbón.
    El alto de cada imagen lo calcula _tech_alto() por área óptica — ver allí el porqué. */
-/* Rejilla de ancho completo, no una fila suelta: las pastillas se reparten TODO el ancho de
-   la página en columnas iguales. Con auto-fit las columnas sobrantes se colapsan y las que
-   quedan se estiran para ocupar el hueco, así la banda llena la línea sea cual sea el número
-   de marcas. Mismo recurso (auto-fit + minmax) que ya usa el bloque "Cómo funciona" del
-   Circuito Cuántico.
-   POR DEFECTO reparte por ancho (auto-fit), que es lo único que se adapta al contenedor real.
-   SOLO con la ventana bien ancha se fija el número exacto de columnas ({TECH_POR_FILA}), que es
-   lo que produce las DOS FILAS PAREJAS de {TECH_POR_FILA}: dejarlo en manos de auto-fit las
-   partiría por donde cupieran, no por la mitad.
-   El umbral se mide sobre el VIEWPORT pero lo que importa es el CONTENEDOR, y la barra lateral
-   se lleva 270px: a 1100px de ventana el contenido son 660px, donde las columnas fijas
-   aplastaban las pastillas. De ahí que la regla exacta empiece en 1400 y no en 1024. */
+/* Rejilla de DOS FILAS FIJAS de {TECH_POR_FILA}, a cualquier ancho y a cualquier zoom.
+   Antes la tira repartía por ancho (auto-fit + minmax) y solo por encima de 1400px se fijaba el
+   número de columnas. Eso significaba que en todo el tramo de en medio era el navegador quien
+   decidía el corte —8+6, 9+5, 5+5+4…— y la banda cambiaba de forma al redimensionar la ventana
+   o al cambiar el zoom. Ahora las columnas son SIEMPRE {TECH_POR_FILA}: lo que se adapta es el
+   TAMAÑO de la pastilla, no su número. Es la única manera de garantizar el reparto parejo.
+   La escala se mide en unidades de CONTENEDOR (cqw), no de viewport (vw): la sidebar se lleva
+   270px y el ancho real de la tira no se deduce del de la ventana —ese desajuste es justo lo
+   que obligaba a poner el umbral en 1400 en vez de en 1024—. .tech-strip-wrap es el elemento
+   que se mide, así que la tira se ajusta a su hueco de verdad, con la sidebar abierta o
+   cerrada y con la página al 100% o al 200%.
+   Cada medida lleva delante su valor fijo de escritorio como reserva para navegadores sin
+   container queries: allí la tira quedaría apretada, nunca rota (el max-height de la imagen la
+   mantiene dentro de la pastilla pase lo que pase). */
+.tech-strip-wrap {{ container-type: inline-size; }}
 .tech-strip {{
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(72px, 1fr));
-    gap:10px; align-items:center; margin-top:4px;
-}}
-@media (min-width: 1400px) {{
-    .tech-strip {{ grid-template-columns:repeat({TECH_POR_FILA}, minmax(0, 1fr)); }}
+    display:grid; grid-template-columns:repeat({TECH_POR_FILA}, minmax(0, 1fr));
+    align-items:center; margin-top:4px;
+    gap:10px; gap:clamp(4px, 1cqw, 10px);
+    /* Unidad de escala de los logos: vale 1px de ~1000px de tira en adelante —el tamaño de
+       siempre en escritorio— y baja proporcional por debajo, con suelo para que no acaben
+       ilegibles. La consume .tech-chip img multiplicándola por el --th que _tech_alto()
+       calculó para esa marca concreta. */
+    --tech-u: clamp(0.60px, 0.1cqw, 1px);
 }}
 .tech-chip {{
     display:flex; align-items:center; justify-content:center;
+    min-width:0;
     /* Alto subido de 46 a 52: al estirarse a ancho completo las pastillas pasan de ~66 px a
-       ~125 px de ancho, y con el alto anterior quedaban como cápsulas aplastadas. */
-    height:52px; padding:0 11px; box-sizing:border-box;
+       ~125 px de ancho, y con el alto anterior quedaban como cápsulas aplastadas. Ese 52 es
+       ahora el TECHO; por debajo de ~1000px de tira encoge con ella para que quepan las siete
+       sin aplastarse. */
+    height:52px; height:clamp(28px, 5.2cqw, 52px);
+    padding:0 11px; padding:0 clamp(4px, 1.1cqw, 11px);
+    box-sizing:border-box;
     background:{'#E9E9EC' if _is_dark else '#F7F7F8'};
     border:1px solid rgba(28,31,38,{0.16 if _is_dark else 0.09});
-    border-radius:9px;
+    border-radius:9px; border-radius:clamp(6px, 0.9cqw, 9px);
     transition: transform 0.14s ease, box-shadow 0.16s ease;
 }}
 .tech-chip:hover {{ transform:translateY(-2px); box-shadow:0 4px 12px rgba(20,30,40,0.16); }}
-.tech-chip img {{ display:block; width:auto; max-width:100%; object-fit:contain; }}
+/* El height va EN LÍNEA, uno por marca (ver tech_strip). Los dos topes de aquí son la red:
+   pase lo que pase con ese calc() —incluido un navegador sin container queries, donde
+   var(--tech-u) no resuelve y el alto cae a auto— el logo no se sale de su pastilla. */
+.tech-chip img {{ display:block; width:auto; max-width:100%; max-height:100%; object-fit:contain; }}
 /* Los dos componentes que solo llevan <script> —el que fija <html lang> y el que escribe el
    reloj— no pintan nada y sus iframes sobran. Se colapsan con el MISMO recurso que las
    banderas —display:contents en los envoltorios y position:fixed en el elemento—, así no
@@ -714,22 +887,58 @@ section[data-testid="stSidebar"] div[data-testid="stIFrame"],
 section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
     background-color:{t['sidebar_bg']} !important;
 }}
-/* El menú arranca separado del buscador que ahora tiene encima: sin este aire, la caja de
-   búsqueda y el primer ítem del menú se tocaban y se leían como un solo bloque. */
+/* ── Reparto del aire alrededor del buscador ──────────────────────────────────
+   Entre el filete que cierra el logo y la primera fila del menú hay tres cosas: el hueco de
+   arriba, la pastilla (38px) y el hueco de abajo. Medido sobre captura, ese reparto era 29/17:
+   al buscador le sobraba aire por arriba mientras casi tocaba el primer ítem por abajo, así que
+   caja y menú se leían como un solo bloque. Ojo con medirlo por la tinta del icono de "Resumen"
+   —da 35 y parece holgado—: lo que el ojo toma por borde del ítem es su CAJA, la que se ve
+   sombreada en el ítem activo, y esa empieza 17px por debajo de la pastilla.
+   Ahora va 21/25. Ni centrado exacto ni por gusto: el buscador queda colgado de la línea que
+   cierra la cabecera, y el menú —siete filas seguidas, un grupo denso— se lleva algo más de
+   separación que la que hay dentro del grupo de arriba. Lo gobiernan tres números, y hay que
+   moverlos a la vez o el reparto se desequilibra: el margin-bottom del bloque del logo (en
+   SIDEBAR, más abajo), el margin-top de .st-key-nav_search y este de aquí. */
 section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
-    margin-top:14px !important;
+    margin-top:22px !important;
 }}
 /* ── Buscador de la sidebar ──────────────────────────────────────────────────
    Pastilla en relieve (ver NEU_* arriba): terminaciones ovaladas, sin borde, y el contorno
    dibujado solo por las dos sombras. Reposo = extruida; foco = hundida. El radio va en
    999px y no en un valor fijo para que las tapas sigan siendo semicírculos exactos aunque
    cambie el alto — es lo que separa una pastilla de un rectángulo muy redondeado. */
-.st-key-nav_search {{ margin-top:2px; }}
+/* A cero: los 2px que había aquí eran parte del exceso de aire de arriba (ver "Reparto del
+   aire alrededor del buscador"). Se conserva la regla, y no se borra, porque es el ajuste fino
+   de ese reparto — el sitio donde tocar si hay que mover la pastilla un pelo. */
+.st-key-nav_search {{ margin-top:0; }}
 /* Lupa del modo colapsado: la MISMA pastilla reducida a círculo. En 84 px no cabe caja de
    texto, así que la entrada se repliega a su icono y al pulsarla despliega la barra (la
    lógica vive en el bloque BUSCADOR). Conserva los 38 px de los iconos del menú de debajo
    para que la columna siga leyéndose alineada. El rótulo del botón es un espacio en blanco
    (la etiqueta real viaja en el tooltip), así que se anula su hueco. */
+/* ── Eje de la lupa colapsada ──────────────────────────────────────────────
+   El botón se quedaba unos 19 px a la izquierda de la columna de iconos del menú, y es el
+   mismo efecto secundario que arriba obligó a forzar el ancho del iframe: al quitarle a la
+   barra su relleno lateral de 20 px, el contenedor del botón conserva el ancho que tenía CON
+   él —84 − 2×20 = 44— pero ya sin el desplazamiento que lo colocaba. Resultado: el botón se
+   centra dentro de esos 44 px pegados al borde, no dentro de los 84 de la barra. Se le
+   devuelve el ancho completo y del centrado ya se encarga la regla general de botones de la
+   sidebar (justify-content:center, más arriba).
+   Los 2 px de relleno izquierdo no son un ajuste a ojo: reproducen el `border-left:2px`
+   transparente que llevan los ítems del menú, que corre su eje 1 px a la derecha. Sin ellos
+   las dos columnas quedan alineadas a 1 px, que es justo lo que se venía a arreglar. */
+.st-key-search_expand {{
+    display:flex !important; justify-content:center !important; box-sizing:border-box !important;
+    width:100% !important; min-width:100% !important; max-width:100% !important;
+    padding-left:2px !important; padding-right:0 !important;
+}}
+/* El `help=` del botón lo envuelve en un objetivo de tooltip: si ese envoltorio se ajusta al
+   contenido, rompe la cadena de anchos. Se le fuerza el mismo trato que al resto. */
+.st-key-search_expand div[data-testid="stButton"],
+.st-key-search_expand div[data-testid="stTooltipHoverTarget"] {{
+    display:flex !important; justify-content:center !important;
+    width:100% !important; padding:0 !important; margin:0 !important;
+}}
 .st-key-search_expand button {{
     width:38px !important; height:38px !important; min-height:38px !important;
     padding:0 !important; margin:2px auto 0 !important;
@@ -756,8 +965,9 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
 }}
 /* El alto se fija aquí y el relleno se reparte a mano: 16px a la izquierda (0,42 × alto) es
    lo que hace falta para que el texto no se meta en la curva de la tapa, y 14px a la derecha
-   dejan al icono a la misma distancia óptica del extremo. Con menos, la pastilla se lee
-   apretada; con más, en 270px de barra el hueco de escritura se queda corto. */
+   frenan el texto antes de la curva opuesta —ahí es donde degrada en puntos suspensivos—. Con
+   menos, la pastilla se lee apretada; con más, en 270px de barra el hueco de escritura se
+   queda corto. */
 .st-key-nav_search div[data-baseweb="input"] {{
     display:flex !important; align-items:center !important;
     height:38px !important; min-height:38px !important;
@@ -769,18 +979,13 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
 .st-key-nav_search div[data-baseweb="input"]:focus-within {{
     box-shadow:{NEU_INSET} !important;
 }}
-/* La lupa a la DERECHA como en la referencia. Streamlit la inyecta como startEnhancer de
-   BaseWeb, o sea primer hijo del contenedor flex; no hay parámetro para moverla, así que se
-   reordena con `order` en vez de reimplementar el widget con HTML suelto (que perdería el
-   binding de session_state del que dependen el vaciado por callback y el colapso). */
-.st-key-nav_search [data-testid="stTextInputIcon"] {{
-    order:2 !important; margin:0 0 0 8px !important; padding:0 !important;
-    color:{t['text_muted']} !important;
-    transition: color 0.18s ease !important;
-}}
-.st-key-nav_search div[data-baseweb="input"]:focus-within [data-testid="stTextInputIcon"] {{
-    color:{C_PRIMARY} !important;
-}}
+/* La pastilla desplegada NO lleva lupa. Streamlit la inyecta como startEnhancer de BaseWeb
+   —primer hijo del contenedor flex, con relleno blanco propio—, y sobre una pastilla en
+   relieve ese relleno se leía como un recuadro opaco pegado al texto, no como parte de la
+   caja. Se quita en el origen (sin `icon=` en el widget) en vez de repintarla o reordenarla
+   por CSS: era pelear con el interior del componente para conservar un glifo que aquí no
+   informa de nada, porque el placeholder ya dice qué hace la caja. La lupa se queda donde sí
+   es la única señal disponible: el botón del modo colapsado (.st-key-search_expand). */
 .st-key-nav_search div[data-baseweb="base-input"] {{
     flex:1 1 auto !important; min-width:0 !important; padding:0 !important;
 }}
@@ -793,8 +998,8 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
 /* La referencia pone su placeholder en versalita muy espaciada, y ahí NO se la sigue: su
    "SEARCH…" son seis letras y el nuestro son treinta y una ("Buscar en el panel o en la
    web…", que dice a propósito que la caja busca en los dos sitios). Con caja alta y 0,11em
-   esa frase pide ~260px y en la pastilla solo hay ~174 de texto — 270 de barra menos 40 de
-   relleno, menos el interior y la lupa. Se conserva el aire de la referencia con un
+   esa frase pide ~260px y en la pastilla no hay ni 200 de texto — 270 de barra menos el
+   relleno de la sidebar y el de la propia pastilla. Se conserva el aire de la referencia con un
    espaciado corto, y el ellipsis asegura que si el idioma alarga la frase degrade en puntos
    suspensivos en vez de cortarse a hachazo, igual que las filas de resultados. */
 .st-key-nav_search input {{
@@ -809,7 +1014,7 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
 /* El foco de teclado global (regla `input:focus-visible` de más arriba) dibuja un rectángulo
    de 8px de radio que en una pastilla se ve como un cerco desalineado. Aquí se sustituye por
    un aro que sigue la forma, sobre el estado hundido. El :has() acota el aro al foco POR
-   TECLADO: al hacer clic basta con el hundido y la lupa en ámbar. */
+   TECLADO: al hacer clic basta con el hundido. */
 .st-key-nav_search input:focus-visible {{ outline:none !important; }}
 .st-key-nav_search div[data-baseweb="input"]:has(input:focus-visible) {{
     box-shadow:{NEU_INSET}, 0 0 0 2px {C_PRIMARY} !important;
@@ -845,17 +1050,34 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
 .search-none {{
     font-size:12px; color:{t['text_muted']}; padding:6px 10px 2px; line-height:1.4;
 }}
-/* Salida a la web: se separa de los resultados locales con un filete, porque es una
-   acción de otra naturaleza — abandona la aplicación. */
-a.search-web {{
-    display:flex; align-items:center; gap:6px;
-    margin-top:6px; padding:8px 10px 2px;
+/* Salida a la literatura: se separa de los resultados locales con un filete, porque es una
+   acción de otra naturaleza — abandona la aplicación. Van dos piezas donde antes había un
+   único enlace: un rótulo que repite la consulta y debajo la fila de destinos. El rótulo se
+   saca fuera precisamente porque los destinos ahora son tres — meterlo en cada enlace, como
+   estaba, escribiría la consulta tres veces en 270px de barra. Por eso además va en color
+   apagado: es contexto, y lo pulsable son los nombres. */
+.search-web {{
+    margin-top:6px; padding:8px 10px 5px;
     border-top:1px solid {t['border']};
+    font-size:12px; color:{t['text_muted']};
+    /* Una consulta larga se recorta aquí en vez de partir el rótulo en tres líneas y empujar
+       los destinos fuera de la vista. */
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}}
+/* La fila envuelve: si un idioma alarga los nombres o el usuario agranda la tipografía del
+   navegador, el tercer destino baja a una segunda línea en vez de desbordar la barra. */
+.search-srcs {{
+    display:flex; flex-wrap:wrap; align-items:center; gap:3px 12px;
+    padding:0 10px 2px;
+}}
+a.search-src {{
     font-size:12.5px; color:{t['text_secondary']}; text-decoration:none !important;
     transition: color 0.13s ease;
 }}
-a.search-web:hover {{ color:{C_PRIMARY}; }}
-a.search-web .search-web-ext {{ font-size:11px; opacity:0.75; }}
+a.search-src:hover {{ color:{C_PRIMARY}; }}
+/* La flecha va en CADA destino y no una vez en la fila: los tres abren pestaña nueva, y una
+   sola flecha al final se leería como propiedad del último. */
+a.search-src .search-web-ext {{ font-size:10.5px; opacity:0.75; margin-left:2px; }}
 /* El menú (option_menu) remonta el iframe entero al colapsar/descolapsar (key distinta para narrow
    vs. ancho — necesario para que reaplique sus estilos, ver comentario junto a esa key), así que el
    texto no puede "encogerse" con una transición: aparece/desaparece de golpe con el nuevo iframe. Un
@@ -892,13 +1114,19 @@ a.search-web .search-web-ext {{ font-size:11px; opacity:0.75; }}
     background:linear-gradient(90deg, {t['border_strong']}, {t['border']} 45%, transparent);
 }}
 .kpi-card, .info-card {{
-    background-color:{t['surface']}; border:1px solid {t['border']}; border-radius:14px; padding:20px 22px; height:100%;
+    background-color:{t['surface']}; background-image:{CARD_SHEEN};
+    border:1px solid {t['border']}; border-radius:14px; padding:20px 22px; height:100%;
     box-shadow: {SHADOW};
-    transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), transform 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s ease;
+    transition: box-shadow 0.24s cubic-bezier(0.4,0,0.2,1), transform 0.24s cubic-bezier(0.4,0,0.2,1), border-color 0.24s ease;
 }}
+/* Al hover la tarjeta no solo sube: el borde se tiñe del acento y un aro de 1px lo acompaña.
+   El aro va en el box-shadow y NO engordando el borde, que desplazaría el contenido un píxel
+   —el salto que delata una tarjeta mal hecha—. El tinte se queda en alfa 0,35 sobre el borde:
+   suficiente para que la tarjeta "conteste" al ratón, lejos de parecer seleccionada. Eso
+   último importa aquí, donde ninguna tarjeta es pulsable y un estado de selección mentiría. */
 .kpi-card:hover, .info-card:hover {{
-    box-shadow: {SHADOW_HOVER};
-    border-color:{t['border_strong']};
+    box-shadow: {SHADOW_HOVER}, 0 0 0 1px {C_PRIMARY}26;
+    border-color:{C_PRIMARY}59;
     transform: translateY(-2px);
 }}
 /* Tarjeta "lead" (párrafo introductorio): filete lateral degradado de marca a violeta —
@@ -930,6 +1158,48 @@ a.search-web .search-web-ext {{ font-size:11px; opacity:0.75; }}
    solo centramos el recuadro; no forzamos alturas por CSS para no reintroducir el bucle de medición. */
 .st-key-bloch_row div[data-testid="stPlotlyChart"] {{ display:flex; align-items:center; justify-content:center; }}
 .st-key-bloch_row .info-card {{ height:auto; box-sizing:border-box; }}
+/* Q-sphere (sección de entrelazamiento de la misma página): mismo centrado que su hermana de
+   arriba y por el mismo motivo — el alto lo fija la figura en píxeles, aquí solo se centra. */
+.st-key-ent_row div[data-testid="stPlotlyChart"] {{ display:flex; align-items:center; justify-content:center; }}
+.st-key-ent_row .info-card {{ height:auto; box-sizing:border-box; }}
+/* ─── Botones de la secuencia de puertas (H · CNOT · Reiniciar) ───
+   PRIMER BOTÓN DE ACCIÓN DEL LIENZO PRINCIPAL: los otros cuatro de la app viven en la sidebar
+   o son piel de otra cosa (banderas, cápsula de tema) y se visten uno a uno por su clave. Sin
+   esta regla saldrían con el tema BASE de Streamlit, que config.toml deja en claro — el mismo
+   fallo que tenía el expander: caja casi blanca en tema oscuro. Se visten como una .info-card
+   pequeña, que es el lenguaje de superficie de toda la app.
+   Se listan por clave y no con un selector global de botón a propósito: un `button {{...}}` a
+   secas alcanzaría también a los de la sidebar, que ya tienen su propia forma. */
+.st-key-ent_h button, .st-key-ent_cnot button, .st-key-ent_reset button, .st-key-ent_medir button {{
+    background-color:{t['surface']} !important;
+    border:1px solid {t['border']} !important;
+    color:{t['text']} !important;
+    border-radius:10px !important;
+    padding:9px 14px !important; min-height:42px !important;
+    font-family:{FONT_SANS} !important; font-size:14px !important; font-weight:500 !important;
+    box-shadow:{SHADOW} !important;
+    transition: border-color 0.15s ease, color 0.15s ease, transform 0.14s ease, box-shadow 0.16s ease;
+}}
+.st-key-ent_h button p, .st-key-ent_cnot button p,
+.st-key-ent_reset button p, .st-key-ent_medir button p {{ color:inherit !important; }}
+.st-key-ent_h button:hover:enabled, .st-key-ent_cnot button:hover:enabled,
+.st-key-ent_reset button:hover:enabled, .st-key-ent_medir button:hover:enabled {{
+    border-color:{C_PRIMARY} !important; color:{C_PRIMARY} !important;
+    transform:translateY(-2px); box-shadow:{SHADOW_HOVER} !important;
+}}
+/* El botón de la puerta que TOCA ahora va en acento y con relieve; los otros dos quedan
+   apagados y sin sombra. El estado deshabilitado de Streamlit solo baja la opacidad, y a la
+   mitad de opacidad los tres se parecían demasiado como para ver de un vistazo cuál es el
+   siguiente paso — que es toda la interacción de esta sección. */
+.st-key-ent_h button:enabled, .st-key-ent_cnot button:enabled {{
+    border-color:{C_QUANTUM} !important; color:{C_QUANTUM} !important;
+}}
+.st-key-ent_h button:disabled, .st-key-ent_cnot button:disabled, .st-key-ent_reset button:disabled {{
+    background-color:{t['surface_alt']} !important; border-color:{t['border']} !important;
+    color:{t['text_muted']} !important; box-shadow:none !important; opacity:1 !important;
+}}
+.st-key-ent_h button:disabled p, .st-key-ent_cnot button:disabled p,
+.st-key-ent_reset button:disabled p {{ color:{t['text_muted']} !important; }}
 /* Reserva SIEMPRE el hueco de la barra de scroll vertical. Sin esto, cuando la barra aparece/desaparece
    al re-renderizar (Firefox la reserva de verdad), el ancho del contenido salta ~15 px y la esfera de
    Bloch —limitada por el ancho de su columna— se redimensionaba al cambiar de variable o mover el slider.
@@ -1154,8 +1424,12 @@ div[data-testid="stPlotlyChart"] .gtitle {{ font-weight:400 !important; }}
     font-family:{FONT_SERIF}; font-size:23px; font-weight:400; color:{t['text']};
     margin-bottom:5px; display:flex; align-items:center; gap:14px; letter-spacing:-0.01em; line-height:1.3;
 }}
+/* transform-origin a la izquierda: el filete se dibuja DESDE el título hacia el margen
+   cuando entra la página (la animación vive en el bloque de entrada escalonada). Sin esto
+   crecería desde su centro hacia los dos lados, que no es un gesto de escritura. */
 .section-title::after {{
     content:""; flex:1 1 auto; height:1px; min-width:20px;
+    transform-origin:left center;
     background:linear-gradient(90deg, {t['border_strong']}, transparent);
 }}
 .section-sub {{ font-size:15px; color:{t['text_secondary']}; margin-bottom:16px; line-height:1.6; text-align:justify; }}
@@ -1208,9 +1482,27 @@ button[data-baseweb="tab"] p {{
     font-family:{FONT_MONO} !important; font-size:13.5px !important; font-weight:500 !important;
     letter-spacing:0.09em !important; text-transform:uppercase !important;
 }}
-button[data-baseweb="tab"]:hover {{ color:{t['text']} !important; }}
+/* El hover ya no cambia solo la tinta: la pestaña recibe además una base apenas teñida y
+   redondeada por arriba, que es lo que da la sensación de superficie pulsable. Sin ella, un
+   rótulo que solo cambia de color se lee como texto, no como control. */
+button[data-baseweb="tab"] {{
+    border-radius:8px 8px 0 0 !important;
+    transition: color 0.15s ease, background-color 0.18s ease !important;
+}}
+button[data-baseweb="tab"]:hover {{
+    color:{t['text']} !important;
+    background-color:{C_PRIMARY}0F !important;
+}}
 button[data-baseweb="tab"][aria-selected="true"] {{ color:{C_PRIMARY} !important; }}
-[data-baseweb="tab-highlight"] {{ background-color:{C_PRIMARY} !important; height:2px !important; }}
+/* BaseWeb mueve el subrayado con `left`/`width` en línea; sin transición salta de una pestaña
+   a otra de golpe. Con esto se DESLIZA, que es lo que convierte el cambio de pestaña en un
+   gesto continuo y no en un corte. La curva es la misma que la de las tarjetas, para que toda
+   la página se mueva con el mismo temperamento. */
+[data-baseweb="tab-highlight"] {{
+    background-color:{C_PRIMARY} !important; height:2px !important;
+    border-radius:2px !important;
+    transition: left 0.28s cubic-bezier(0.4,0,0.2,1), width 0.28s cubic-bezier(0.4,0,0.2,1) !important;
+}}
 [data-baseweb="tab-border"] {{ background-color:{t['border']} !important; }}
 /* ═══════════════ EXPANDER (Gobernanza · Registro de decisiones) ═══════════════
    Único widget nativo que quedaba sin vestir, y en tema oscuro se rompía: config.toml no fija
@@ -1436,10 +1728,11 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     div[data-testid="stColumn"] {{ flex:1 1 100% !important; min-width:100% !important; }}
     /* Rejilla de tarjetas comparativas: una por fila */
     .compare-grid {{ grid-template-columns:1fr !important; }}
-    /* La tira de tecnologías NO se apila de una en una —serían {TECH_N} filas—: se aprieta a
-       pastillas más pequeñas y sigue repartiendo por ancho. */
-    .tech-strip {{ grid-template-columns:repeat(auto-fit, minmax(58px, 1fr)) !important; gap:8px; }}
-    .tech-chip {{ height:46px; padding:0 8px; }}
+    /* La tira de tecnologías tampoco cambia de forma aquí: sigue siendo {TECH_POR_FILA}+{TECH_POR_FILA}.
+       Ya no hace falta reajustarla por media query —las cqw de .tech-strip-wrap la encogen
+       solas y en el teléfono tocan sus suelos—, y volver a tocarla aquí es justo lo que rompía
+       el reparto parejo: el auto-fit anterior repartía por ancho y en un móvil salían tres y
+       hasta cuatro filas. */
     /* Al apilarse (teléfono) la columna es de ancho completo; el alto ya lo fija la figura Plotly */
     .st-key-bloch_row div[data-testid="stColumn"]:last-of-type div[data-testid="stVerticalBlock"] {{ height:auto !important; }}
     /* Cabecera proporcionada a la pantalla del teléfono */
@@ -2037,8 +2330,13 @@ def _wrap_hover(text, width=54):
 with st.sidebar:
     _qml_logo_b64 = _b64_image(str(ASSETS_DIR / "qml_logov2-sidebar.png"))
     _logo_h = "40px" if narrow else "64px"
+    # El filete que cierra la cabecera es el border-bottom de este mismo div, así que su
+    # margin-bottom ES la distancia entre esa línea y el buscador. Va corto (2px) porque el
+    # aire de verdad lo pone el hueco propio del bloque que Streamlit mete detrás; subirlo
+    # descuelga el buscador de la línea y lo empuja contra el menú. El reparto completo, con
+    # las medidas, está en el CSS bajo "Reparto del aire alrededor del buscador".
     st.markdown(f"""
-    <div style="display:flex;justify-content:center;align-items:center;padding:16px 0;margin-bottom:8px;border-bottom:1px solid {t['border']};">
+    <div style="display:flex;justify-content:center;align-items:center;padding:16px 0;margin-bottom:2px;border-bottom:1px solid {t['border']};">
         <img src="data:image/png;base64,{_qml_logo_b64}" style="height:{_logo_h};width:auto;display:block;" alt="QML DataOps">
     </div>
     """, unsafe_allow_html=True)
@@ -2060,21 +2358,26 @@ with st.sidebar:
 
     # Sin tooltip, pero con nombre accesible. El globito con "Expandir"/"Colapsar" repetía en
     # palabras lo que la flecha ya dice —apunta siempre al lado al que se moverá la barra—,
-    # así que se va; lo que no puede irse es el nombre del botón, porque un <button> cuyo
-    # único contenido es "‹" no se anuncia como nada.
+    # así que se va; lo que no puede irse es el nombre del botón, porque un <button> sin más
+    # contenido que un dibujo no se anuncia como nada.
     #
     # st.button no acepta aria-label y el help de Streamlit tampoco servía: se traduce en un
     # aria-describedby que solo existe mientras el globito está abierto, o sea una DESCRIPCIÓN
     # ocasional, nunca el nombre. Así que el nombre se construye con el propio rótulo: la
     # palabra viaja dentro en cursiva —el único envoltorio que el markdown de st.button deja
     # crear— y el CSS la recorta. El ojo ve la flecha; el lector de pantalla lee la frase.
+    #
+    # El rótulo ES SOLO esa cursiva recortada: la flecha ya no es un carácter dentro del texto
+    # (antes iba un «‹» / «›» delante) sino el ::before de FLECHA_TOGGLE. Un pseudoelemento no
+    # entra en el árbol de accesibilidad, que es justo lo que se quiere de un adorno; y así el
+    # dibujo no depende de que la fuente traiga el glifo.
     if narrow:
-        if st.button(f"› *{S('sidebar_expand')}*", key="toggle_sidebar"):
+        if st.button(f"*{S('sidebar_expand')}*", key="toggle_sidebar"):
             st.session_state.sidebar_narrow = False
             st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
     else:
-        if st.button(f"‹ *{S('sidebar_collapse')}*", key="toggle_sidebar"):
+        if st.button(f"*{S('sidebar_collapse')}*", key="toggle_sidebar"):
             st.session_state.sidebar_narrow = True
             st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
@@ -2109,7 +2412,7 @@ with st.sidebar:
             st.session_state.nav_search = ""
 
         _q = (st.text_input(S("search_label"), key="nav_search", placeholder=S("search_ph"),
-                            icon=":material/search:", label_visibility="collapsed") or "").strip()
+                            label_visibility="collapsed") or "").strip()
         if _q:
             _hits = i18n.search(_q, LANG)
             with st.container(key="nav_search_results"):
@@ -2124,14 +2427,19 @@ with st.sidebar:
                 if not _hits:
                     st.markdown(f'<div class="search-none">{S("search_none")}</div>',
                                 unsafe_allow_html=True)
-                # Enlace en crudo y no st.link_button: aquí hace falta target="_blank"
+                # Enlaces en crudo y no st.link_button: aquí hace falta target="_blank"
                 # explícito (la consulta se abre FUERA, no reemplazando el panel) y
-                # rel="noopener" para no ceder window.opener al buscador.
+                # rel="noopener" para no ceder window.opener a la fuente. Los nombres de los
+                # destinos van sin escapar por ser constantes nuestras (SEARCH_SOURCES, arriba);
+                # el rótulo sí se escapa, porque lleva dentro lo que el usuario ha tecleado.
+                _fuentes = "".join(
+                    f'<a class="search-src" target="_blank" rel="noopener noreferrer" '
+                    f'href="{_url.format(q=quote_plus(_q))}">{_nombre}'
+                    f'<span class="search-web-ext">↗</span></a>'
+                    for _nombre, _url in SEARCH_SOURCES)
                 st.markdown(
-                    f'<a class="search-web" target="_blank" rel="noopener noreferrer" '
-                    f'href="https://www.google.com/search?q={quote_plus(_q)}">'
-                    f'{html.escape(S("search_web").format(q=_q))}'
-                    f'<span class="search-web-ext">↗</span></a>', unsafe_allow_html=True)
+                    f'<div class="search-web">{html.escape(S("search_web").format(q=_q))}</div>'
+                    f'<div class="search-srcs">{_fuentes}</div>', unsafe_allow_html=True)
 
     # streamlit-option-menu renderiza dentro de un iframe: el CSS del documento principal
     # (st.markdown) no puede alcanzar sus elementos internos. Por eso el modo narrow se logra
@@ -2218,6 +2526,10 @@ with st.sidebar:
     # comparten orden— y a partir de este punto en toda la app "page" es la clave, nunca el texto.
     page = i18n.PAGE_KEYS[_MENU_OPTIONS.index(_seleccion)]
     st.session_state.page = page
+    # Índice de la página, que viaja DENTRO del nombre de los keyframes de la entrada
+    # escalonada (ver el bloque más abajo): al cambiar de página cambia el nombre y las
+    # animaciones reinician; dentro de la misma página el nombre no cambia y no se repiten.
+    _page_idx_anim = i18n.PAGE_KEYS.index(page)
     # Refuerzo del hover (streamlit-option-menu no expone :hover directo en icon/color de texto)
     st.markdown(f"""
     <style>
@@ -2236,6 +2548,52 @@ with st.sidebar:
        forzar, esa cascada se lleva por delante el color en línea del <i>. */
     nav[role="navigation"] a.nav-link.active i {{
         color:{C_DARK} !important;
+    }}
+    /* ═══════════════ ENTRADA ESCALONADA DEL CONTENIDO ═══════════════
+       El contenido no aparece de golpe: sube unos píxeles y se revela en cascada corta,
+       cabecera primero y bloques de datos después. Es lo que hace que una página se lea
+       como compuesta en vez de volcada, y de paso guía la mirada en el orden correcto.
+
+       EL TRUCO ESTÁ EN EL NOMBRE. Streamlit reutiliza los nodos entre reruns, así que una
+       animación "al aparecer" no vuelve a dispararse nunca (ya está razonado en header()).
+       Pero una animación SÍ reinicia si le cambia el `animation-name`, y este bloque de
+       estilo se regenera en cada rerun: metiendo el índice de página en el nombre del
+       keyframe, la cascada se dispara justo cuando cambias de página y NO cuando mueves un
+       slider o alternas el tema dentro de la misma. Que es exactamente el criterio que se
+       quiere; repetirla en cada rerun sería mareante.
+
+       Se aplica a clases NUESTRAS y no a los data-testid de Streamlit: son las que este
+       fichero controla, no cambian con la versión del framework, y así ninguna animación
+       puede quedarse colgada de un contenedor interno que un día se renombre.
+
+       backwards es obligatorio: sin él, un bloque con retardo se vería opaco durante ese
+       retardo y luego parpadearía a cero para entrar. Y como toda la regla vive dentro de
+       prefers-reduced-motion, quien pida menos movimiento no recibe ni la animación ni el
+       estado inicial — ve la página quieta y completa, nunca en blanco. */
+    @media (prefers-reduced-motion: no-preference) {{
+        .page-eyebrow, .page-title, .page-subtitle, .page-rule,
+        .section-title, .section-sub, .lead-card, .clinical-note,
+        .kpi-card, .info-card, .stat-card {{
+            animation: tfmEnter{_page_idx_anim} 0.42s cubic-bezier(0.22,1,0.36,1) backwards;
+        }}
+        .page-title    {{ animation-delay:0.06s; }}
+        .page-subtitle {{ animation-delay:0.11s; }}
+        .page-rule     {{ animation-delay:0.15s; }}
+        .section-title, .section-sub {{ animation-delay:0.17s; }}
+        .lead-card, .clinical-note, .kpi-card, .info-card, .stat-card {{ animation-delay:0.20s; }}
+        /* El filete del título de sección se dibuja solo, de izquierda a derecha. Es el
+           gesto editorial de la página —la regla que cierra el titular— hecho visible. */
+        .section-title::after {{
+            animation: tfmRule{_page_idx_anim} 0.6s cubic-bezier(0.22,1,0.36,1) 0.22s backwards;
+        }}
+    }}
+    @keyframes tfmEnter{_page_idx_anim} {{
+        from {{ opacity:0; transform:translateY(12px); }}
+        to   {{ opacity:1; transform:translateY(0); }}
+    }}
+    @keyframes tfmRule{_page_idx_anim} {{
+        from {{ transform:scaleX(0); opacity:0; }}
+        to   {{ transform:scaleX(1); opacity:1; }}
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -2349,6 +2707,54 @@ with st.container(key="reloj"):
   }}
   pinta();
   window.parent.__tfmRelojTick = window.parent.setInterval(pinta, 15000);
+
+  // ── Fundido al bajar ──────────────────────────────────────────────────────
+  // El reloj es fijo y el contenido le pasa POR DEBAJO, así que en cuanto la página baja se
+  // cruza con el texto y quedan las dos cosas superpuestas. Se apaga con el scroll en lugar de
+  // apartarlo: sigue donde se le espera mientras estás arriba, y deja de existir en cuanto
+  // empiezas a leer. Vale para las siete páginas porque cuelga del contenedor de scroll, no de
+  // nada que dependa de la página que haya dentro.
+  // Quien hace scroll es section[data-testid="stMain"] y no la ventana (mismo motivo que se
+  // explica en scrollbar-gutter): en window.scrollY no pasa NUNCA nada. Se deja la ventana
+  // como alternativa por si en móvil el que se mueve es el documento.
+  var main = doc.querySelector('section[data-testid="stMain"]');
+  function desplazamiento() {{ return main ? main.scrollTop : (window.parent.scrollY || 0); }}
+
+  // La curva es cúbica y no una rampa lineal: gasta la opacidad deprisa al principio y luego
+  // se arrastra, que es como se lee un fundido en vez de un interruptor. VENTANA son los px de
+  // scroll que dura; el exponente, lo brusco que arranca. Son los dos únicos números que tocar.
+  // 140 y no los 64 de la primera versión, que resultaron demasiado secos al verlos en marcha.
+  // El precio está medido y es real: el contenido arranca a 3rem (48px) y el reloj cierra en
+  // y=32, así que el primer texto lo alcanza a los ~16px de scroll, y a esa altura la curva aún
+  // va por el 70%. O sea que las primeras líneas cruzan el reloj todavía legible — es el trato
+  // que hay que hacer para que el fundido se note, porque con solo 16px de margen no caben las
+  // dos cosas. Bajando VENTANA se recupera limpieza y se pierde suavidad, y al revés.
+  var VENTANA = 140;
+  function opacidad() {{
+    var k = Math.max(0, 1 - desplazamiento() / VENTANA);
+    caja.style.opacity = (k * k * k).toFixed(3);
+  }}
+
+  // Un oyente por rerun y no uno más cada vez: igual que el setInterval de arriba, el iframe se
+  // recarga en cada rerun y volvería a suscribirse sobre el mismo elemento. Se guarda también
+  // el nodo al que se enganchó, porque es a ESE al que hay que quitárselo.
+  if (window.parent.__tfmRelojFadeEl && window.parent.__tfmRelojFade) {{
+    window.parent.__tfmRelojFadeEl.removeEventListener("scroll", window.parent.__tfmRelojFade);
+  }}
+  // rAF: el scroll dispara muchos más eventos que fotogramas tiene la pantalla, y sin esto se
+  // recalcularía la opacidad varias veces para pintarla una.
+  var pendiente = false;
+  var alDesplazar = function () {{
+    if (pendiente) {{ return; }}
+    pendiente = true;
+    window.parent.requestAnimationFrame(function () {{ pendiente = false; opacidad(); }});
+  }};
+  (main || window.parent).addEventListener("scroll", alDesplazar, {{ passive: true }});
+  window.parent.__tfmRelojFade = alDesplazar;
+  window.parent.__tfmRelojFadeEl = main || window.parent;
+  // Se aplica ya: un rerun (cambiar de página, mover un slider) puede llegar con la página a
+  // media altura, y sin esto el reloj reaparecería opaco hasta el siguiente scroll.
+  opacidad();
 }})();
 </script>""",
         height=0, width=0,
@@ -2488,6 +2894,380 @@ def plotly_layout(fig, height=300, **kwargs):
     return fig
 
 # ═══════════════════════════════════════════════════════════════════════
+# ENTRELAZAMIENTO DE DOS QUBITS  (sección final de la página Esfera de Bloch)
+# ═══════════════════════════════════════════════════════════════════════
+# POR QUÉ ESTO ES NUMPY Y NO QISKIT — la pregunta obvia en un TFM que entrena con Qiskit.
+# Qiskit vive en el PIPELINE, no en el panel: está en requirements.txt de la raíz (junto a
+# qiskit-machine-learning, pylatexenc y matplotlib, todo lo que necesitan los notebooks de
+# Databricks) y NO en streamlit/requirements.txt, que es el entorno que se despliega. Por eso
+# el circuito de 8 qubits de la página Circuito Cuántico entra como PNG ya renderizado desde
+# el notebook, y por eso app.py no importa qiskit en ninguna línea. qiskit-aer no está en
+# ninguno de los dos ficheros.
+#
+# Traer qiskit + qiskit-aer + matplotlib solo para esta sección rompería esa separación por
+# dos motivos, y el segundo pesa más que el primero:
+#   · TAMAÑO — varios cientos de MB añadidos a un despliegue de Streamlit Cloud, para un
+#     estado de DOS qubits: cuatro amplitudes y dos matrices 4x4.
+#   · TEMA — plot_state_qsphere() y plot_histogram() devuelven figuras de MATPLOTLIB: fondo
+#     blanco fijo, tipografía ajena y ciegas al tema. En una app que se pinta entera en Plotly
+#     y alterna claro/oscuro, esas dos figuras serían los únicos recuadros que no cambian.
+#
+# Lo que sigue no es una aproximación: es el mismo álgebra lineal que ejecutaría Statevector,
+# escrita a mano porque a esta escala cabe entera en pantalla y se puede leer. El dibujo
+# reutiliza el vocabulario visual de la esfera de Bloch de arriba (superficie tenue, círculos
+# máximos, acento cuántico), que es lo que hace que las dos figuras se lean como una sola idea.
+
+# Orden de la base: el índice es 2·q0 + q1, con q0 a la IZQUIERDA del ket. Es la convención de
+# libro de texto, no la de Qiskit —que numera al revés y escribe |q1 q0⟩—. Para el estado de
+# Bell las dos coinciden en la etiqueta ("00" y "11" salen igual leídas por cualquier lado),
+# pero se deja dicho aquí porque en el paso intermedio SÍ se separan: tras la Hadamard sobre
+# q0 este código da "10" donde Qiskit escribiría "01".
+ENT_BASE = ("00", "01", "10", "11")
+
+_H1 = np.array([[1, 1], [1, -1]], dtype=float) / np.sqrt(2)
+# H actúa sobre q0 y la identidad sobre q1. El producto de Kronecker EN ESE ORDEN es lo que
+# fija la convención de arriba: el factor izquierdo es el qubit más significativo del índice.
+ENT_H0 = np.kron(_H1, np.eye(2))
+# CNOT con control q0 y objetivo q1: intercambia |10⟩ y |11⟩ (índices 2 y 3) y deja |00⟩ y
+# |01⟩ intactos — el objetivo se voltea solo cuando el control vale 1.
+ENT_CNOT = np.array([[1, 0, 0, 0],
+                     [0, 1, 0, 0],
+                     [0, 0, 0, 1],
+                     [0, 0, 1, 0]], dtype=float)
+
+
+def ent_statevector(paso: int) -> np.ndarray:
+    """Vector de estado de los dos qubits tras `paso` puertas, partiendo de |00⟩.
+
+    Se RECALCULA entero desde |00⟩ en cada rerun en vez de guardarse en session_state y
+    mutarse: el estado que persiste es solo el entero `paso`, así que no hay forma de que
+    el vector se desincronice del circuito dibujado ni de que un rerun a mitad de camino
+    (cambio de tema, de idioma) lo deje aplicado dos veces.
+    """
+    psi = np.array([1.0, 0.0, 0.0, 0.0])
+    if paso >= 1:
+        psi = ENT_H0 @ psi
+    if paso >= 2:
+        psi = ENT_CNOT @ psi
+    return psi
+
+
+def _rho_reducida(psi: np.ndarray, ejes) -> np.ndarray:
+    """Matriz densidad de los qubits `ejes`, trazando fuera todos los demás.
+
+    `psi` llega como TENSOR de forma (2,)·n, un eje por qubit, y no como vector plano: así
+    "trazar fuera el resto" es literalmente reordenar ejes y aplanar, sin aritmética de bits.
+    Con los ejes pedidos delante, la matriz M de forma (2^k, resto) cumple ρ = M·M†, que es el
+    atajo estándar de la traza parcial sobre un estado puro.
+
+    La usan las DOS secciones de esta página —la de 2 qubits y la del ZZFeatureMap de 8—, que
+    es el motivo de que esté aquí fuera: la fórmula es la misma y no debe existir por duplicado.
+    """
+    n = psi.ndim
+    otros = [k for k in range(n) if k not in ejes]
+    M = np.transpose(psi, list(ejes) + otros).reshape(2 ** len(ejes), -1)
+    return M @ M.conj().T
+
+
+def _entropia_vn(rho: np.ndarray) -> float:
+    """Entropía de von Neumann en BITS (log base 2), no en nats.
+
+    En bits porque la unidad tiene lectura directa: 1 bit es exactamente el entrelazamiento
+    de un par de Bell, que es el patrón con el que se compara todo lo demás en esta página.
+    Los autovalores nulos se filtran: 0·log0 vale 0 por continuidad, pero log(0) es -inf.
+    """
+    lam = np.linalg.eigvalsh(rho)
+    lam = lam[lam > 1e-12]
+    return abs(float(-np.sum(lam * np.log2(lam)))) if lam.size else 0.0
+
+
+def ent_local(psi: np.ndarray) -> dict:
+    """Lo que queda del qubit 0 cuando se ignora al otro, y cuánto se ha perdido por el camino.
+
+    ESTA es la evidencia dura de que un estado de Bell no cabe en dos esferas de Bloch. Al
+    trazar fuera el qubit 1 queda la matriz densidad reducida ρ₀, y de ella salen tres cifras
+    que dicen lo mismo desde tres ángulos:
+
+      · |r| — longitud del vector de Bloch de q0. Vale 1 mientras el estado sea puro (la
+        flecha llega a la superficie: hay un punto que dibujar) y 0 en el estado de Bell.
+        Cero no es "apunta a otro sitio": es que NO HAY flecha, el vector se ha quedado en el
+        centro y ningún punto de la esfera describe a ese qubit por separado.
+      · Pureza Tr(ρ₀²) — 1 en un estado puro, 0,5 en la mezcla máxima de un qubit.
+      · Entropía de entrelazamiento — la de von Neumann de ρ₀, en bits. 0 si los dos qubits
+        son separables, 1 en un estado de Bell, que es el máximo para un par.
+
+    Las tres son redundantes a propósito (|r| = √(2·pureza − 1) es exacta, no aproximada):
+    quien viene del lado clínico lee la longitud, quien viene del cuántico lee la entropía.
+    """
+    rho0 = _rho_reducida(psi.reshape(2, 2), [0])
+    pureza = float(np.real(np.trace(rho0 @ rho0)))
+    # El max(0, ...) no es paranoia gratuita: en el estado de Bell la pureza sale 0,4999...
+    # por redondeo de coma flotante y el radicando se va a -1e-16, que da nan.
+    r = float(np.sqrt(max(0.0, 2.0 * pureza - 1.0)))
+    return dict(pureza=pureza, r=r, entropia=_entropia_vn(rho0))
+
+
+def ent_qsphere_fig(psi: np.ndarray):
+    """Q-sphere del estado CONJUNTO: un nodo por estado base, no una flecha por qubit.
+
+    La Q-sphere existe justamente porque la esfera de Bloch no escala: con dos qubits ya no
+    hay dos flechas que dibujar, hay un solo estado en un espacio de cuatro dimensiones. La
+    convención es la de Qiskit: la LATITUD la fija el peso de Hamming del estado base —|00⟩
+    en el polo norte, |11⟩ en el sur, los de peso 1 en el ecuador— y el ÁREA del nodo es
+    proporcional a su probabilidad. Así el paso de |00⟩ a Bell se ve como lo que es: un único
+    nodo en el polo que se parte en dos, uno en cada polo, y nada en el ecuador.
+
+    Se dibuja con el mismo repertorio que la esfera de Bloch de esta página (superficie tenue
+    con lighting, tres círculos máximos, acento cuántico para el dato) para que las dos
+    figuras se lean como el mismo objeto visto a dos escalas.
+    """
+    fig = go.Figure()
+    u, w = np.mgrid[0:2*np.pi:60j, 0:np.pi:30j]
+    xs, ys, zs = np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w)
+    fig.add_trace(go.Surface(
+        x=xs, y=ys, z=zs, opacity=0.14, showscale=False, hoverinfo="skip",
+        colorscale=[[0, RAMP[0]], [1, RAMP[2]]],
+        lighting=dict(ambient=0.66, diffuse=0.9, specular=0.22, roughness=0.6, fresnel=0.25),
+        lightposition=dict(x=120, y=200, z=160),
+    ))
+    circ = np.linspace(0, 2 * np.pi, 120)
+    for gx, gy, gz in [
+        (np.cos(circ), np.sin(circ), np.zeros_like(circ)),
+        (np.cos(circ), np.zeros_like(circ), np.sin(circ)),
+        (np.zeros_like(circ), np.cos(circ), np.sin(circ)),
+    ]:
+        fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.42,
+                                    line=dict(color=C_MID1, width=1.2), showlegend=False, hoverinfo="skip"))
+
+    # Un anillo por peso de Hamming. Con 2 qubits son tres: {00} arriba, {01,10} en el
+    # ecuador y {11} abajo. El reparto azimutal dentro del anillo es uniforme, que con dos
+    # estados los deja enfrentados a 0 y π.
+    por_peso = {}
+    for idx, etiqueta in enumerate(ENT_BASE):
+        por_peso.setdefault(etiqueta.count("1"), []).append((idx, etiqueta))
+
+    for peso, miembros in por_peso.items():
+        z = 1.0 - peso                       # = 1 − 2·peso/n con n = 2
+        radio = float(np.sqrt(max(0.0, 1.0 - z * z)))
+        for j, (idx, etiqueta) in enumerate(miembros):
+            phi = 2 * np.pi * j / len(miembros)
+            x, y = radio * np.cos(phi), radio * np.sin(phi)
+            amp = float(psi[idx])
+            prob = amp ** 2
+            # Los nodos de amplitud nula NO se dibujan, igual que hace Qiskit: pintarlos de
+            # tamaño cero deja un punto residual que se confunde con un estado poco probable,
+            # que es justo la lectura contraria a la que se busca ("01 y 10 no salen NUNCA").
+            if prob < 1e-9:
+                continue
+            # Radio del nodo desde el centro hasta su punto en la superficie: el "rayo" que
+            # ata cada amplitud a su estado base. En tinta apagada — es soporte, no dato.
+            fig.add_trace(go.Scatter3d(x=[0, x], y=[0, y], z=[0, z], mode="lines", opacity=0.55,
+                                        line=dict(color=C_MID1, width=2), showlegend=False, hoverinfo="skip"))
+            # ÁREA proporcional a la probabilidad ⇒ diámetro proporcional a su raíz. Es la
+            # convención de la Q-sphere y no un ajuste estético: con el diámetro proporcional
+            # a la probabilidad, un estado al 50 % se vería como la cuarta parte de uno al
+            # 100 % en vez de como la mitad.
+            fig.add_trace(go.Scatter3d(
+                x=[x], y=[y], z=[z], mode="markers",
+                marker=dict(size=34 * np.sqrt(prob), color=C_QUANTUM,
+                            line=dict(color=t["surface"], width=2)),
+                showlegend=False,
+                hovertemplate=(f"|{etiqueta}⟩<br>{S('bl_ent_hover_amp')} {nf(amp, 3)}"
+                               f"<br>{S('bl_ent_hover_prob')} {pct(prob)}<extra></extra>")))
+            # La etiqueta se aparta del nodo hacia AFUERA (radio 1,22) en vez de pegarse a él:
+            # con el nodo del polo a tamaño máximo, un textposition relativo la metía dentro
+            # del propio marcador.
+            fig.add_trace(go.Scatter3d(
+                x=[x * 1.22 if radio else 0.0], y=[y * 1.22 if radio else 0.0], z=[z * 1.22],
+                mode="text", text=[f"|{etiqueta}⟩"],
+                textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_secondary"]),
+                showlegend=False, hoverinfo="skip"))
+
+    fig.update_layout(
+        height=430, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
+        scene=dict(
+            xaxis=dict(visible=False, range=[-1.30, 1.30]),
+            yaxis=dict(visible=False, range=[-1.30, 1.30]),
+            zaxis=dict(visible=False, range=[-1.34, 1.34]),
+            aspectmode="cube", dragmode="orbit",
+            camera=dict(eye=dict(x=1.45, y=1.45, z=0.75)),
+        ),
+    )
+    return fig
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EL ZZFEATUREMAP REAL (8 qubits) — tercer escalón de la página Esfera de Bloch
+# ═══════════════════════════════════════════════════════════════════════
+# Aquí se deja el ejemplo de libro y se mide EL CIRCUITO DEL TFM. La estructura no es una
+# reconstrucción de oído: sale de notebook_06_qsvm.ipynb, celda 6, que instancia la clase de
+# Qiskit tal cual —ZZFeatureMap(feature_dimension=8, reps=2, entanglement="linear")— y cuya
+# salida impresa confirma los tres parámetros. Cada repetición es:
+#     H en los 8  →  P(2·xᵢ) en cada qubit  →  por cada par adyacente (i,j):
+#                                              CX(i,j) · P(2·(π−xᵢ)(π−xⱼ)) en j · CX(i,j)
+# y el bloque entero se repite reps=2 veces (la capa de H entra en la repetición: es como
+# PauliFeatureMap cuenta las suyas).
+#
+# POR QUÉ NO SE PINTAN AQUÍ LA Q-SPHERE NI EL HISTOGRAMA. Con 8 qubits el estado tiene 256
+# amplitudes, y la Q-sphere las repartiría en anillos de 1·8·28·56·70·56·28·8·1 nodos: 70 solo
+# en el ecuador, ilegible. Pero el motivo de fondo es peor que el tamaño: tras H⊗8 las 256
+# amplitudes son IDÉNTICAS (comprobado: valen 1/16 exacto) y todo lo que viene después —las
+# P y los bloques CX·P·CX— es diagonal, o sea que mueve FASES y nunca magnitudes. La Q-sphere
+# dimensiona por probabilidad y el histograma mide en la base computacional, que destruye la
+# fase: las dos figuras mirarían justo donde este circuito no guarda nada. Las dos magnitudes
+# de abajo sí leen la fase, porque salen de la matriz densidad reducida.
+ZZ_N = len(QSVM_FEATURES)                        # 8 qubits = 8 features, uno por variable
+ZZ_REPS = 2
+ZZ_PARES = [(i, i + 1) for i in range(ZZ_N - 1)]  # entanglement="linear": solo vecinos
+ZZ_MI_MAX = 2.0    # tope teórico de la información mutua entre dos qubits, en bits
+
+
+def _zz_h(psi, k):
+    return np.moveaxis(np.tensordot(_H1, psi, axes=([1], [k])), 0, k)
+
+
+def _zz_p(psi, k, theta):
+    """P(θ) sobre el qubit k: diag(1, e^{iθ}). Solo toca la mitad del eje k que vale 1."""
+    psi = psi.copy()
+    idx = [slice(None)] * ZZ_N
+    idx[k] = 1
+    psi[tuple(idx)] *= np.exp(1j * theta)
+    return psi
+
+
+def _zz_cx(psi, c, t):
+    """CNOT: voltea el eje t allí donde el eje c vale 1.
+
+    El índice del eje objetivo se corrige cuando t > c porque al indexar el eje c con un
+    entero ese eje DESAPARECE del bloque y todos los posteriores se corren uno. Verificado
+    contra la matriz de permutación explícita para todos los pares con n = 2, 3 y 4.
+    """
+    psi = psi.copy()
+    idx = [slice(None)] * ZZ_N
+    idx[c] = 1
+    psi[tuple(idx)] = np.flip(psi[tuple(idx)], axis=t - 1 if t > c else t)
+    return psi
+
+
+def zz_statevector(x) -> np.ndarray:
+    """Estado de los 8 qubits tras el ZZFeatureMap sobre el vector de features ESCALADO.
+
+    Se trabaja con el estado como tensor (2,)·8 y no como vector de 256: cada puerta es
+    entonces una operación sobre un eje, sin construir ni una sola matriz 256×256. La pasada
+    completa cuesta unos 0,8 ms, que es lo que permite recalcularla en vivo al mover el
+    deslizador en vez de precomputar una tabla.
+    """
+    psi = np.zeros((2,) * ZZ_N, dtype=complex)
+    psi[(0,) * ZZ_N] = 1.0
+    for _ in range(ZZ_REPS):
+        for k in range(ZZ_N):
+            psi = _zz_h(psi, k)
+        for k in range(ZZ_N):
+            psi = _zz_p(psi, k, 2.0 * x[k])
+        for i, j in ZZ_PARES:
+            psi = _zz_cx(psi, i, j)
+            psi = _zz_p(psi, j, 2.0 * (np.pi - x[i]) * (np.pi - x[j]))
+            psi = _zz_cx(psi, i, j)
+    return psi
+
+
+@st.cache_data
+def zz_metricas(valores: tuple) -> tuple:
+    """|r| de cada qubit y matriz 8×8 de información mutua, a partir de las 8 cifras CLÍNICAS.
+
+    El escalado se hace AQUÍ dentro y no en quien llama: el ZZFeatureMap del TFM no recibe
+    mg/dL ni años, recibe la salida del StandardScaler ajustado en la capa Gold (celda de
+    notebook_03), que es el mismo scaler_correcto.json que ya usa el Predictor en Vivo. Meter
+    valores crudos daría ángulos de fase disparatados y una figura que no es la del modelo.
+
+    Se devuelven las dos magnitudes juntas porque comparten el estado, que es lo caro de
+    calcular: pedirlas por separado lo evaluaría dos veces.
+
+    · |r| — longitud del vector de Bloch de cada qubit por separado. Es LA MISMA cifra que
+      explica la sección de 2 qubits de más arriba, y por eso esta figura se puede leer: 1 =
+      el qubit conserva su estado propio, 0 = se lo ha comido el entrelazamiento.
+    · Información mutua I(i:j) = S(ρᵢ) + S(ρⱼ) − S(ρᵢⱼ), en bits. Mide cuánta información
+      comparten DOS qubits, y es la magnitud que dibuja la topología del circuito: con
+      entrelazamiento lineal solo hay puertas entre vecinos, así que los pares lejanos salen
+      a cero exacto (comprobado sobre 300 perfiles aleatorios: a distancia ≥ 5 en la cadena,
+      máximo 0,0000 bits). El cono de luz del circuito, hecho figura.
+    """
+    esc = _load_scaler_and_medians()
+    if esc is None:
+        return None, None
+    idx = [esc["features"].index(f) for f in QSVM_FEATURES]
+    x = (np.array(valores, dtype=float) - esc["mean"][idx]) / esc["scale"][idx]
+
+    psi = zz_statevector(x)
+    rho1 = [_rho_reducida(psi, [k]) for k in range(ZZ_N)]
+    pureza = [float(np.real(np.trace(r @ r))) for r in rho1]
+    r_len = np.array([np.sqrt(max(0.0, 2.0 * u - 1.0)) for u in pureza])
+    S1 = [_entropia_vn(r) for r in rho1]
+
+    MI = np.zeros((ZZ_N, ZZ_N))
+    for i in range(ZZ_N):
+        for j in range(i + 1, ZZ_N):
+            # El max(0,·) es solo higiene numérica: la información mutua es no negativa por
+            # subaditividad, pero la resta de tres entropías puede dar -1e-16.
+            MI[i, j] = MI[j, i] = max(0.0, S1[i] + S1[j] - _entropia_vn(_rho_reducida(psi, [i, j])))
+    return r_len, MI
+
+
+def ent_circuito_svg(paso: int, medir: bool) -> str:
+    """Diagrama del circuito de 2 qubits, dibujado con la paleta activa.
+
+    Va como SVG EN LÍNEA y no como PNG —que es lo que hace la página Circuito Cuántico— por
+    la diferencia de fondo entre las dos: allí el circuito es fijo, sale del notebook y se
+    sirve ya renderizado; aquí cambia con cada pulsación y con el tema. Un SVG en línea hereda
+    la tipografía y los tokens de color de la página, así que sigue al tema en los dos
+    sentidos sin generar cuatro imágenes.
+    """
+    hilo, tinta = t["border_strong"], t["text"]
+    apagado = t["text_muted"]
+    y0, y1 = 46, 100
+    piezas = [
+        # Hilos: se dibujan enteros de un extremo a otro y las puertas se pintan encima.
+        f'<line x1="74" y1="{y0}" x2="446" y2="{y0}" stroke="{hilo}" stroke-width="1.6"/>',
+        f'<line x1="74" y1="{y1}" x2="446" y2="{y1}" stroke="{hilo}" stroke-width="1.6"/>',
+        f'<text x="8" y="{y0 + 5}" fill="{tinta}" font-family="{FONT_MONO}" font-size="14">q₀ |0⟩</text>',
+        f'<text x="8" y="{y1 + 5}" fill="{tinta}" font-family="{FONT_MONO}" font-size="14">q₁ |0⟩</text>',
+    ]
+    # Las puertas ya aplicadas van en el acento cuántico; las que aún no, no se dibujan. El
+    # diagrama es el registro de lo hecho, no el guion de lo que falta — para eso están los
+    # botones, que ya dicen cuál toca.
+    if paso >= 1:
+        piezas.append(
+            f'<rect x="120" y="{y0 - 20}" width="40" height="40" rx="7" '
+            f'fill="{t["surface_alt"]}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+            f'<text x="140" y="{y0 + 6}" text-anchor="middle" fill="{C_QUANTUM}" '
+            f'font-family="{FONT_MONO}" font-size="17" font-weight="600">H</text>')
+    if paso >= 2:
+        # CNOT en notación canónica: punto relleno en el control, ⊕ en el objetivo y la
+        # vertical que los une. El ⊕ se dibuja con dos segmentos y no con un carácter, que
+        # dependería de que la fuente lo traiga.
+        piezas.append(
+            f'<line x1="232" y1="{y0}" x2="232" y2="{y1}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+            f'<circle cx="232" cy="{y0}" r="5.5" fill="{C_QUANTUM}"/>'
+            f'<circle cx="232" cy="{y1}" r="13" fill="{t["surface_alt"]}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+            f'<line x1="232" y1="{y1 - 13}" x2="232" y2="{y1 + 13}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+            f'<line x1="219" y1="{y1}" x2="245" y2="{y1}" stroke="{C_QUANTUM}" stroke-width="1.8"/>')
+    if medir:
+        # Medidor: el arco con la aguja, el símbolo de siempre. En tinta apagada porque la
+        # medición no es una puerta más — es donde el estado cuántico deja de existir.
+        for y in (y0, y1):
+            piezas.append(
+                f'<rect x="330" y="{y - 20}" width="40" height="40" rx="7" '
+                f'fill="{t["surface_alt"]}" stroke="{apagado}" stroke-width="1.6"/>'
+                f'<path d="M332 {y + 9} A 18 18 0 0 1 368 {y + 9}" fill="none" '
+                f'stroke="{apagado}" stroke-width="1.6"/>'
+                f'<line x1="350" y1="{y + 9}" x2="363" y2="{y - 7}" stroke="{apagado}" stroke-width="1.6"/>')
+    return (f'<svg viewBox="0 0 460 146" width="100%" height="auto" '
+            f'style="display:block; max-width:460px; margin:0 auto;" '
+            f'role="img" aria-label="{html.escape(S("bl_ent_circuit_alt"))}">'
+            + "".join(piezas) + "</svg>")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # PAGINA 1 — OVERVIEW
 # ═══════════════════════════════════════════════════════════════════════
 if page == "overview":
@@ -2622,7 +3402,9 @@ if page == "overview":
 elif page == "governance":
     header(S("gov_eyebrow"), S("gov_title"), S("gov_subtitle"))
 
-    tab_calidad, tab_linaje, tab_stack = st.tabs(S("gov_tabs"))
+    # Vía tabs_i18n y no st.tabs directo: los tres rótulos cambian con el idioma y el tab
+    # abierto se perdía al pulsar la bandera. Ver el porqué en tabs_i18n.
+    tab_calidad, tab_linaje, tab_stack = tabs_i18n("gov_tabs", key="gov_tabs")
 
     # ─────────────────────────── TAB A — CALIDAD ───────────────────────────
     with tab_calidad:
@@ -3334,6 +4116,17 @@ elif page == "circuit":
 elif page == "bloch":
     header(S("bl_eyebrow"), S("bl_title"), S("bl_subtitle"))
 
+    # Qué es una esfera de Bloch, antes de enseñar una. El subtítulo dice qué se está viendo
+    # (la codificación), pero da por sabido el soporte donde se dibuja; a quien llega desde el
+    # lado clínico la figura le queda en una bola con una flecha. Va en .clinical-note, el mismo
+    # recurso con el que el Predictor en Vivo aclara qué estima su formulario: nota de entrada,
+    # una sola vez, antes de los controles.
+    st.markdown(f"""
+    <div class="clinical-note" style="margin-bottom:16px;">
+    {S("bl_what_note")}
+    </div>
+    """, unsafe_allow_html=True)
+
     # Contenedor con clave (genera .st-key-bloch_row) para poder estirar la gráfica 3D hasta el alto
     # de la columna izquierda y que ambas tarjetas cierren alineadas abajo — ver CSS .st-key-bloch_row.
     bloch_row = st.container(key="bloch_row")
@@ -3417,6 +4210,43 @@ elif page == "bloch":
         fig.add_trace(go.Scatter3d(x=[0,0], y=[0,0], z=[1.08,-1.08], mode="text", text=["|0⟩","|1⟩"],
                                     textfont=dict(family=PLOTLY_MONO, size=14, color=t["text_secondary"]),
                                     showlegend=False, hoverinfo="skip"))
+        # ── Arco de θ, como en los diagramas canónicos de la esfera de Bloch ──────────
+        # θ ES el valor clínico una vez normalizado, así que dibujarlo cierra el circuito entre
+        # la cifra de la tarjeta de la izquierda y la figura: se ve DE DÓNDE sale el ángulo. Va
+        # en el plano XZ porque φ=0 (ver el vector, más arriba), a radio corto para no tocar ni
+        # el vector ni la superficie, y en tinta apagada porque es cota, no dato.
+        # Por debajo de ~0,05 rad no se dibuja: un arco de dos píxeles no se lee como arco, se
+        # lee como un borrón junto al eje.
+        if theta > 0.05:
+            _arc = np.linspace(0, theta, 40)
+            fig.add_trace(go.Scatter3d(x=0.32*np.sin(_arc), y=np.zeros_like(_arc), z=0.32*np.cos(_arc),
+                                        mode="lines", line=dict(color=t["text_muted"], width=2),
+                                        showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter3d(x=[0.44*np.sin(theta/2)], y=[0.0], z=[0.44*np.cos(theta/2)],
+                                        mode="text", text=["θ"],
+                                        textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_muted"]),
+                                        showlegend=False, hoverinfo="skip"))
+        # ── Valor de la variable, EN el punto ────────────────────────────────────────
+        # Sin esto la esfera enseña una posición pero no dice de qué, y hay que mirar al
+        # selector de al lado para saber qué representa la flecha. Dos líneas y no una: el
+        # rótulo más largo ("Glucosa en ayunas = 100 mg/dL") pide unos 200 px y se saldría de
+        # la tarjeta; partido por el "=" la línea más ancha baja a la mitad larga.
+        # Siempre a la IZQUIERDA: el vector vive en el semiplano x≥0 (φ=0 y sen θ≥0 en [0,π]),
+        # así que en pantalla sale del centro hacia arriba-izquierda y ese lado queda libre en
+        # todo el recorrido.
+        # Y arriba o abajo SEGÚN EL HEMISFERIO, que no es un adorno: en los extremos del
+        # deslizador el punto aterriza justo en un polo, y ahí |0⟩ y |1⟩ ya ocupan sitio —el de
+        # arriba por encima, el de abajo por debajo—. Alejándose del ecuador se esquivan los
+        # dos: con la variable al mínimo la etiqueta cae bajo el polo norte, y al máximo sube
+        # sobre el polo sur. Sin esta regla, al llevar el deslizador al tope la etiqueta tapaba
+        # |1⟩ por completo (comprobado exportando la figura).
+        _dec = 1 if v["step"] < 1 else 0
+        fig.add_trace(go.Scatter3d(
+            x=[px], y=[py], z=[pz], mode="text",
+            text=[f"{q_label(var_code)}<br>{nf(val, _dec)} {q_unit(var_code)}"],
+            textposition="bottom left" if pz >= 0 else "top left",
+            textfont=dict(family=PLOTLY_MONO, size=12, color=C_QUANTUM),
+            showlegend=False, hoverinfo="skip"))
         # Alto FIJO en píxeles (sin autosize): tamaño idéntico en cada rerun y en cualquier navegador
         # (Firefox incluido). 486 px ≈ alto natural de la columna izquierda (selectbox + slider +
         # tarjeta de métricas), para que el fondo de esta tarjeta quede alineado con el de aquella.
@@ -3444,6 +4274,281 @@ elif page == "bloch":
     {S("bl_note")}
     </div>
     """, unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # ENTRELAZAMIENTO DE DOS QUBITS
+    # ═══════════════════════════════════════════════════════════════════
+    # POR QUÉ AQUÍ Y NO AL FINAL DE CIRCUITO CUÁNTICO. La nota de arriba (bl_note) cierra la
+    # página diciendo que el entrelazamiento "solo es representable en el espacio conjunto":
+    # esta sección es esa frase hecha figura. El argumento entero —que un estado de Bell NO
+    # cabe en dos esferas de Bloch— solo se entiende habiendo visto antes la esfera de un
+    # qubit, y esa esfera está justo encima; en Circuito Cuántico la sección habría llegado
+    # sin ese precedente, entre las especificaciones del ZZFeatureMap y las cifras de
+    # entrenamiento, que es una página de fichas y no de didáctica.
+    #
+    # El paso ES el estado. Lo único que persiste entre reruns es el entero `ent_paso`; el
+    # vector se recalcula desde |00⟩ en cada pasada (ver ent_statevector). Los botones van con
+    # on_click y no con `if st.button(...)`: el callback corre ANTES de que el script se
+    # reejecute, así que el circuito, la Q-sphere y las métricas se pintan ya con el paso
+    # nuevo. Con la forma `if` haría falta un st.rerun() explícito para no ir un paso por
+    # detrás — el mismo motivo por el que el toggle de la sidebar sí lo lleva.
+    st.session_state.setdefault("ent_paso", 0)
+    st.session_state.setdefault("ent_counts", None)
+
+    def _ent_paso(destino):
+        """Mueve el circuito al paso `destino` y tira las mediciones anteriores.
+
+        Lo segundo importa tanto como lo primero: un histograma de |00⟩+|11⟩ bajo un circuito
+        que ya no tiene el CNOT sería una figura que miente. Al cambiar de paso, la muestra
+        vuelve a estar vacía y hay que volver a pedirla.
+        """
+        st.session_state.ent_paso = destino
+        st.session_state.ent_counts = None
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{S("bl_ent_title")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-sub">{S("bl_ent_sub")}</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="clinical-note" style="margin-bottom:16px;">
+    {S("bl_ent_intro")}
+    </div>
+    """, unsafe_allow_html=True)
+
+    paso = st.session_state.ent_paso
+    psi = ent_statevector(paso)
+    local = ent_local(psi)
+
+    # Botonera: cada puerta se habilita SOLO en su turno. Un circuito no admite aplicar el
+    # CNOT antes que la Hadamard —saldría un estado producto sin entrelazar y la sección
+    # perdería el hilo—, así que la secuencia la impone el propio control en vez de un aviso
+    # a posteriori. El tercer botón siempre está vivo: se puede rehacer el recorrido entero.
+    b1, b2, b3 = st.columns([1.25, 1.55, 1])
+    with b1:
+        st.button(S("bl_ent_btn_h"), key="ent_h", width="stretch",
+                  disabled=paso != 0, on_click=_ent_paso, args=(1,))
+    with b2:
+        st.button(S("bl_ent_btn_cnot"), key="ent_cnot", width="stretch",
+                  disabled=paso != 1, on_click=_ent_paso, args=(2,))
+    with b3:
+        st.button(S("bl_ent_btn_reset"), key="ent_reset", width="stretch",
+                  disabled=paso == 0, on_click=_ent_paso, args=(0,))
+
+    # Las tres frases del paso actual, en la misma tarjeta de prosa que usa "Cómo funciona"
+    # del Circuito Cuántico. Van FUERA de las columnas y a ancho completo: es el texto que
+    # explica las dos figuras de debajo, no el pie de ninguna de las dos.
+    st.markdown(f'<div class="info-card" style="margin-top:12px;">'
+                f'<p class="qc-prose">{S("bl_ent_step_note")[paso]}</p></div>',
+                unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    ent_row = st.container(key="ent_row")
+    col1, col2 = ent_row.columns([1, 1.15])
+    with col1:
+        st.markdown(f'<div class="section-title">{S("bl_ent_circuit_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="fig-card" style="padding:18px 14px;">'
+                    f'{ent_circuito_svg(paso, st.session_state.ent_counts is not None)}</div>',
+                    unsafe_allow_html=True)
+        # Las tres cifras de ent_local(), que son el argumento cuantitativo de la sección.
+        # Mismo patrón .kpi-row que la tarjeta de amplitudes de arriba, a propósito: se leen
+        # como su continuación —allí el estado de UN qubit, aquí lo que queda de él dentro
+        # del par—. La longitud del vector va la primera porque es la que se puede contrastar
+        # con la figura de esta misma página: 1 = hay flecha que dibujar, 0 = no la hay.
+        _kpi_lab = S("bl_ent_kpi")
+        _kpi_val = [nf(local["r"], 3), nf(local["pureza"], 3),
+                    f'{nf(local["entropia"], 3)} {S("bl_ent_bits")}']
+        st.markdown(
+            '<div class="info-card" style="margin-top:14px;">'
+            + "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span>'
+                      f'<span class="kpi-value">{v}</span></div>'
+                      for l, v in zip(_kpi_lab, _kpi_val))
+            + "</div>", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f'<div class="section-title">{S("bl_ent_qsphere_title")}</div>', unsafe_allow_html=True)
+        # key estable por el mismo motivo que en la esfera de arriba: sin ella Streamlit
+        # remonta el iframe en cada rerun y la figura parpadea. Aquí además el rerun ocurre
+        # en cada pulsación, así que se notaría el triple.
+        st.plotly_chart(ent_qsphere_fig(psi), width="stretch", key="ent_qsphere",
+                        config={"displayModeBar": False, "responsive": True})
+
+    # ── Medición ────────────────────────────────────────────────────────
+    # La Q-sphere enseña el estado; esto enseña lo que se MIDE, que es lo único observable y
+    # la prueba empírica del entrelazamiento: 00 y 11 a partes iguales, 01 y 10 nunca. Se
+    # habilita desde el primer paso y no solo en el estado de Bell, porque el contraste es
+    # parte de la lección — tras la Hadamard sola salen 00 y 10, o sea q0 al azar y q1 fijo
+    # en 0; es al añadir el CNOT cuando los dos resultados quedan atados.
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{S("bl_ent_meas_title")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-sub">{S("bl_ent_meas_sub")}</div>', unsafe_allow_html=True)
+
+    m1, m2 = st.columns([2.2, 1])
+    with m1:
+        shots = st.slider(S("bl_ent_meas_n"), 100, 10000, 1000, step=100)
+    with m2:
+        # El aire de arriba alinea el botón con el carril del deslizador de al lado: el
+        # slider gasta su primera línea en el rótulo y sin esto el botón subía por encima.
+        st.markdown('<div style="height:30px;"></div>', unsafe_allow_html=True)
+        if st.button(S("bl_ent_meas_btn"), key="ent_medir", width="stretch"):
+            # Muestreo multinomial sobre |ψ|². Es EXACTAMENTE lo que hace un simulador ideal
+            # sin ruido: cada disparo es un sorteo independiente con las probabilidades de
+            # Born, y el simulador no añade nada más cuando no se le pide modelo de ruido.
+            # Sin semilla fija a propósito: dos tandas seguidas dan cifras distintas, que es
+            # justo lo que se quiere enseñar —la proporción es estable, el recuento exacto
+            # no— y con semilla fija parecería un resultado calculado en vez de muestreado.
+            rng = np.random.default_rng()
+            st.session_state.ent_counts = rng.multinomial(shots, psi ** 2).tolist()
+
+    counts = st.session_state.ent_counts
+    if counts is None:
+        # Hueco explícito en vez de una figura vacía: una gráfica con cuatro barras a cero se
+        # lee como un resultado ("no sale nada"), que es lo contrario de "aún no has medido".
+        st.markdown(f'<div class="info-card" style="text-align:center; color:{t["text_muted"]}; '
+                    f'padding:34px 18px;">{S("bl_ent_meas_empty")}</div>', unsafe_allow_html=True)
+    else:
+        total = sum(counts)
+        fig = go.Figure()
+        # Los cuatro resultados posibles SIEMPRE en el eje, incluidos los que salen a cero:
+        # que |01⟩ y |10⟩ aparezcan etiquetados y vacíos es el dato. Si se filtraran las
+        # barras nulas, la figura enseñaría dos resultados equiprobables y no habría forma
+        # de ver que faltan otros dos.
+        fig.add_trace(go.Bar(
+            x=[f"|{b}⟩" for b in ENT_BASE], y=counts,
+            marker_color=[C_QUANTUM if c else hex_to_rgba(t["text"], 0.10) for c in counts],
+            text=[mil(c) for c in counts], textposition="outside",
+            textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_secondary"]),
+            customdata=[[pct(c / total)] for c in counts], showlegend=False, cliponaxis=False,
+            hovertemplate="<b>%{x}</b><br>%{y} " + S("bl_ent_hover_shots") + "<br>%{customdata[0]}<extra></extra>",
+        ))
+        plotly_layout(fig, height=320,
+                      xaxis=dict(showgrid=False, fixedrange=True,
+                                 tickfont=dict(family=PLOTLY_MONO, size=15, color=t["text"])),
+                      yaxis=dict(title=dict(text=S("bl_ent_meas_yaxis"), font=dict(size=13)),
+                                 showgrid=True, gridcolor=GRID, fixedrange=True,
+                                 range=[0, max(counts) * 1.18]),
+                      margin=dict(l=60, r=20, t=26, b=40))
+        st.plotly_chart(fig, width="stretch", key="ent_hist", config={"displayModeBar": False})
+        st.markdown(f'<div class="clinical-note">{S("bl_ent_meas_note")[paso]}</div>',
+                    unsafe_allow_html=True)
+
+    # Nota de honestidad metodológica, en la misma línea que bl_note: la sección de arriba
+    # dice qué NO reproduce la esfera del ZZFeatureMap, y esta dice con qué está calculado lo
+    # que se acaba de ver. En un TFM eso no es un pie de página, es parte del resultado.
+    st.markdown(f'<div class="clinical-note" style="margin-top:16px;">{S("bl_ent_impl_note")}</div>',
+                unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # EL ZZFEATUREMAP REAL (8 qubits)
+    # ═══════════════════════════════════════════════════════════════════
+    # Tercer escalón de la página: un qubit → dos → los ocho del modelo. Cada uno usa el
+    # vocabulario del anterior, y ese encadenamiento es lo que hace legible este último — |r|
+    # es LA MISMA cifra que la sección de 2 qubits acaba de explicar con el estado de Bell.
+    # Sin ese precedente, estas ocho barras serían ocho números entre 0 y 1 sin significado.
+    #
+    # NO LLEVA CONTROLES PROPIOS: usa el selector y el deslizador del principio de la página.
+    # Añadir un segundo par para las mismas ocho variables habría dejado dos controles que
+    # dicen lo mismo. Y así el gesto de la página es uno solo: mueves una variable clínica y
+    # ves su efecto a las tres escalas, la esfera de arriba y las dos figuras de aquí.
+    # Además tiene premio: con entrelazamiento lineal, mover UNA variable solo altera su
+    # qubit y sus vecinos inmediatos (verificado barriendo HbA1c por su rango completo: q0,
+    # q1 y q2 se mueven; de q3 a q7 no cambian ni un decimal). El cono de luz del circuito se
+    # ve arrastrando el deslizador.
+    #
+    # La sección entera es opcional: si falta scaler_correcto.json no hay forma de escalar las
+    # features como las escaló el pipeline, y se omite en silencio en vez de inventar una
+    # normalización distinta — mismo criterio que el diagrama del circuito de 8 qubits, que
+    # solo se pinta si su PNG está en disco.
+    _esc = _load_scaler_and_medians()
+    if _esc is not None and all(f in _esc["features"] for f in QSVM_FEATURES):
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("bl_zz_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("bl_zz_sub")}</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="clinical-note" style="margin-bottom:16px;">
+        {S("bl_zz_intro")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Las 8 features en su valor de referencia, salvo la que el lector tiene elegida
+        # arriba. var_code y val vienen del selector y el deslizador de la esfera: `with`
+        # no abre ámbito en Python, así que siguen vivos aquí.
+        _perfil = {c: float(f["default"]) for c, f in QSVM_FEATURES.items()}
+        _perfil[var_code] = float(val)
+        _codigos = list(QSVM_FEATURES.keys())
+        r_len, MI = zz_metricas(tuple(_perfil[c] for c in _codigos))
+
+        st.markdown(
+            f'<div class="section-sub" style="margin-top:-6px;">'
+            f'{S("bl_zz_current").format(var=q_label(var_code), val=nf(val, 1 if v["step"] < 1 else 0), unidad=q_unit(var_code))}'
+            f'</div>', unsafe_allow_html=True)
+
+        zz_row = st.container(key="zz_row")
+        zc1, zc2 = zz_row.columns([1, 1.15])
+        with zc1:
+            st.markdown(f'<div class="section-title">{S("bl_zz_r_title")}</div>', unsafe_allow_html=True)
+            # Barras horizontales con el mismo tratamiento que el ranking RF del Circuito
+            # Cuántico: la lista es la misma y leerlas igual ayuda a cruzarlas. Se invierte
+            # el orden porque Plotly apila el eje de categorías de abajo arriba y así el
+            # primer qubit queda arriba, como en el diagrama del circuito.
+            _orden = list(reversed(_codigos))
+            _vals = [float(r_len[_codigos.index(c)]) for c in _orden]
+            fig = go.Figure()
+            # La variable que el lector está moviendo va en el acento de marca y el resto en
+            # el cuántico: sin eso, al arrastrar el deslizador se ve cambiar una barra sin
+            # saber cuál se estaba tocando.
+            fig.add_trace(go.Bar(
+                x=_vals, y=_orden, orientation="h", cliponaxis=False,
+                marker_color=[C_PRIMARY if c == var_code else C_QUANTUM for c in _orden],
+                text=[nf(x, 3) for x in _vals], textposition="outside",
+                textfont=dict(family=PLOTLY_MONO, size=12.5, color=t["text_secondary"]),
+                customdata=[[q_label(c)] for c in _orden], showlegend=False,
+                hovertemplate="<b>%{customdata[0]}</b><br>|r| = %{x:.3f}<extra></extra>"))
+            plotly_layout(fig, height=340,
+                          xaxis=dict(title=dict(text=S("bl_zz_r_xaxis"), font=dict(size=13)),
+                                     range=[0, 1.16], showgrid=True, gridcolor=GRID, fixedrange=True),
+                          yaxis=dict(showgrid=False, fixedrange=True,
+                                     tickfont=dict(family=PLOTLY_MONO, size=12, color=t["text"])),
+                          margin=dict(l=88, r=54, t=20, b=42))
+            st.plotly_chart(fig, width="stretch", key="zz_r", config={"displayModeBar": False})
+
+        with zc2:
+            st.markdown(f'<div class="section-title">{S("bl_zz_mi_title")}</div>', unsafe_allow_html=True)
+            # Diagonal en blanco: I(i:i) no es cero, es la entropía del propio qubit, y
+            # pintarla en la misma escala que los pares sería comparar dos magnitudes
+            # distintas. Con NaN, Plotly deja la celda al color del fondo.
+            _z = MI.copy().astype(float)
+            np.fill_diagonal(_z, np.nan)
+            _txt = [["" if i == j else nf(_z[i, j], 2) for j in range(ZZ_N)] for i in range(ZZ_N)]
+            fig = go.Figure(go.Heatmap(
+                z=_z, x=_codigos, y=_codigos,
+                # Escala FIJA de 0 al tope teórico (2 bits). Adaptarla al máximo de cada
+                # render habría hecho que el mismo color significara cosas distintas según
+                # dónde estuviera el deslizador, que en un control en vivo es lo peor
+                # posible. El extremo inferior es la superficie de la tarjeta, así que un
+                # par sin correlación se ve literalmente vacío.
+                zmin=0, zmax=ZZ_MI_MAX,
+                colorscale=[[0.0, t["surface_alt"]], [0.25, RAMP[0]], [0.5, RAMP[1]],
+                            [0.75, RAMP[2]], [1.0, RAMP[3]]],
+                text=_txt, texttemplate="%{text}", xgap=2, ygap=2,
+                textfont=dict(family=PLOTLY_MONO, size=11, color=t["text"]),
+                hovertemplate="<b>%{y} · %{x}</b><br>%{z:.3f} " + S("bl_ent_bits") + "<extra></extra>",
+                colorbar=dict(title=dict(text=S("bl_zz_mi_cbar"), font=dict(size=12)),
+                              thickness=10, outlinewidth=0, len=0.86,
+                              tickfont=dict(family=PLOTLY_MONO, size=11)),
+            ))
+            plotly_layout(fig, height=340,
+                          xaxis=dict(showgrid=False, fixedrange=True, side="top",
+                                     tickfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"])),
+                          # autorange invertido: la primera variable arriba, para que la
+                          # diagonal caiga de arriba-izquierda a abajo-derecha como se lee
+                          # cualquier matriz, y no al revés.
+                          yaxis=dict(showgrid=False, fixedrange=True, autorange="reversed",
+                                     tickfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"])),
+                          margin=dict(l=76, r=10, t=54, b=10))
+            st.plotly_chart(fig, width="stretch", key="zz_mi", config={"displayModeBar": False})
+
+        st.markdown(f'<div class="clinical-note">{S("bl_zz_note")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="clinical-note" style="margin-top:16px;">{S("bl_zz_caveat")}</div>',
+                    unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 6 — LIVE PREDICTOR
@@ -3485,34 +4590,45 @@ elif page == "predictor":
                 _i = _sp["features"].index(_c)
                 _ref[_c] = (float(_sp["mean"][_i]), float(_sp["scale"][_i]))
 
-    cols = st.columns(2)
     inputs = {}
     items = list(QSVM_FEATURES.items())
-    for i, (code, v) in enumerate(items):
-        with cols[i % 2]:
-            lo, hi = v["range"]
-            inputs[code] = st.slider(f"{q_label(code)} ({q_unit(code)})",
-                                      float(lo), float(hi), float(v["default"]),
-                                      step=v["step"], format=v["fmt"], key=f"lp_{code}")
-            _pie = []
-            if code in _ref:
-                _mu, _sd = _ref[code]
-                _dec = 1 if v["step"] < 1 else 0
-                # Las cuatro cifras pasan por nf(): son magnitudes clínicas y el separador
-                # decimal tiene que seguir al idioma igual que en el resto de la página.
-                _pie.append(S("lp_train_range").format(
-                    mu=nf(_mu, _dec), sd=nf(_sd, _dec),
-                    lo=nf(_mu - 3 * _sd, _dec), hi=nf(_mu + 3 * _sd, _dec)))
-                _z = (inputs[code] - _mu) / _sd if _sd else 0.0
-                if abs(_z) > 3:
-                    _pie.append(f'<span style="color:{STATUS["warning"]};">'
-                                + S("lp_extrapolates").format(z=f"{nf(_z, 1)}" if _z < 0 else f"+{nf(_z, 1)}")
-                                + "</span>")
-            if code == "LBXGH":
-                _pie.append(S("lp_ada"))
-            if _pie:
-                st.markdown(f'<div style="font-size:12px; color:{t["text_muted"]}; line-height:1.6; '
-                            f'margin:-8px 0 14px;">{"<br>".join(_pie)}</div>', unsafe_allow_html=True)
+    # Una fila de columnas POR PAREJA, y no dos columnas para las ocho de golpe. Con un único
+    # st.columns(2) cada columna apila sus cuatro variables por su cuenta, así que basta con que
+    # un pie tenga una línea de más para que esa columna entera baje y sus sliders dejen de
+    # cuadrar con los de al lado. Y pasa de dos maneras: fija —el criterio ADA solo cuelga de
+    # HbA1c— y móvil, porque el aviso de extrapolación aparece y desaparece al arrastrar un
+    # slider fuera de ±3 sd, o sea que el desajuste cambiaba mientras el usuario juega con la
+    # página. Reabriendo las columnas en cada pareja, cada fila arranca alineada y una
+    # diferencia de alto se queda dentro de su fila en vez de arrastrar todo lo que va debajo.
+    # Se paga en alto: la celda de pie corto queda con aire de sobra hasta la fila siguiente.
+    # Es lo que vale una rejilla alineada, y es preferible a fijar min-height en los pies, que
+    # obligaría a adivinar cuántas líneas ocupa cada texto en cada idioma y ancho de ventana.
+    for _fila in range(0, len(items), 2):
+        for _col, (code, v) in zip(st.columns(2), items[_fila:_fila + 2]):
+            with _col:
+                lo, hi = v["range"]
+                inputs[code] = st.slider(f"{q_label(code)} ({q_unit(code)})",
+                                          float(lo), float(hi), float(v["default"]),
+                                          step=v["step"], format=v["fmt"], key=f"lp_{code}")
+                _pie = []
+                if code in _ref:
+                    _mu, _sd = _ref[code]
+                    _dec = 1 if v["step"] < 1 else 0
+                    # Las cuatro cifras pasan por nf(): son magnitudes clínicas y el separador
+                    # decimal tiene que seguir al idioma igual que en el resto de la página.
+                    _pie.append(S("lp_train_range").format(
+                        mu=nf(_mu, _dec), sd=nf(_sd, _dec),
+                        lo=nf(_mu - 3 * _sd, _dec), hi=nf(_mu + 3 * _sd, _dec)))
+                    _z = (inputs[code] - _mu) / _sd if _sd else 0.0
+                    if abs(_z) > 3:
+                        _pie.append(f'<span style="color:{STATUS["warning"]};">'
+                                    + S("lp_extrapolates").format(z=f"{nf(_z, 1)}" if _z < 0 else f"+{nf(_z, 1)}")
+                                    + "</span>")
+                if code == "LBXGH":
+                    _pie.append(S("lp_ada"))
+                if _pie:
+                    st.markdown(f'<div style="font-size:12px; color:{t["text_muted"]}; line-height:1.6; '
+                                f'margin:-8px 0 14px;">{"<br>".join(_pie)}</div>', unsafe_allow_html=True)
 
     _real = predict_real(inputs) if _models_ready else None
 
