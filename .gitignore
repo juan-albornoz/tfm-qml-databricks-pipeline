@@ -26,6 +26,14 @@ __pycache__/
 venv/
 .venv/
 
+# Copias de seguridad locales del dashboard. El historial de git YA es la copia de
+# seguridad de app.py; una segunda copia dentro del repo solo añade un fichero de
+# 100 KB que se desincroniza en cuanto se toca el original, y que ademas confunde a
+# las busquedas — grep encuentra dos veces cada funcion, una de ellas obsoleta.
+# Se ignora por ruta exacta y no con un patron tipo *_BACKUP.py: asi no puede tapar
+# en silencio un fichero futuro que si haga falta versionar.
+streamlit/app_ORIGINAL_BACKUP.py
+
 # Secretos / credenciales — NUNCA subir
 .streamlit/secrets.toml
 secrets.toml
