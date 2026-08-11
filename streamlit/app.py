@@ -1,8 +1,6 @@
 """
-QML DataOps TFM Dashboard — App completa (6 paginas)
-Universidad Europea de Valencia · TFM Juan Albornoz
-
 QML DataOps TFM Dashboard — App completa (7 paginas)
+Universidad Europea de Valencia · TFM Juan Albornoz
 
 Estructura de paginas segun Seccion "Estructura y Paginas de la Aplicacion"
 del TFM_UEV_QML_JuanAlbornoz.docx: Overview, Results, SHAP Analysis,
@@ -37,7 +35,7 @@ try:
 except ImportError:
     ONNX_AVAILABLE = False
 
-import i18n                                   # catálogo de textos ES/EN (módulo local)
+import i18n                                   # catálogo de textos ES/EN/DE/FR/IT (módulo local)
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 FIGURES_DIR = Path(__file__).parent.parent / "figures"
@@ -472,15 +470,12 @@ RAMP = (["#724D00", "#9A6A00", "#C48800", "#EBAA2D", "#FFCF83"] if _is_dark
 C_PRIMARY = P_AMBAR if _is_dark else "#9A6504"
 C_DARK    = P_ORO if _is_dark else "#6B4600"
 C_QUANTUM = SERIES["qsvm"]          # acento del componente cuántico (Bloch, ZZFeatureMap)
-# La crema es el tono de realce de la paleta, y solo sirve donde contrasta: 12,4:1
-# sobre el carbón (vale como texto) frente a 1,33:1 sobre blanco (solo como relleno o
-# tinte). Por eso en claro nunca lleva texto encima ni hace de texto.
-C_CREMA = P_CREMA
-# Alias de compatibilidad: pasos intermedios de la rampa. Se toman del extremo VISIBLE
-# de cada una — la clara corre brillante→oscuro y la oscura oscuro→brillante, así que el
-# paso "medio-alto" es RAMP[1] en claro y RAMP[3] en oscuro. Con esto el halo del
-# interruptor de tema y el anillo de las láminas pesan ópticamente igual en ambos temas.
-C_LIGHT = RAMP[0]
+# Pasos intermedios de la rampa. Se toman del extremo VISIBLE de cada una — la clara
+# corre brillante→oscuro y la oscura oscuro→brillante, así que el paso "medio-alto" es
+# RAMP[1] en claro y RAMP[3] en oscuro. Con esto el halo del interruptor de tema y el
+# anillo de las láminas pesan ópticamente igual en ambos temas.
+# (La crema P_CREMA no tiene alias propio: se usa a través de RAMP y de SERIES, que es
+# donde le toca, y nunca como color de texto en claro — ahí da 1,33:1.)
 C_MID2  = RAMP[3] if _is_dark else RAMP[1]
 C_MID1  = RAMP[2]
 
@@ -1501,12 +1496,6 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
 }}
 .gov-table tr:last-child td {{ border-bottom:none; }}
 .gov-table .num {{ font-family:{FONT_MONO}; font-variant-numeric:tabular-nums; color:{t['text']}; }}
-/* Bloque de código dentro de una tarjeta (los asserts de la cadena anti-leakage) */
-.gov-code {{
-    font-family:{FONT_MONO}; font-size:13px; line-height:1.65; color:{t['text_secondary']};
-    background:{t['surface_alt']}; border:1px solid {t['border']}; border-radius:8px;
-    padding:10px 12px; margin-top:10px; overflow-x:auto; white-space:pre;
-}}
 /* Prosa dentro de tarjeta (el par Limitación / Mitigación de MLflow). Va al mismo cuerpo que
    el .section-sub de encima porque aquí el texto ES el contenido de la sección, no una nota al
    pie de una tabla — y por eso encoge con él en móvil en vez de quedarse fijo en píxeles.
@@ -1724,7 +1713,7 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color:{C_PRIMARY} !important
    carril: ni height ni overflow, que es lo que dispara el bucle de medición de Plotly y estira
    las gráficas sin fin (mismo motivo que el comentario de la esfera de Bloch más arriba).
    scrollbar-width NO se hereda, así que esto afecta a estos dos contenedores y a nada de su
-   interior: el scroll horizontal de .gov-table-wrap y .gov-code se conserva intacto. Gana a la
+   interior: el scroll horizontal de .gov-table-wrap se conserva intacto. Gana a la
    regla "*" de arriba por especificidad, no por orden. En Firefox scrollbar-width:none es lo
    único que quita el carril (::-webkit-scrollbar no aplica allí); la regla WebKit cubre
    Chrome/Edge. Al liberar ese hueco, el aire de la derecha vuelve a igualar al de la izquierda. */
@@ -3112,6 +3101,40 @@ def plotly_layout(fig, height=300, **kwargs):
     )
     return fig
 
+
+def esfera_base() -> go.Figure:
+    """Figura con la esfera unidad ya puesta: superficie tenue + tres círculos máximos.
+
+    La comparten las DOS esferas de la página: la de Bloch de un qubit y la Q-sphere del
+    estado conjunto de dos. Que se parezcan no es casualidad sino requisito — tienen que
+    leerse como el mismo objeto visto a dos escalas—, y con el bloque escrito dos veces
+    bastaba tocar un `opacity` en una para que dejaran de parecerlo. Aquí la definición
+    vive una sola vez y la coincidencia se sostiene sola.
+
+    La esfera es el CONTENEDOR, no el dato: va en la rampa muy diluida para no competir
+    con lo que se dibuja encima (el vector |ψ⟩ o los nodos de la Q-sphere), y el
+    `lighting` le da volumen de bola real en vez de aspecto de malla. Los tres círculos
+    máximos —ecuador XY, meridianos XZ e YZ— refuerzan la curvatura al rotarla.
+    """
+    fig = go.Figure()
+    u, w = np.mgrid[0:2*np.pi:60j, 0:np.pi:30j]
+    xs, ys, zs = np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w)
+    fig.add_trace(go.Surface(
+        x=xs, y=ys, z=zs, opacity=0.14, showscale=False, hoverinfo="skip",
+        colorscale=[[0, RAMP[0]], [1, RAMP[2]]],
+        lighting=dict(ambient=0.66, diffuse=0.9, specular=0.22, roughness=0.6, fresnel=0.25),
+        lightposition=dict(x=120, y=200, z=160),
+    ))
+    circ = np.linspace(0, 2 * np.pi, 120)
+    for gx, gy, gz in [
+        (np.cos(circ), np.sin(circ), np.zeros_like(circ)),   # ecuador (plano XY)
+        (np.cos(circ), np.zeros_like(circ), np.sin(circ)),   # meridiano XZ
+        (np.zeros_like(circ), np.cos(circ), np.sin(circ)),   # meridiano YZ
+    ]:
+        fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.42,
+                                    line=dict(color=C_MID1, width=1.2), showlegend=False, hoverinfo="skip"))
+    return fig
+
 # ═══════════════════════════════════════════════════════════════════════
 # ENTRELAZAMIENTO DE DOS QUBITS  (sección final de la página Esfera de Bloch)
 # ═══════════════════════════════════════════════════════════════════════
@@ -3238,25 +3261,10 @@ def ent_qsphere_fig(psi: np.ndarray):
 
     Se dibuja con el mismo repertorio que la esfera de Bloch de esta página (superficie tenue
     con lighting, tres círculos máximos, acento cuántico para el dato) para que las dos
-    figuras se lean como el mismo objeto visto a dos escalas.
+    figuras se lean como el mismo objeto visto a dos escalas. Ese repertorio compartido es
+    literalmente el mismo código: sale de esfera_base().
     """
-    fig = go.Figure()
-    u, w = np.mgrid[0:2*np.pi:60j, 0:np.pi:30j]
-    xs, ys, zs = np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w)
-    fig.add_trace(go.Surface(
-        x=xs, y=ys, z=zs, opacity=0.14, showscale=False, hoverinfo="skip",
-        colorscale=[[0, RAMP[0]], [1, RAMP[2]]],
-        lighting=dict(ambient=0.66, diffuse=0.9, specular=0.22, roughness=0.6, fresnel=0.25),
-        lightposition=dict(x=120, y=200, z=160),
-    ))
-    circ = np.linspace(0, 2 * np.pi, 120)
-    for gx, gy, gz in [
-        (np.cos(circ), np.sin(circ), np.zeros_like(circ)),
-        (np.cos(circ), np.zeros_like(circ), np.sin(circ)),
-        (np.zeros_like(circ), np.cos(circ), np.sin(circ)),
-    ]:
-        fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.42,
-                                    line=dict(color=C_MID1, width=1.2), showlegend=False, hoverinfo="skip"))
+    fig = esfera_base()
 
     # Un anillo por peso de Hamming. Con 2 qubits son tres: {00} arriba, {01,10} en el
     # ecuador y {11} abajo. El reparto azimutal dentro del anillo es uniforme, que con dos
@@ -4383,27 +4391,9 @@ elif page == "bloch":
         """, unsafe_allow_html=True)
 
     with col2:
-        fig = go.Figure()
-        # Superficie esférica con sombreado (lighting) para darle volumen de bola real
-        u, w = np.mgrid[0:2*np.pi:60j, 0:np.pi:30j]
-        xs, ys, zs = np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w)
-        # La esfera es el CONTENEDOR, no el dato: va en un azul de marca muy diluido para
-        # que no compita con el vector. El dato (|ψ⟩) es lo único en violeta saturado.
-        fig.add_trace(go.Surface(
-            x=xs, y=ys, z=zs, opacity=0.14, showscale=False, hoverinfo="skip",
-            colorscale=[[0, RAMP[0]], [1, RAMP[2]]],
-            lighting=dict(ambient=0.66, diffuse=0.9, specular=0.22, roughness=0.6, fresnel=0.25),
-            lightposition=dict(x=120, y=200, z=160),
-        ))
-        # Círculos máximos (ecuador + 2 meridianos): refuerzan la curvatura al rotar
-        circ = np.linspace(0, 2 * np.pi, 120)
-        for gx, gy, gz in [
-            (np.cos(circ), np.sin(circ), np.zeros_like(circ)),   # ecuador (plano XY)
-            (np.cos(circ), np.zeros_like(circ), np.sin(circ)),   # meridiano XZ
-            (np.zeros_like(circ), np.cos(circ), np.sin(circ)),   # meridiano YZ
-        ]:
-            fig.add_trace(go.Scatter3d(x=gx, y=gy, z=gz, mode="lines", opacity=0.42,
-                                        line=dict(color=C_MID1, width=1.2), showlegend=False, hoverinfo="skip"))
+        # Superficie esférica sombreada + círculos máximos: la misma base que la Q-sphere
+        # de más abajo, definida una sola vez en esfera_base().
+        fig = esfera_base()
         # Ejes cartesianos
         for ax_x, ax_y, ax_z in [([-1.06,1.06],[0,0],[0,0]), ([0,0],[-1.06,1.06],[0,0]), ([0,0],[0,0],[-1.10,1.10])]:
             fig.add_trace(go.Scatter3d(x=ax_x, y=ax_y, z=ax_z, mode="lines",
@@ -4915,7 +4905,7 @@ elif page == "predictor":
         # "gauge+number" nativo de Plotly (que solo pinta una barra rellena desde cero, sin aguja).
         # Construido a mano con arcos SVG (fig.add_shape) + una aguja por trigonometría — mismo
         # planteamiento que ya usa el vector de estado en Esfera de Bloch. Paleta propia del proyecto:
-        # 5 tonos, de C_LIGHT (bajo riesgo) a C_DARK (alto riesgo), en vez del rojo→verde de referencia.
+        # los 5 pasos de RAMP, de bajo a alto riesgo, en vez del rojo→verde de referencia.
         def _polar(angle_deg, r):
             rad = np.radians(angle_deg)
             return r * np.cos(rad), r * np.sin(rad)
