@@ -333,12 +333,113 @@ def _flag_uri(lang):
     return "data:image/svg+xml;base64," + base64.b64encode(
         i18n.FLAG_SVG[lang].encode("utf-8")).decode("ascii")
 
-# El "otro" idioma se precalcula aquí y no dentro de la hoja de estilos: la CSS es un
-# f-string gigante y meterle una condicional lo vuelve ilegible justo donde ya hay
-# llaves escapadas. Con esto, las reglas de bandera activa/inactiva se leen solas.
-LANG_OTRO = "en" if LANG == "es" else "es"
-FLAG_ES_URI = _flag_uri("es")
-FLAG_EN_URI = _flag_uri("en")
+def _sel_lang(sufijo="", langs=None):
+    """Selector CSS que abarca las banderas indicadas (todas, por defecto).
+
+    Las reglas de las banderas eran tres listas escritas a mano con "es" y "en", y el
+    idioma inactivo era un `"en" if LANG == "es" else "es"`. Con dos banderas colaba;
+    al entrar la tercera dejó de haber UN "otro" idioma, y las listas a mano habrían
+    exigido tocar cuatro sitios con la garantía de que uno se queda atrás. Generado
+    desde i18n.LANGS, añadir un idioma es añadir su catálogo y su bandera y nada más.
+    """
+    return ", ".join(f".st-key-lang_{l}{sufijo}" for l in (langs or i18n.LANGS))
+
+LANGS_OTROS = [l for l in i18n.LANGS if l != LANG]
+
+# Estados en los que el desplegable se considera ABIERTO. Son tres y no uno porque cada
+# uno cubre un caso que los otros no:
+#   · :hover del contenedor — el caso normal con ratón. El contenedor va en
+#     display:contents, así que no tiene caja propia y su :hover depende de que el
+#     navegador lo propague desde los hijos.
+#   · :has(button:hover) — la misma condición pero resuelta como CONSULTA del árbol, sin
+#     depender de esa propagación. Es la red de seguridad de la anterior.
+#   · :focus-within — el teclado. Las banderas del panel siguen siendo enfocables con el
+#     tabulador aunque estén a opacidad 0 (por eso se ocultan así y no con visibility,
+#     que las sacaría del orden de tabulación), de modo que tabular hasta una la muestra.
+_ABIERTO = (".st-key-lang_switch:hover",
+            ".st-key-lang_switch:has(button:hover)",
+            ".st-key-lang_switch:focus-within")
+
+def _sel_abierto(sufijo="", langs=None):
+    """Selector de las banderas indicadas, pero solo con el desplegable abierto.
+
+    Producto cartesiano de los tres estados por los idiomas: CSS no tiene variables de
+    selector y hay que escribir las combinaciones una a una. Generarlas evita el bloque
+    de doce selectores a mano que habría que rehacer al tocar un idioma.
+    """
+    return ", ".join(f"{estado} .st-key-lang_{l}{sufijo}"
+                     for estado in _ABIERTO for l in (langs or i18n.LANGS))
+
+# ── Geometría del desplegable de idioma ──
+# La bandera ACTIVA hace de disparador y se queda sola en la esquina; las otras cuelgan
+# debajo, ocultas hasta que el grupo recibe cursor o foco. Con cinco idiomas la tira
+# horizontal medía 162 px y se comía la franja de cabecera entera —y el reloj se iba a
+# 196 px del borde—; el desplegable la devuelve al ancho de una sola bandera.
+#
+# Todas las banderas guardan el MISMO aire (_MENU_HUECO), tanto entre el disparador y el
+# panel como entre las del panel: un solo ritmo vertical en vez de dos. Ese aire tiene un
+# coste que hay que pagar aparte — cada hueco es un punto donde el cursor no está sobre
+# ninguna de las cinco banderas, así que el :hover del grupo se apagaría y el panel se
+# cerraría justo mientras lo recorres. Cada bandera tapa SU hueco (el de debajo) con un
+# ::after que le pertenece; ver el puente en la hoja de estilos.
+_FLAG_ANCHO, _FLAG_ALTO = 26, 18
+_MENU_TOP, _MENU_HUECO, _MENU_BORDE = 14, 6, 22
+_MENU_CARET = 12                # lo que ocupa la flecha a la izquierda del disparador
+
+# Quién lleva puente: todas menos la última del panel, que no tiene nada debajo que
+# alcanzar. Se calcula aquí porque la hoja de estilos lo necesita como lista de selectores.
+LANGS_PUENTE = [LANG] + LANGS_OTROS[:-1]
+
+def _reparto(top, alto, hueco):
+    """Coordenada `top` de cada bandera: la activa arriba, las demás en el panel.
+
+    Devuelve un dict por idioma. El orden del panel es el de i18n.LANGS sin la activa,
+    así que la lista no se reordena al cambiar de idioma — solo desaparece de ella la
+    que ha subido a disparador.
+
+    El paso es `alto + hueco`, el mismo que separa el disparador de la primera del panel:
+    así las cinco quedan a intervalos iguales y la columna se lee como una sola serie.
+    """
+    primera = top + alto + hueco
+    reparto = {LANG: top}
+    reparto.update({l: primera + i * (alto + hueco) for i, l in enumerate(LANGS_OTROS)})
+    return reparto
+
+FLAG_TOP = _reparto(_MENU_TOP, _FLAG_ALTO, _MENU_HUECO)
+# El reloj ya solo tiene que esquivar UNA bandera y su flecha, no cinco.
+RELOJ_RIGHT = _MENU_BORDE + _FLAG_ANCHO + _MENU_CARET + 12
+
+# Mismas cuentas con las medidas de móvil (ver la media query del final de la hoja).
+_FLAG_ANCHO_M, _FLAG_ALTO_M = 23, 16
+_MENU_TOP_M, _MENU_HUECO_M, _MENU_BORDE_M = 10, 5, 14
+_MENU_CARET_M = 11
+FLAG_TOP_M = _reparto(_MENU_TOP_M, _FLAG_ALTO_M, _MENU_HUECO_M)
+RELOJ_RIGHT_M = _MENU_BORDE_M + _FLAG_ANCHO_M + _MENU_CARET_M + 10
+
+def _css_banderas(tops, ancho, alto, borde, radio=3, con_imagen=True):
+    """Sitio y piel de cada bandera: una regla por idioma.
+
+    `con_imagen` existe porque el data-URI de la bandera de EE. UU. lleva las 50
+    estrellas y pesa: la media query de móvil solo cambia medidas, así que repetir ahí
+    los cinco data-URI duplicaría la parte más gorda de la hoja de estilos para nada.
+
+    Las cinco redondean sus CUATRO esquinas por igual. Cuando el panel iba pegado hacía
+    falta lo contrario —esquinas a escuadra en medio y redondeadas solo arriba del todo y
+    abajo del todo, para que las cuatro leyeran como una sola pieza—; separadas, cada una
+    es su propia ficha y esa excepción sobra.
+    """
+    return [
+        f'.st-key-lang_{l} button {{ top:{tops[l]}px !important; right:{borde}px !important; '
+        f'width:{ancho}px !important; height:{alto}px !important; min-height:{alto}px !important; '
+        f'border-radius:{radio}px !important;'
+        + (f' background-image:url("{_flag_uri(l)}") !important;' if con_imagen else "")
+        + " }"
+        for l in i18n.LANGS
+    ]
+
+CSS_FLAGS = "\n".join(_css_banderas(FLAG_TOP, _FLAG_ANCHO, _FLAG_ALTO, _MENU_BORDE))
+CSS_FLAGS_MOVIL = "\n    ".join(
+    _css_banderas(FLAG_TOP_M, _FLAG_ANCHO_M, _FLAG_ALTO_M, _MENU_BORDE_M, con_imagen=False))
 
 # ── Paleta base, literal. Referencia única para todo lo demás. ──
 P_AMBAR, P_ORO, P_CREMA, P_GRIS, P_CARBON = "#F5A623", "#F9C449", "#FBDD8B", "#E9E9E9", "#1C1F26"
@@ -692,63 +793,136 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     transform: scale(1.05);
 }}
 .st-key-theme_toggle button p {{ font-size:0 !important; }}
-/* ── Selector de idioma: dos banderas fijas en la esquina superior derecha ──
-   Van en el lienzo principal y no en la sidebar a propósito: el idioma afecta a TODA la
+/* ── Selector de idioma: desplegable de banderas en la esquina superior derecha ──
+   Va en el lienzo principal y no en la sidebar a propósito: el idioma afecta a TODA la
    aplicación, no solo a la navegación, y colapsar la sidebar no debe esconderlo. Como el
    <header> nativo de Streamlit está en visibility:hidden (ver más abajo), esa franja
    superior derecha está libre y no hay nada con lo que chocar.
 
-   Los dos contenedores se disuelven con display:contents en LOS DOS niveles (el de Streamlit
-   y el del botón), no con el height:0 que usa el toggle de colapso. El motivo es que el
-   bloque vertical de Streamlit es un flex con gap: un hijo de altura cero sigue siendo hijo y
-   sigue cobrando su hueco, así que height:0 habría dejado dos huecos en blanco por encima del
-   titular de la página. Con display:contents el único elemento que queda es el <button>, y
-   como es position:fixed ni siquiera cuenta como ítem del flex: no ocupa absolutamente nada.
+   ESTRUCTURA. La bandera del idioma activo es el DISPARADOR y ocupa sola la esquina; las
+   otras cuatro forman el PANEL, colgando justo debajo y ocultas hasta que el grupo recibe
+   cursor o foco. Antes las cinco iban en fila y medían 162 px de franja; ver la geometría
+   y el porqué en el bloque _reparto() de arriba.
+
+   TODOS los contenedores se disuelven con display:contents —el de la agrupación, el de
+   cada elemento de Streamlit y el del propio botón—, no con el height:0 que usa el toggle
+   de colapso. El motivo es que el bloque vertical de Streamlit es un flex con gap: un hijo
+   de altura cero sigue siendo hijo y sigue cobrando su hueco, así que height:0 habría
+   dejado huecos en blanco por encima del titular de la página. Con display:contents lo
+   único que queda son los <button>, y como son position:fixed ni siquiera cuentan como
+   ítems del flex: no ocupan absolutamente nada.
+
+   Ese display:contents en la agrupación es además lo que permite que .st-key-lang_switch
+   siga siendo el ancestro común de las cinco banderas —de ahí cuelga la condición de
+   «abierto»— sin dibujar ninguna caja que tape la página debajo.
 
    La bandera es un background-image: así el botón sigue siendo un botón de Streamlit
    (accesible, con su tooltip y su foco de teclado) y la bandera es solo su piel; poner un
    <img> dentro habría exigido HTML, que no es pulsable. */
-.st-key-lang_es, .st-key-lang_en,
-.st-key-lang_es div[data-testid="stButton"],
-.st-key-lang_en div[data-testid="stButton"] {{ display:contents !important; }}
-.st-key-lang_es button, .st-key-lang_en button {{
-    position:fixed !important; top:14px !important;
-    width:26px !important; height:18px !important; min-height:18px !important;
+.st-key-lang_switch,
+.st-key-lang_switch > div,
+.st-key-lang_switch div[data-testid="stElementContainer"],
+.st-key-lang_switch div[data-testid="stButton"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
+{_sel_lang()},
+{_sel_lang(' div[data-testid="stButton"]')} {{ display:contents !important; }}
+{_sel_lang(" button")} {{
+    position:fixed !important;
     padding:0 !important; margin:0 !important;
-    border-radius:3px !important; border:1px solid {t['border']} !important;
+    border:1px solid {t['border']} !important;
     background-repeat:no-repeat !important; background-position:center !important;
     background-size:cover !important;
+    /* overflow visible: la flecha y el puente del disparador son pseudoelementos que
+       salen de la caja del botón, y Streamlit recorta los suyos por defecto. */
+    overflow:visible !important;
     box-shadow: 0 1px 3px rgba(20,30,40,0.18) !important;
     z-index:1001 !important;
-    transition: opacity 0.16s ease, filter 0.16s ease, transform 0.14s ease,
-                box-shadow 0.16s ease !important;
+    transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease,
+                box-shadow 0.16s ease, border-color 0.16s ease !important;
 }}
 /* El texto del botón es un espacio en blanco (la etiqueta real viaja en el tooltip):
    se colapsa a 0 para que no empuje la bandera ni asome bajo ella. */
-.st-key-lang_es button p, .st-key-lang_en button p {{ font-size:0 !important; line-height:0 !important; }}
-.st-key-lang_es button {{ right:56px !important; background-image:url("{FLAG_ES_URI}") !important; }}
-.st-key-lang_en button {{ right:22px !important; background-image:url("{FLAG_EN_URI}") !important; }}
-/* El idioma INACTIVO se apaga (medio desaturado y traslúcido) y el activo va a plena tinta
-   con un anillo en color de marca. Es el mismo criterio que el ítem activo del menú: el
-   estado se lee por contraste entre las dos, no por un adorno añadido. */
-.st-key-lang_{LANG_OTRO} button {{
-    opacity:0.42 !important; filter:grayscale(0.55) !important;
-}}
-.st-key-lang_{LANG_OTRO} button:hover {{
-    opacity:1 !important; filter:grayscale(0) !important; transform:scale(1.08);
-    border-color:{C_PRIMARY} !important;
-}}
+{_sel_lang(" button p")} {{ font-size:0 !important; line-height:0 !important; }}
+{CSS_FLAGS}
+/* ── Disparador: la bandera activa ──
+   A plena tinta y con anillo en color de marca, el mismo criterio que el ítem activo del
+   menú: el estado se lee por contraste con las apagadas, no por un adorno añadido. */
 .st-key-lang_{LANG} button {{
     opacity:1 !important; filter:none !important;
     border-color:{C_PRIMARY} !important;
     box-shadow: 0 0 0 1.5px {C_PRIMARY}66, 0 1px 3px rgba(20,30,40,0.18) !important;
-    cursor:default !important;
+    cursor:pointer !important;
 }}
-/* ── Reloj: fecha y hora, a la izquierda de las banderas ──────────────────────
-   Comparte la franja de las banderas (top:14px, alto 18px) y se alinea al mismo eje
-   vertical, así los tres elementos leen como una sola tira de cabecera y no como piezas
-   sueltas. La bandera ES ocupa de right:56 a right:82, de modo que el reloj cierra en 94:
-   doce píxeles de aire, el mismo respiro que hay entre las dos banderas.
+/* La flecha va DIBUJADA con bordes, no escrita con un carácter tipo "▾": este panel se
+   defiende en Windows, donde ya se comprobó con las banderas que no se puede contar con
+   que un glifo exista (ver la nota de i18n.FLAG_SVG). Un triángulo de bordes se ve igual
+   en cualquier fuente y gira con transform como cualquier otra caja. */
+.st-key-lang_{LANG} button::before {{
+    content:""; position:absolute; right:100%; top:50%;
+    margin-right:5px;
+    width:0; height:0;
+    border-left:3.5px solid transparent; border-right:3.5px solid transparent;
+    border-top:4px solid {t['text_secondary']};
+    transform:translateY(-50%);
+    transition: transform 0.2s ease, border-top-color 0.16s ease;
+    pointer-events:none;
+}}
+/* LOS PUENTES. Entre cada bandera y la siguiente hay {_MENU_HUECO} px de aire, y ese aire
+   es un sitio donde el cursor no está sobre ninguna: al cruzarlo, el grupo dejaría de
+   estar en :hover y el panel se cerraría en la cara de quien iba a elegir idioma. Cada
+   bandera tapa SU hueco —el de debajo— con este ::after, que le pertenece y por tanto
+   mantiene el grupo recorrido.
+   Solo hacia ABAJO, y no en las dos direcciones: así los puentes no se solapan entre sí
+   y cada punto del hueco pertenece a una sola bandera, sin ambigüedad sobre quién recibe
+   el clic. La última del panel no lleva puente porque debajo no hay nada que alcanzar.
+   El alto es exactamente el del hueco, ni un píxel más: pasarse taparía el borde superior
+   de la bandera de debajo y le robaría esa franja de clic. */
+{_sel_lang(" button::after", LANGS_PUENTE)} {{
+    content:""; position:absolute;
+    top:100%; left:-3px; right:-3px; height:{_MENU_HUECO}px;
+}}
+/* ── Panel: los idiomas inactivos ──
+   Cerrado, se ocultan con opacidad y NO con visibility ni display: los dos últimos sacan
+   el botón del orden de tabulación, y entonces el desplegable no se podría abrir con el
+   teclado. Con opacidad 0 siguen siendo enfocables, y el :focus-within del grupo los
+   revela en cuanto el tabulador llega al primero. pointer-events:none evita que ese panel
+   invisible intercepte clics dirigidos a la página. */
+{_sel_lang(" button", LANGS_OTROS)} {{
+    opacity:0 !important;
+    filter:grayscale(0.55) !important;
+    transform:translateY(-5px) !important;
+    pointer-events:none !important;
+    box-shadow:none !important;
+}}
+{_sel_abierto(" button", LANGS_OTROS)} {{
+    opacity:0.72 !important;
+    transform:translateY(0) !important;
+    pointer-events:auto !important;
+    box-shadow: 0 2px 8px rgba(20,30,40,0.22) !important;
+}}
+/* La bandera concreta bajo el cursor sube a plena tinta: dentro del panel abierto, el
+   contraste vuelve a distinguir «la que voy a pulsar» de «las demás». */
+{_sel_lang(" button:hover", LANGS_OTROS)},
+{_sel_lang(" button:focus-visible", LANGS_OTROS)} {{
+    opacity:1 !important; filter:grayscale(0) !important;
+    border-color:{C_PRIMARY} !important;
+    z-index:1002 !important;
+}}
+/* Abierto, la flecha se da la vuelta y toma el color de marca. */
+{_sel_abierto(" button::before", [LANG])} {{
+    transform:translateY(-50%) rotate(180deg);
+    border-top-color:{C_PRIMARY};
+}}
+/* ── Reloj: fecha y hora, a la izquierda del selector de idioma ───────────────
+   Comparte la franja del disparador (top:14px, alto 18px) y se alinea al mismo eje
+   vertical, así los dos elementos leen como una sola tira de cabecera y no como piezas
+   sueltas. Su borde derecho (RELOJ_RIGHT) se calcula desde el disparador y su flecha,
+   dejando doce píxeles de aire. Calculado y no escrito a mano: esta cifra ya ha cambiado
+   tres veces —94 con dos banderas, 196 con las cinco en fila, y ahora que el desplegable
+   las recoge vuelve a caber en 72—, y cada vez a mano habría dejado el reloj debajo de
+   una bandera. El PANEL desplegado no le afecta: cae por debajo de la franja del reloj,
+   no a su lado.
    El contenido lo escribe un <script> en el documento padre (ver bloque RELOJ más abajo);
    aquí solo vive su aspecto, que así hereda el tema como cualquier otra regla.
    pointer-events:none porque es información, no un control: no debe capturar el cursor
@@ -762,7 +936,7 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
    son iguales por construcción y no por dos números que haya que mantener a la vez. Ninguna de
    las dos puede redeclarar font-weight — quien lo haga se sale de la negrita común. */
 #tfm-reloj {{
-    position:fixed; top:14px; right:94px; height:18px;
+    position:fixed; top:14px; right:{RELOJ_RIGHT}px; height:18px;
     display:flex; align-items:center; gap:6px;
     z-index:1001; pointer-events:none; user-select:none;
     font-size:11.5px; font-weight:600; line-height:1; white-space:nowrap;
@@ -1704,19 +1878,23 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     .sidebar-footer {{
         position:static !important; width:100% !important; margin-top:10px; border-top:none;
     }}
-    /* Las banderas SÍ siguen fijas en móvil (no son de la sidebar, son del lienzo), pero se
-       arriman al borde y encogen un punto. El botón nativo de abrir la sidebar ocupa la
-       esquina superior IZQUIERDA, así que no hay colisión posible. */
-    .st-key-lang_es button, .st-key-lang_en button {{
-        top:10px !important; width:23px !important; height:16px !important; min-height:16px !important;
-    }}
-    .st-key-lang_es button {{ right:44px !important; }}
-    .st-key-lang_en button {{ right:14px !important; }}
+    /* El desplegable de idioma SÍ sigue fijo en móvil (no es de la sidebar, es del lienzo),
+       pero se arrima al borde y encoge un punto. El botón nativo de abrir la sidebar ocupa
+       la esquina superior IZQUIERDA, así que no hay colisión posible. Aquí solo cambian las
+       medidas: las banderas, sus estados y el puente ya están definidos arriba y se heredan.
+       Estas reglas no repiten los data-URI —_css_banderas(con_imagen=False)—, que son con
+       diferencia lo más pesado de la hoja. */
+    {CSS_FLAGS_MOVIL}
+    /* Los puentes tienen que medir exactamente el hueco de MÓVIL: si se quedaran con los
+       {_MENU_HUECO} px de escritorio taparían el primer milímetro de la bandera de debajo
+       y le robarían el clic justo en la pantalla donde el dedo es menos preciso. */
+    {_sel_lang(" button::after", LANGS_PUENTE)} {{ height:{_MENU_HUECO_M}px !important; }}
+    .st-key-lang_{LANG} button::before {{ margin-right:4px !important; }}
     /* El reloj sigue a las banderas a su nueva posición y se queda SOLO con la hora: en un
        teléfono la franja superior es estrecha y la fecha es el dato prescindible de los dos
-       —quien mira un reloj de cabecera mira la hora—. Con la bandera ES ahora en right:44 y
-       23px de ancho, el reloj cierra en 77 y conserva sus diez píxeles de aire. */
-    #tfm-reloj {{ top:10px; right:77px; height:16px; font-size:11px; }}
+       —quien mira un reloj de cabecera mira la hora—. Su borde sale de la misma cuenta que
+       en escritorio (RELOJ_RIGHT_M), con diez píxeles de aire en vez de doce. */
+    #tfm-reloj {{ top:10px; right:{RELOJ_RIGHT_M}px; height:16px; font-size:11px; }}
     #tfm-reloj .r-fecha, #tfm-reloj .r-sep {{ display:none; }}
     /* Contenido: menos padding lateral y sin el tope de ancho */
     div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
@@ -2614,7 +2792,7 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────
 # SELECTOR DE IDIOMA
 # ─────────────────────────────────────────────────────────────────────────
-# Los dos botones se pintan en el lienzo principal (no en la sidebar) y el CSS los lleva a la
+# Los botones se pintan en el lienzo principal (no en la sidebar) y el CSS los lleva a la
 # esquina superior derecha con position:fixed; ver las reglas .st-key-lang_* de la hoja de
 # estilos. Aquí solo importa el mecanismo, que es el mismo del interruptor de tema: escribir
 # el idioma en session_state y forzar un rerun.
@@ -2627,14 +2805,25 @@ with st.sidebar:
 # ONNX, scaler, scores de ROC, logos en base64— no depende del texto, así que el cambio de
 # bandera cuesta exactamente lo mismo que el de tema.
 # Sin st.columns para colocarlos uno al lado del otro: el contenedor de columnas SÍ ocuparía
-# una fila en el flujo (el height:0 solo aplica a los dos .st-key-lang_*) y empujaría el
-# titular de la página hacia abajo. Sueltos, no ocupan nada y el CSS los coloca.
-if st.button(" ", key="lang_es", help=S("lang_es_help")) and LANG != "es":
-    st.session_state.lang = "es"
-    st.rerun()
-if st.button(" ", key="lang_en", help=S("lang_en_help")) and LANG != "en":
-    st.session_state.lang = "en"
-    st.rerun()
+# una fila en el flujo (el height:0 solo aplica a los .st-key-lang_*) y empujaría el titular
+# de la página hacia abajo. Sueltos, no ocupan nada y el CSS los coloca.
+#
+# En bucle sobre i18n.LANGS y no un `if` por idioma: los cinco botones son el mismo botón
+# con otra clave, y escritos a mano el tercero se habría copiado del segundo con la
+# comparación del segundo — el fallo silencioso de un selector de idioma, que deja una
+# bandera muerta.
+#
+# El contenedor NO es decorativo y no puede quitarse: es el ancestro común de las cinco
+# banderas, y de él cuelga la condición de «desplegable abierto» (.st-key-lang_switch:hover
+# / :has(button:hover) / :focus-within). Sin un ancestro propio habría que preguntarle al
+# bloque vertical de Streamlit, que envuelve la página entera. No ocupa sitio: la hoja de
+# estilos lo disuelve con display:contents junto con los envoltorios que Streamlit mete
+# dentro.
+with st.container(key="lang_switch"):
+    for _lang in i18n.LANGS:
+        if st.button(" ", key=f"lang_{_lang}", help=S(f"lang_{_lang}_help")) and LANG != _lang:
+            st.session_state.lang = _lang
+            st.rerun()
 
 # ── El idioma DECLARADO del documento ──
 # Streamlit escribe <html lang="en"> fijo y no lo toca al cambiar de bandera: con la app
@@ -2679,7 +2868,8 @@ with st.container(key="reloj"):
         f"""<script>
 (function () {{
   var doc = window.parent.document;
-  var loc = {json.dumps("es-ES" if LANG == "es" else "en-GB")};
+  var loc = {json.dumps({"es": "es-ES", "en": "en-GB", "de": "de-DE",
+                          "fr": "fr-FR", "it": "it-IT"}[LANG])};
   if (window.parent.__tfmRelojTick) {{ window.parent.clearInterval(window.parent.__tfmRelojTick); }}
   var caja = doc.getElementById("tfm-reloj");
   if (!caja) {{
@@ -2815,37 +3005,65 @@ def ink_over(hex_color, alpha, surface):
         return "#FFFFFF", "rgba(255,255,255,0.78)"
     return P_CARBON, hex_to_rgba(P_CARBON, 0.72)
 
+# ── Separadores numéricos de cada idioma: (millar, decimal) ──
+# Cuatro de las cinco lenguas escriben la coma como separador DECIMAL, pero NO comparten
+# el de MILLAR: el francés lo pone con un espacio inseparable ("1 567"), no con un punto.
+# Por eso esto es un mapa de parejas y no el booleano que bastaba mientras solo convivían
+# el español y el inglés — con aquel, el francés habría dado "1.567", que en Francia se
+# lee como uno coma quinientos sesenta y siete y no como el número de instancias del test.
+#
+# Lo consultan las tres funciones de abajo más el `separators` de Plotly. Centralizado
+# aquí, añadir una lengua es añadir su fila; escrito como `LANG == "es"` en cada sitio,
+# habría que acertar en cinco a la vez y el que se quedara atrás daría "0.9190" en una
+# tarjeta y "0,9190" en la de al lado.
+#
+# El espacio francés es U+00A0 y no uno normal porque partir la línea entre el 1 y el 567
+# rompería la cifra en dos. Se usa el inseparable ANCHO y no el fino de U+202F —que es lo
+# que prescribe la tipografía francesa moderna— porque el fino falta en bastantes fuentes,
+# y donde falta se pinta un rectángulo vacío justo dentro del número.
+SEPARADORES = {
+    "es": (".", ","),
+    "en": (",", "."),
+    "de": (".", ","),
+    "fr": ("\u00a0", ","),   # escapado y no el carácter literal: se vería como un espacio normal
+    "it": (".", ","),
+}
+MILLAR, DECIMAL = SEPARADORES[LANG]
+
+# El signo de porcentaje va pegado a la cifra SOLO en inglés. En las otras cuatro lleva
+# espacio: lo exige la norma del SI, y además la DIN 5008 en alemán y la tipografía
+# francesa. El italiano corriente lo omite a menudo, pero esto es una memoria científica
+# y la notación manda sobre el uso coloquial.
+PCT_ESPACIO = "" if LANG == "en" else " "
+
 def nf(x, dec=4):
     """Formato numérico según el idioma activo.
 
-    Español: coma decimal y punto de millar ('1.234,5678'), consistente con la prosa
-    del TFM. Inglés: la convención inversa ('1,234.5678'), que es la que Python ya
-    produce de fábrica. Traducir el texto y dejar las cifras a la española sería un
-    error tan visible como no traducir: en una memoria científica el separador forma
-    parte de la notación, no de la maquetación.
+    Español, alemán e italiano: coma decimal y punto de millar ('1.234,5678'). Francés:
+    coma decimal y espacio de millar ('1 234,5678'). Inglés: la convención inversa
+    ('1,234.5678'), que es la que Python ya produce de fábrica. Traducir el texto y dejar
+    las cifras a la española sería un error tan visible como no traducir: en una memoria
+    científica el separador forma parte de la notación, no de la maquetación.
+
+    La sustitución es un translate y no dos replace encadenados: translate recorre la
+    cadena UNA vez y mapea cada carácter de forma independiente, así que la coma no puede
+    convertirse en punto y ese punto volver a convertirse en coma en la segunda pasada.
     """
     s = f"{x:,.{dec}f}"                       # formato US: '1,234.5678'
-    if LANG == "es":
-        s = s.translate(str.maketrans({",": ".", ".": ","}))  # intercambia separadores en una pasada
-    return s
+    return s.translate(str.maketrans({",": MILLAR, ".": DECIMAL}))
 
 def pct(x, dec=1):
-    """Porcentaje en el idioma activo: '78,2 %' en español, '78.2%' en inglés.
-
-    El espacio antes del signo no es un capricho tipográfico: en español la norma
-    (y el criterio del SI) lo exige, y en inglés la convención es pegarlo a la cifra.
-    """
-    return f"{nf(x * 100, dec)} %" if LANG == "es" else f"{nf(x * 100, dec)}%"
+    """Porcentaje en el idioma activo: '78,2 %' en cuatro lenguas, '78.2%' en inglés."""
+    return f"{nf(x * 100, dec)}{PCT_ESPACIO}%"
 
 def mil(n):
-    """Entero con separador de millar en el idioma activo: '29.400' / '29,400'.
+    """Entero con separador de millar en el idioma activo: '29.400' · '29,400' · '29 400'.
 
     Existe porque la app pinta cifras enteras (registros, filas descartadas) por media
     docena de sitios con un `.replace(",", ".")` a mano. Ese replace es correcto en
-    español y erróneo en inglés, así que la decisión se centraliza aquí.
+    español y erróneo en las otras cuatro, así que la decisión se centraliza aquí.
     """
-    s = f"{n:,}"
-    return s.replace(",", ".") if LANG == "es" else s
+    return f"{n:,}".replace(",", MILLAR)
 
 def thr_text(clave):
     """Punto de corte de un modelo, con el decimal en el idioma activo.
@@ -2880,10 +3098,11 @@ def plotly_layout(fig, height=300, **kwargs):
     fig.update_layout(
         height=height, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family=PLOTLY_FONT, color=t["text_secondary"], size=12),
-        # Separadores de los ticks y del hover, en el idioma activo: ES usa coma decimal y
-        # punto de millar; EN, la convención inversa. Estaba fijo en ",." y las gráficas
-        # seguían dando "0,95" con la app en inglés, justo donde la cifra manda.
-        separators=",." if LANG == "es" else ".,",
+        # Separadores de los ticks y del hover, en el idioma activo. Plotly los quiere en
+        # una cadena de DOS caracteres y en el orden contrario al del mapa: primero el
+        # decimal, después el de millar. Estaba fijo en ",." y las gráficas seguían dando
+        # "0,95" con la app en inglés, justo donde la cifra manda.
+        separators=DECIMAL + MILLAR,
         # barcornerradius es de layout (no de traza): redondea el extremo de dato de TODAS
         # las barras de la figura, verticales y horizontales.
         barcornerradius=4,

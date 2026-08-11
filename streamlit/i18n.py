@@ -1,4 +1,4 @@
-"""Catálogo de textos ES/EN del dashboard.
+"""Catálogo de textos ES/EN/DE/FR/IT del dashboard.
 
 Separado de app.py a propósito: el texto es lo único que cambia entre idiomas y
 tenerlo en un solo fichero permite revisar la traducción de corrido, sin leerla
@@ -11,9 +11,11 @@ Dos reglas que sostienen el resto:
    enrutado comparaba contra el rótulo español (`if page == "Gobernanza"`), así
    que traducir el menú habría roto la navegación.
 
-2. STR["en"] PUEDE ESTAR INCOMPLETO. `S()` en app.py cae al español cuando falta
-   una clave, de modo que las páginas todavía sin traducir siguen funcionando en
-   vez de reventar con KeyError. Esto es lo que permite traducir página a página.
+2. LOS CATÁLOGOS QUE NO SON EL ESPAÑOL PUEDEN ESTAR INCOMPLETOS. `S()` en app.py
+   cae al español cuando falta una clave, de modo que las páginas todavía sin
+   traducir siguen funcionando en vez de reventar con KeyError. Esto es lo que
+   permite traducir página a página, y lo que permitió añadir el alemán, el
+   francés y el italiano enteros sin tocar una sola llamada de app.py.
 
 3. EL TEXTO VA AQUÍ; LOS NÚMEROS, NO. Las cifras verificadas (conteos de registros,
    métricas, importancias) siguen viviendo en app.py, que es donde se documenta su
@@ -22,13 +24,14 @@ Dos reglas que sostienen el resto:
    excepciones son los bloques cuyo contenido es íntegramente texto o notación
    localizable (las 15 expectativas, la tarjeta del escalador): esos van completos.
 
-Estado: traducida la aplicación entera — menú, barra lateral y las siete páginas.
+Estado: traducida la aplicación entera a los cinco idiomas — menú, barra lateral y
+las siete páginas.
 """
 
 import re
 import unicodedata
 
-LANGS = ("es", "en")
+LANGS = ("es", "en", "de", "fr", "it")
 DEFAULT_LANG = "es"
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -57,15 +60,17 @@ PAGE_ICONS = [i for _, i in PAGES]
 # se desarrolla y se defiende este TFM. El SVG además escala sin pixelarse y pesa
 # menos que cualquier PNG equivalente.
 #
-# Las dos van en el MISMO lienzo 60×40 (3:2) para que ocupen idéntica caja en la
-# barra. Ninguna de las dos tiene esa proporción oficialmente (la española es 3:2,
-# la de EE. UU. 10:19), así que la segunda se redibuja recalculando sus medidas en
-# proporción — no se estira—, que es lo que hacen los sets de iconos al normalizar
-# a una rejilla común.
+# Las CINCO van en el MISMO lienzo 60×40 (3:2) para que ocupen idéntica caja en la
+# barra. Solo la española tiene esa proporción oficialmente (la de EE. UU. es
+# 10:19, la alemana 3:5, la francesa 2:3 y la italiana 2:3), así que las otras se
+# redibujan recalculando sus medidas en proporción — no se estiran—, que es lo que
+# hacen los sets de iconos al normalizar a una rejilla común.
 #
 # La bandera del idioma inglés es la de ESTADOS UNIDOS, no la del Reino Unido,
 # porque el catálogo STR["en"] está escrito en inglés americano (ver su cabecera):
-# la bandera nombra la variante que de verdad se sirve.
+# la bandera nombra la variante que de verdad se sirve. Por el mismo criterio, el
+# alemán se sirve en su variante estándar de Alemania y lleva la Bundesflagge, y el
+# francés en la de Francia (no la de Quebec ni la valona).
 
 # ── Construcción de la bandera de EE. UU. ──
 # 13 franjas, roja la primera y la última; cantón de 2/5 del ancho y 7/13 del alto.
@@ -92,6 +97,14 @@ _BARRAS = "".join(
     for i in range(0, 13, 2)
 )
 
+# ── Construcción de la bandera de Alemania ──
+# Tres franjas horizontales IGUALES, así que el alto de cada una sale de una división
+# que no es exacta (40/3 = 13,33…). Se calcula en vez de escribirse redondeado a mano:
+# con "13.33" repetido tres veces la última franja cerraría en 39,99 y dejaría una línea
+# de fondo asomando por el borde inferior. Cada franja se posiciona por su múltiplo y la
+# de abajo se estira hasta el borde del lienzo.
+_BANDA_DE = 40 / 3
+
 FLAG_SVG = {
     "es": (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">'
@@ -110,6 +123,36 @@ FLAG_SVG = {
         f"{_BARRAS}"
         f'<rect width="{_CANTON_ANCHO:.2f}" height="{_CANTON_ALTO:.2f}" fill="#3C3B6E"/>'
         f"{_ESTRELLAS}"
+        "</svg>"
+    ),
+    # Schwarz-Rot-Gold en los tonos que publica el Bundesministerium des Innern. El negro
+    # es el fondo del lienzo y no una franja aparte: dibujarlo como <rect> sería un
+    # rectángulo de más para el mismo resultado.
+    "de": (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">'
+        '<rect width="60" height="40" fill="#000000"/>'
+        f'<rect y="{_BANDA_DE:.3f}" width="60" height="{_BANDA_DE:.3f}" fill="#DD0000"/>'
+        f'<rect y="{2 * _BANDA_DE:.3f}" width="60" height="{40 - 2 * _BANDA_DE:.3f}" fill="#FFCE00"/>'
+        "</svg>"
+    ),
+    # Tricolores VERTICALES: tres franjas iguales de 20, que aquí sí sale exacto (60/3)
+    # y no hace falta la cuenta con decimales de la alemana. La banda central es el
+    # fondo blanco del lienzo; solo se pintan las dos de los lados.
+    # Colores oficiales: los de la Présidence de la République desde 2020 (el azul
+    # marino de 1976, no el más claro de la bandera europea).
+    "fr": (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">'
+        '<rect width="60" height="40" fill="#FFFFFF"/>'
+        '<rect width="20" height="40" fill="#002395"/>'
+        '<rect x="40" width="20" height="40" fill="#ED2939"/>'
+        "</svg>"
+    ),
+    # Verde e rosso del Reglamento italiano (verde prato / rosso pomodoro).
+    "it": (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">'
+        '<rect width="60" height="40" fill="#FFFFFF"/>'
+        '<rect width="20" height="40" fill="#009246"/>'
+        '<rect x="40" width="20" height="40" fill="#CE2B37"/>'
         "</svg>"
     ),
 }
@@ -140,6 +183,9 @@ STR = {
         "theme_to_light": "Cambiar a tema claro",
         "lang_es_help": "Ver la aplicación en español",
         "lang_en_help": "Ver la aplicación en inglés",
+        "lang_de_help": "Ver la aplicación en alemán",
+        "lang_fr_help": "Ver la aplicación en francés",
+        "lang_it_help": "Ver la aplicación en italiano",
         "footer_name": "Juan Albornoz C. · TFM 2026",
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
@@ -887,6 +933,9 @@ STR = {
         "theme_to_light": "Switch to light theme",
         "lang_es_help": "View the application in Spanish",
         "lang_en_help": "View the application in English",
+        "lang_de_help": "View the application in German",
+        "lang_fr_help": "View the application in French",
+        "lang_it_help": "View the application in Italian",
         "footer_name": "Juan Albornoz C. · MSc Thesis 2026",
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
@@ -1558,6 +1607,2260 @@ STR = {
                          '<div style="margin-top:10px;">Neither should be read as a modifiable risk '
                          "factor.</div>"),
     },
+
+    # ═══════════════════════════════ ALEMÁN ════════════════════════════════
+    # Alemán estándar de Alemania, registro académico. Rige lo mismo que en inglés para
+    # lo que NO se traduce: nombres propios, librerías, códigos de variable NHANES y
+    # nombres de fichero del repositorio (scaler_correcto.json,
+    # INSTRUCCIONES_exportar_golden_set.md) — son rutas reales y traducirlas daría una
+    # instrucción que no se puede seguir.
+    #
+    # NOTACIÓN NUMÉRICA: la alemana coincide con la española — coma decimal, punto de
+    # millar y espacio antes del signo de porcentaje (DIN 5008). Por eso nf(), pct(),
+    # mil() y el `separators` de Plotly agrupan "de" con "es" en vez de con "en", y por
+    # eso las cifras escritas dentro de estas frases van con coma, igual que arriba.
+    #
+    # COMILLAS: las alemanas („…“), bajas de apertura y altas de cierre, que es lo que
+    # espera el lector y lo que ya hacen las otras dos con las suyas.
+    #
+    # RAYAS: en alemán las dos funciones que el inglés distingue llevan el mismo signo,
+    # con espacios a ambos lados — puntuando la oración («…zwei Torte — und genau das…»)
+    # y separando un rótulo de su glosa («Silver — Bereinigung»). Aquí no hay, por tanto,
+    # la doble convención de la cabecera inglesa.
+    #
+    # COMPUESTOS: unidos según el Duden, y con guion cuando un miembro es sigla o nombre
+    # propio ("SHAP-Analyse", "Bloch-Kugel", "ZZFeatureMap"). Es lo que evita cadenas
+    # ilegibles justo en los rótulos cortos, que es donde más se nota.
+    "de": {
+        # ── Navigation und Seitenleiste ──
+        "nav": ["Übersicht", "Governance", "Ergebnisse", "SHAP-Analyse",
+                "Quantenschaltkreis", "Bloch-Kugel", "Live-Prädiktor"],
+        "sidebar_expand": "Seitenleiste ausklappen",
+        "sidebar_collapse": "Seitenleiste einklappen",
+        "search_label": "Suchen",
+        "search_ph": "Im Dashboard oder im Web suchen…",
+        "search_expand": "Suchen — klappt die Seitenleiste aus",
+        "search_in": "in {p}",
+        "search_none": "Keine Treffer im Dashboard.",
+        "search_web": "„{q}“ suchen in:",
+        "theme_to_dark": "Zum dunklen Design wechseln",
+        "theme_to_light": "Zum hellen Design wechseln",
+        "lang_es_help": "Die Anwendung auf Spanisch ansehen",
+        "lang_en_help": "Die Anwendung auf Englisch ansehen",
+        "lang_de_help": "Die Anwendung auf Deutsch ansehen",
+        "lang_fr_help": "Die Anwendung auf Französisch ansehen",
+        "lang_it_help": "Die Anwendung auf Italienisch ansehen",
+        "footer_name": "Juan Albornoz C. · Masterarbeit 2026",
+        "footer_uni": "Universidad Europea de Valencia",
+        "footer_name_narrow": "JAC",
+        "footer_uni_narrow": "UEV",
+
+        # ── Seite 1 · Übersicht ──
+        "ov_eyebrow": "DataOps- und QML-Framework",
+        "ov_title": "Übersicht",
+        "ov_subtitle": ("End-to-End-Pipeline auf Databricks CE + AWS S3, mit einer Quanten-QSVM gegen "
+                        "zwei klassische Baselines, validiert an echten klinischen Daten der "
+                        "NHANES-Studie (CDC)."),
+        "ov_lead": (
+            "Dieses Framework entwirft und implementiert eine <b>End-to-End-DataOps</b>-Pipeline auf "
+            "<b>Databricks Community Edition</b>, mit <b>AWS S3</b> als echter Cloud-Speicherschicht "
+            "und einer <b>Medaillon</b>-Architektur (Bronze → Silver → Gold) über Delta Lake als "
+            "Rückgrat. Als Anwendungsfall wird Typ-2-Diabetes anhand von Datensätzen der "
+            "<b>NHANES</b>-Studie (CDC) vorhergesagt — der Datensatz ist nicht der Gegenstand der "
+            "Untersuchung, sondern das Vehikel, um zu zeigen, dass die Architektur an echten Daten "
+            "im großen Maßstab tragfähig, reproduzierbar und prüfbar ist. Der experimentelle Kern "
+            "ist ein <b>triangulierter Vergleich</b> zwischen LightGBM (tabellarische Baseline), "
+            "einer SVM mit RBF-Kernel (strukturelle Brücke) und einer <b>QSVM</b> mit "
+            "FidelityQuantumKernel in Qiskit, wobei der zugrunde liegende Klassifikator identisch "
+            "bleibt, damit jeder Leistungsunterschied dem Effekt des Quantenkernels zugeschrieben "
+            "werden kann."),
+        "ov_stats_title": "Statistik des NHANES-Datensatzes",
+        "ov_stats_sub": "Drei Zweijahreszyklen integriert · Schichtenpipeline Bronze → Silver → Gold",
+        "ov_stat_bronze": "Bronze-Datensätze",
+        "ov_stat_silver": "Silver-Datensätze",
+        "ov_stat_features": "Gold-Features",
+        "ov_stat_balance": "Klassenbalance",
+        "ov_medallion_title": "Medaillon-Architektur",
+        "ov_medallion_sub": "Wertschöpfungskette der Daten (Curry, 2016), Schicht für Schicht angewandt",
+        "ov_layers": [
+            ("Bronze", "Ingestion aus AWS S3 ohne Transformation. Bewahrt die Ursprungsquelle."),
+            ("Silver", "Bereinigung, Imputation, Winsorisierung und Qualitätsprüfung."),
+            ("Gold",   "Skalierung, Kodierung und stratifizierte Aufteilung. Bereit zur Modellierung."),
+        ],
+        "ov_goto_gov": "Qualitäts- und Lineage-Kontrollen ansehen  →",
+        "ov_target_title": "Verteilung der Zielvariablen (DIQ010)",
+        "ov_target_sub": "Binarisiertes Ziel: 1 = diagnostizierter Diabetes, 0 = alle übrigen",
+        "ov_pie_no": "Kein Diabetes",
+        "ov_pie_yes": "Diabetes",
+        "ov_donut_center": "14 %",
+        "ov_donut_caption": "DIABETES",
+        "ov_tech_title": "Gebaut auf",
+        "ov_tech_sub": ("Plattform, Speicher und Bibliotheken der Pipeline in der Reihenfolge ihres "
+                        "Einsatzes · das vollständige Inventar mit der Begründung jeder Wahl steht "
+                        "unter Governance"),
+        "ov_compare_title": "Triangulierter Vergleich: Ziel des Experiments",
+        "ov_compare": [
+            ("LightGBM", "Tabellarische Referenz-Baseline"),
+            ("SVM-RBF",  "Strukturelle Brücke zur Quantenkomponente"),
+            ("QSVM",     "FidelityQuantumKernel: derselbe Klassifikator, Quantenkernel"),
+        ],
+
+        # ── NHANES-Variablen (gemeinsam: SHAP, Schaltkreis, Bloch, Prädiktor) ──
+        # Die NHANES-Codes werden nie übersetzt, nur ihre Erläuterung.
+        "var_short": {
+            "LBXGH": "HbA1c", "RIDAGEYR": "Alter", "LBXGLU": "Nüchternglukose",
+            "LBDLDL": "LDL-Cholesterin", "BMXWAIST": "Taillenumfang",
+            "WTINT2YR": "Stichprobengewicht*", "BMXARML": "Armlänge", "BMXLEG": "Beinlänge",
+            "BMXBMI": "BMI", "PAD680": "Sitzende Aktivität", "PAD645": "Moderate Aktivität",
+            "PAQ640": "Muskelkräftigung", "BMXWT": "Körpergewicht", "LBXIN": "Insulin",
+            "INDHHIN2": "Haushaltseinkommen", "DMDYRSUS": "Jahre in den USA",
+            "BMXARMC": "Armumfang", "PAQ670": "Intensive Aktivität",
+            "BPXSY1": "Systolischer Druck", "PAD630": "Moderate Freizeitakt.",
+            "DMDHHSZE": "Haushaltsgröße (Kinder)", "BPXDI1": "Diastolischer Druck",
+            "LBXTR": "Triglyzeride", "DMDMARTL_1": "Familienstand (verheiratet)",
+            "DMDMARTL_5": "Familienstand (nie verheiratet)", "BPXPLS": "Puls",
+            "DMDEDUC2_3": "Bildung (Stufe 3)", "SDMVSTRA": "Stichprobenschicht",
+            "DMDMARTL_2": "Familienstand (verwitwet)", "DMDHHSZB": "Haushaltsgröße (Erwachsene)",
+        },
+        "var_desc": {
+            "LBXGH":      "Glykiertes Hämoglobin (HbA1c): durchschnittlicher Blutzucker der letzten 2-3 Monate. Primärer diagnostischer Marker für Diabetes (ADA: ≥ 6,5 %).",
+            "RIDAGEYR":   "Alter der teilnehmenden Person zum Zeitpunkt der Untersuchung (Jahre).",
+            "LBXGLU":     "Nüchtern-Plasmaglukose: biochemischer Marker der Blutzuckereinstellung (mg/dL).",
+            "LBDLDL":     "Berechnetes LDL-Cholesterin: die mit kardiovaskulärem Risiko verbundene Cholesterinfraktion (mg/dL).",
+            "BMXWAIST":   "Taillenumfang: abdominelle Adipositas, assoziiert mit Insulinresistenz (cm).",
+            "WTINT2YR":   "Stichprobengewicht des NHANES-Interviews. Ein Artefakt des Erhebungsdesigns, keine klinische Variable.",
+            "BMXARML":    "Oberarmlänge (Akromion → Olekranon): anthropometrisches Maß (cm).",
+            "BMXLEG":     "Maximale Beinlänge (Knie → Boden): anthropometrisches Maß (cm).",
+            "BMXBMI":     "Body-Mass-Index (Gewicht/Größe²): globale Körperfettmasse (kg/m²).",
+            "PAD680":     "Minuten sitzender Tätigkeit pro Tag (Zeit im Sitzen oder Liegen).",
+            "PAD645":     "Wöchentliche Minuten moderater körperlicher Aktivität (Arbeit + Freizeit).",
+            "PAQ640":     "Tage pro Woche mit muskelkräftigenden Aktivitäten.",
+            "BMXWT":      "Gesamtes Körpergewicht (kg).",
+            "LBXIN":      "Nüchtern-Seruminsulin: Marker für Insulinresistenz (µU/mL).",
+            "INDHHIN2":   "Einkommensniveau des Haushalts (kategoriale sozioökonomische Variable).",
+            "DMDYRSUS":   "Anzahl der Jahre des Aufenthalts in den Vereinigten Staaten.",
+            "BMXARMC":    "Mittlerer Oberarmumfang: anthropometrisches Maß (cm).",
+            "PAQ670":     "Wöchentliche Minuten intensiver Freizeitaktivität.",
+            "BPXSY1":     "Systolischer Blutdruck, erste Messung (mmHg).",
+            "PAD630":     "Wöchentliche Minuten moderater körperlicher Freizeitaktivität.",
+            "DMDHHSZE":   "Haushaltszusammensetzung: Anzahl der Kinder im Haushalt.",
+            "BPXDI1":     "Diastolischer Blutdruck, erste Messung (mmHg).",
+            "LBXTR":      "Serum-Triglyzeride: Marker des Lipidprofils (mg/dL).",
+            "DMDMARTL_1": "Familienstand = verheiratet (Dummy-Variable nach One-Hot-Kodierung).",
+            "DMDMARTL_5": "Familienstand = nie verheiratet (Dummy-Variable nach One-Hot-Kodierung).",
+            "BPXPLS":     "Puls: Ruheherzfrequenz (Schläge/min).",
+            "DMDEDUC2_3": "Mittleres Bildungsniveau (High School/GED): Dummy-Variable nach One-Hot-Kodierung.",
+            "SDMVSTRA":   "Varianzschicht des NHANES-Erhebungsdesigns (methodische Variable, nicht klinisch).",
+            "DMDMARTL_2": "Familienstand = verwitwet (Dummy-Variable nach One-Hot-Kodierung).",
+            "DMDHHSZB":   "Haushaltszusammensetzung: Anzahl der Erwachsenen im Haushalt.",
+        },
+        "qsvm_labels": {
+            "LBXGH": "HbA1c", "LBXGLU": "Nüchternglukose", "RIDAGEYR": "Alter",
+            "LBDLDL": "LDL-Cholesterin", "BMXWAIST": "Taillenumfang", "LBXIN": "Insulin",
+            "BMXLEG": "Beinlänge", "BMXBMI": "BMI",
+        },
+        "qsvm_units": {"años": "Jahre"},
+
+        # ── Seite 2 · Governance ──
+        "gov_eyebrow": "Governance · DataOps",
+        "gov_title": "Datengovernance und Datenqualität",
+        "gov_subtitle": ("Die Kontrollen, die die Pipeline tragen: was validiert wird, was verworfen wird "
+                         "und warum, was protokolliert wird und mit welchen Frameworks. Alle Zahlen stammen "
+                         "aus den ausgeführten Ausgaben der Notebooks."),
+        "gov_tabs": ["Datenqualität", "Lineage und Nachvollziehbarkeit", "Framework-Inventar"],
+        "gov_kpi_expect": "Bestandene Erwartungen",
+        "gov_kpi_passrate": "Pass-Rate der Suite",
+        "gov_kpi_records": "Validierte Datensätze",
+        "gov_kpi_leakage": "Leakage-freie Artefakte",
+        "gov_funnel_title": "Datensatz-Trichter",
+        "gov_funnel_sub": ("Von den {bronze} Bronze-Datensätzen überstehen {silver} die Kohortenfilter von "
+                           "Silver. Jede Stufe folgt einem ausdrücklichen Kriterium, nicht einer generischen "
+                           "Bereinigung."),
+        "gov_hover_records": "Datensätze",
+        "gov_hover_dropped": "Verworfen",
+        "gov_embudo": [
+            ("Bronze — 3 Zyklen zusammengeführt",
+             "27 XPT-Dateien · Join über SEQN · 162 in allen drei Zyklen gemeinsame Spalten"),
+            ("Altersfilter ≥ 18 Jahre", "Beschränkung auf die erwachsene Bevölkerung"),
+            ("Nüchternfilter — LBXGLU nicht null",
+             "Proxy für die nüchterne Teilgruppe: PHAFSTMN ist zyklusübergreifend nicht konsistent"),
+            ("Filter auf gültiges DIQ010",
+             "Verwirft die Codes 7 „weiß nicht“ und 9 „Antwort verweigert“ sowie die Nullwerte"),
+        ],
+        "gov_dropped_title": "Pro Filter verworfene Datensätze",
+        "gov_split_label": "Gold-Aufteilung 80/20",
+        "gov_suite_title": "Validierungssuite — dataframe-expectations",
+        "gov_suite_sub": ("Suite <code>{nombre}</code>, ausgeführt am {fecha} über die {registros} "
+                          "Silver-Datensätze in {duracion} Sekunden. Great Expectations ist mit den "
+                          "festgeschriebenen Versionen der Serverless-Runtime unvereinbar: dies ist die "
+                          "gewählte Alternative."),
+        "gov_expectativas": [
+            ("Vollständigkeit", "TARGET", "höchstens 0 Nullwerte"),
+            ("Vollständigkeit", "LBXGH", "höchstens 0 Nullwerte"),
+            ("Vollständigkeit", "LBXGLU", "höchstens 0 Nullwerte"),
+            ("Vollständigkeit", "RIDAGEYR", "höchstens 0 Nullwerte"),
+            ("Vollständigkeit", "BMXBMI", "höchstens 0 Nullwerte"),
+            ("Klinische Bereiche", "RIDAGEYR", "Minimum zwischen 18 und 25"),
+            ("Klinische Bereiche", "RIDAGEYR", "Maximum zwischen 70 und 120"),
+            ("Klinische Bereiche", "LBXGH", "Minimum zwischen 3,0 und 6,0"),
+            ("Klinische Bereiche", "LBXGH", "Maximum zwischen 8,0 und 20,0"),
+            ("Klinische Bereiche", "LBXGLU", "Minimum zwischen 30 und 80"),
+            ("Klinische Bereiche", "LBXGLU", "Maximum zwischen 150 und 500"),
+            ("Klinische Bereiche", "BMXBMI", "Minimum zwischen 10,0 und 18"),
+            ("Klinische Bereiche", "BMXBMI", "Maximum zwischen 40,0 und 80"),
+            ("Volumen", "DataFrame", "mindestens 7.000 Zeilen"),
+            ("Volumen", "DataFrame", "höchstens 9.000 Zeilen"),
+        ],
+        "gov_ops_title": "Qualitätsoperationen je Schicht",
+        "gov_silver_card": "Silver — Bereinigung und Aufbereitung",
+        "gov_gold_card": "Gold — Vorbereitung für die Modellierung",
+        "gov_silver_ops": [
+            ("Wegen Leakage ausgeschlossene DIQ-Variablen", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
+            ("Entfernte dünn besetzte Spalten", "Schwelle von >80 % fehlenden Werten"),
+            ("Winsorisierte Variablen", "Ausreißerkappung bei IQR × 3"),
+            ("Fehlende Werte nach Imputation", "Von 75.855 auf 0 im SVM/QSVM-Datensatz (Median + Modus)"),
+        ],
+        "gov_gold_ops": [
+            ("Features nach der Kodierung", "One-Hot von 5 kategorialen Variablen über 84 Features (106 Spalten mit TARGET)"),
+            ("Wegen Korrelation verworfen", "Schwelle r > 0,90 zwischen Prädiktorenpaaren"),
+            ("Endgültige Features", "Der Satz, mit dem alle drei Modelle trainiert werden"),
+            ("Stratifizierte Aufteilung", "80/20 · 14,03 % Positive im Training, 14,04 % im Test"),
+        ],
+        "gov_eff_title": "Effektive gegenüber nominalen Features",
+        "gov_eff_sub": ("Gezählt anhand von <code>scaler_correcto.json</code>: {const} der {total} Spalten "
+                        "haben Varianz null und tragen keine Information für das Modell bei"),
+        "gov_eff_nominal": "Nominale Features",
+        "gov_eff_const": "Konstant (Varianz = 0)",
+        "gov_eff_effective": "Effektive Features",
+        "gov_eff_note": ("Das ist eine Nebenwirkung der IQR-×-3-Winsorisierung in Silver, die auch auf "
+                         "numerisch kodierte kategoriale Variablen angewandt wurde (Antworten 1/2, "
+                         "Interviewsprache, Codes 7 und 9). Wenn mehr als 75 % der Stichprobe dasselbe "
+                         "antworten, lässt die Kappung die Spalte auf einen einzigen Wert zusammenfallen. "
+                         "Die in Notebook 02 am stärksten gekappten — PAQ635, PAQ650, PAQ605, DMDHHSZA, "
+                         "DMDCITZN, SIALANG — sind genau jene, die hier als konstant erscheinen."),
+        "gov_lin_title": "Nachvollziehbarkeit ohne MLflow",
+        "gov_lin_sub": "Die Einschränkung, die die Architektur der Pipeline am stärksten prägt, und ihre Abhilfe.",
+        "gov_lin_limit_title": "Einschränkung",
+        "gov_lin_limit_body": ("Die native <b>MLflow</b>-Integration ist im kostenlosen Databricks Serverless "
+                               "deaktiviert. Jeder Aufruf von <code>mlflow.start_run()</code> oder "
+                               "<code>mlflow.log_metric()</code> erzeugt Authentifizierungsfehler: es gibt "
+                               "keine Protokollierung von Experimenten, Metriken oder Artefakten."),
+        "gov_lin_mit_title": "Abhilfe — ein zweifacher Mechanismus",
+        "gov_lin_mit_body": ("<b>Transaktionsprotokolle von Delta Lake</b> — jeder Schreibvorgang erzeugt "
+                             "einen ACID-Eintrag mit Version, Zeitstempel und Operationsmetriken.<br><br>"
+                             "<b>Metriken-CSV je Modell</b> — jedes Notebook schreibt seine Ergebnisse "
+                             "dauerhaft in Unity Catalog Volumes, und die Abbildungen lesen sie von dort, "
+                             "statt sie fest einkodiert mitzuführen."),
+        "gov_delta_title": "Delta-Historie — Gold-Schicht",
+        "gov_delta_sub": ("Die sechs jüngsten der zehn protokollierten Versionen. Delta löscht die älteren "
+                          "nach 168 h Aufbewahrung: erwartetes Verhalten, kein Fehler der Pipeline."),
+        "gov_delta_cols": ["Version", "Zeitstempel", "Operation", "Zeilen", "Größe"],
+        "gov_chain_title": "Lückenlose Kette gegen Informationsleckagen",
+        "gov_chain_sub": ("Vier verkettete Barrieren. Die dritte verwirft keine einzige Spalte — und genau "
+                          "das will man sehen: der Beleg, dass die vorherigen ihre Arbeit getan haben."),
+        "gov_leakage": [
+            ("Ausschluss in Silver",
+             "Vor der Winsorisierung werden 6 DIQ-Variablen zu Behandlung und Nachsorge entfernt: sie "
+             "sind eine Folge der Diagnose, keine Prädiktoren für sie."),
+            ("Kreuzprüfung",
+             "Es wird geprüft, dass keine DIQ-Variable in den 2 Parquet-Dateien von Silver oder den 13 "
+             "von Gold überlebt. Ergebnis: 15/15 saubere Artefakte."),
+            ("Defensiver Filter der QSVM",
+             "Zweite Barriere vor der Auswahl per Random Forest. Sie verwirft keine Spalte (89 von 89 "
+             "passieren) — eben der Beleg, dass die erste Barriere funktioniert hat."),
+            ("Wächter für Stichprobengewichte",
+             "Stoppt die Pipeline, sobald ein anderes als das bekannte Stichprobengewicht auftaucht. "
+             "WTINT2YR erreicht die Modellierung tatsächlich und ist in Entscheidung 10 dokumentiert."),
+        ],
+        "gov_scaler_card": "Skalierung ohne statistisches Leck",
+        "gov_scaler": [
+            ("Anpassung", "Nur auf dem Training", "fit_transform im Training · transform im Test"),
+            ("Ausgewertete Spalten", "66", "Mit Varianz > 0"),
+            ("Konstante Spalten", "23", "Varianz 0 — siehe Entscheidung 08"),
+            ("Mittelwert ≈ 0 · Std. ≈ 1", "Verifiziert", "Assert über alle Spalten mit Streuung"),
+        ],
+        "gov_scaler_note": ("Der <b>StandardScaler</b> wird ausschließlich auf dem <b>Training</b> angepasst: "
+                            "<code>fit_transform</code> im Training und <code>transform</code> im Test. Würde "
+                            "er auf dem vollständigen Datensatz angepasst, sickerten Mittelwert und "
+                            "Standardabweichung des Tests in die Vorverarbeitung, und die Metriken fielen zu "
+                            "optimistisch aus. Die Auswahl der 8 QSVM-Variablen folgt derselben Regel — der "
+                            "Random Forest wird nur mit <code>X_train_svm_scaled</code> trainiert.<br><br>"
+                            "Der Korrelationsfilter hingegen wird <b>sehr wohl</b> vor der Aufteilung "
+                            "berechnet. Das ist in Entscheidung 09 dokumentiert und bewusst hingenommen."),
+        "gov_e2e_title": "End-to-End-Prüfung gegen die trainierten Modelle",
+        "gov_e2e_missing": ('<b style="color:{color};">Nicht verifiziert.</b> Der Testdatensatz liegt nicht im '
+                            "Repository, deshalb kann das Dashboard nicht von sich aus prüfen, ob sein "
+                            "Inferenzpfad das reproduziert, was die trainierten Modelle geliefert haben. Um "
+                            "das zu schließen, führe die beiden Zellen aus "
+                            "<code>notebooks/INSTRUCCIONES_exportar_golden_set.md</code> aus und kopiere "
+                            "<code>golden_lgbm.npz</code> und <code>golden_svm.npz</code> nach "
+                            "<code>streamlit/models/</code>. Solange sie fehlen, behauptet diese Seite nichts, "
+                            "was sie nicht hat prüfen können."),
+        "gov_e2e_unavailable": "nicht verfügbar",
+        "gov_e2e_ok_val": "{n} Zeilen · max. Abw. {dif}",
+        "gov_e2e_bad_val": "ABWEICHUNG · max. Abw. {dif}",
+        "gov_e2e_scaled": "skaliert und ruft das ONNX-Modell auf",
+        "gov_e2e_raw": "ruft das ONNX-Modell ohne Skalierung auf",
+        "gov_e2e_path": "Das Dashboard {accion}",
+        "gov_e2e_ok_title": "✓ Inferenzpfad verifiziert",
+        "gov_e2e_fail_title": "⚠ Der Inferenzpfad reproduziert die Modelle nicht",
+        "gov_e2e_note": ("Jede Zeile des <i>Golden Set</i> ist eine echte Testinstanz zusammen mit der "
+                         "Wahrscheinlichkeit, die das in seinem Notebook trainierte Modell zurückgegeben hat. "
+                         "Das Dashboard schickt sie durch den eigenen Pfad — Rohvektor, Skalierung nur für die "
+                         "SVM, Umwandlung nach <code>float32</code>, ONNX-Sitzung und Auslesen des "
+                         "Ausgabetensors — und vergleicht. Toleranz {tol}; das durch die Arbeit in "
+                         "<code>float32</code> erwartete Rauschen liegt in der Größenordnung 10⁻⁷."),
+        "gov_stack_title": "Frameworks je Schicht",
+        "gov_stack_sub": ("Das erste Abzeichen jeder Karte ist das Framework, das die Schicht trägt; die "
+                          "übrigen begleiten es."),
+        "gov_stack": [
+            ("Ingestion",
+             "boto3 ersetzt spark.conf, das unter Serverless blockiert ist (Entscheidung 01). Drei "
+             "Integritäts-Asserts: 27/27 Dateien, der Join über SEQN dupliziert keine Zeilen, und "
+             "Delta stimmt mit pandas überein."),
+            ("Qualität",
+             "Das Qualitätsframework dieser Masterarbeit. Great Expectations ist mit der Umgebung "
+             "unvereinbar (Entscheidung 03). Eine Suite aus 15 Erwartungen in 3 Dimensionen, mit "
+             "in CSV gesicherter Evidenz."),
+            ("Vorbereitung",
+             "Skalierung nur auf dem Training angepasst, stratifizierte Aufteilung mit festem "
+             "Startwert und Export des Serving-Vertrags (Scaler und Mediane in JSON)."),
+            ("Modell",
+             "Exakte Interpretierbarkeit über den polynomiellen Algorithmus auf den 1.567 "
+             "Testinstanzen, und Nachweis, dass das ONNX-Modell das PKL zu 100 % reproduziert."),
+            ("Modell",
+             "Modellagnostisches SHAP, um den Preis von Stunden: einmal über 200 Instanzen "
+             "berechnet und zur Wiederverwendung auf der Platte gesichert."),
+            ("Modell",
+             "Keine ONNX-Unterstützung: das Format lässt keine Quantenoperationen zu "
+             "(Entscheidung 05). Die Nachvollziehbarkeit trägt ein Metriken-CSV mit den 14 "
+             "Konfigurationsfeldern."),
+        ],
+        "gov_dec_title": "Entscheidungsprotokoll",
+        "gov_dec_sub": ("Die elf in TECHNICAL_NOTES dokumentierten Einschränkungen samt Abhilfe. Drei prägen "
+                        "die Architektur, sechs werden hingenommen und dokumentiert, ohne sie zu korrigieren "
+                        "— weil das die bereits erzielten Ergebnisse entwerten würde — und zwei sind "
+                        "rückstandslos gelöst."),
+        "gov_dec_tags": {"critical": "Architektur", "warning": "Hingenommen", "good": "Gelöst"},
+        "gov_dec_problem": "Problem · ",
+        "gov_dec_solution": "Gewählte Lösung · ",
+        "gov_decisiones": [
+            ("spark.conf unter Serverless blockiert",
+             "Die Konfiguration der AWS-Zugangsdaten über spark.conf.set liefert CONFIG_NOT_AVAILABLE "
+             "— der Standardweg, um Spark mit S3 zu verbinden.",
+             "boto3 als alternativer Client. S3 bleibt der Ursprungsspeicher und Unity Catalog Volumes "
+             "die Verarbeitungsschicht."),
+            ("MLflow unter Serverless blockiert",
+             "Die native MLflow-Integration ist in der kostenlosen Stufe deaktiviert: es gibt keine "
+             "Protokollierung von Experimenten, Metriken oder Artefakten.",
+             "Ein zweifacher Ersatz: die Transaktionsprotokolle von Delta Lake liefern Version, "
+             "Zeitstempel und Operationsmetriken; und jedes Notebook sichert seine Metriken als CSV."),
+            ("Great Expectations unvereinbar",
+             "Es verlangt eine pandas/numpy-Kombination, die mit den festgeschriebenen Versionen der "
+             "Serverless-Runtime kollidiert (pandas 1.5.3 / numpy 1.23.5).",
+             "dataframe-expectations 0.7.0 als kompatible Alternative. 15 Erwartungen an Silver in drei "
+             "Dimensionen. Ergebnis 15/15, Pass-Rate 1,0."),
+            ("QSVM — Rechenaufwand O(n²)",
+             "Über die 6.264 Trainingsinstanzen verlangte die Kernelmatrix rund 39 Millionen "
+             "Auswertungen des Schaltkreises. Bei 1.500 erschöpft der Kernel den Speicher.",
+             "Training auf einer stratifizierten Stichprobe von 500 Instanzen (~22 min) unter Wahrung "
+             "des Verhältnisses 86/14. Die Auswertung nutzt sehr wohl den vollständigen Testsatz, damit "
+             "die Metriken vergleichbar bleiben."),
+            ("QSVM — keine native ONNX-Unterstützung",
+             "Das ONNX-Format lässt keine Quantenoperationen zu: weder skl2onnx noch onnxmltools können "
+             "einen auf Zustandssimulation beruhenden Kernel serialisieren.",
+             "Serialisierung mit joblib. Das Modell benötigt für die Inferenz die Qiskit-Umgebung, "
+             "weshalb die QSVM nicht Teil des Live-Prädiktors ist."),
+            ("Qiskit-Versionen nicht festschreibbar",
+             "Die immutable_package_constraints.txt von Databricks blockiert die Installation "
+             "bestimmter Versionen, es gibt also keine exakte Versionsreproduzierbarkeit.",
+             "Die Pipeline läuft mit den Versionen der Umgebung (2.5.0 / 0.9.0 / 0.4.0), deren API "
+             "kompatibel ist; sie werden durch eine ausdrückliche Prüfung zu Beginn des Laufs "
+             "protokolliert."),
+            ("Variablenverlust durch die Sitzungsdauer",
+             "Lange Operationen (22 min Training, 132 min Vorhersage) können die Serverless-Sitzung "
+             "erschöpfen und die Variablen im Arbeitsspeicher mitnehmen.",
+             "Sofortige Sicherung nach jeder teuren Operation und ein TRAINING_MODE, der bei späteren "
+             "Läufen von der Platte nachlädt."),
+            ("Winsorisierung auf kodierte kategoriale Variablen angewandt",
+             "NHANES kodiert viele kategoriale Variablen numerisch. Teilen sich mehr als 75 % einen "
+             "Wert, ist IQR = 0, die Grenzen fallen zusammen und clip() macht die Variable zur "
+             "Konstanten. 10 Spalten sind so kollabiert.",
+             "Dokumentiert, ohne es zu ändern: eine Korrektur würde Silver, Gold und alle drei Modelle "
+             "verändern. Konstante Spalten verzerren nichts — das Modell zieht kein Signal aus ihnen —, "
+             "aber Information geht verloren. Die Korrektur ist als künftige Arbeit vermerkt."),
+            ("Korrelation vor der Aufteilung berechnet",
+             "Der Filter r > 0,90 wird auf dem vollständigen Datensatz berechnet, die 16 verworfenen "
+             "Spalten werden also auch anhand der Testbeobachtungen bestimmt.",
+             "Dokumentiert, ohne es zu ändern. Es betrifft weder die Skalierung noch die Feature-Auswahl "
+             "der QSVM — beide nur auf dem Training angepasst —, aber die Auswahl ist nicht mehr streng "
+             "blind gegenüber dem Test."),
+            ("Stichprobengewicht WTINT2YR unter den Features",
+             "Der Join innerhalb des Zyklus dupliziert WTSAF2YR über drei Spalten. WTINT2YR steht nicht "
+             "auf der Ausschlussliste und übersteht den Korrelationsfilter: es ist eines der 89 Features.",
+             "Dokumentiert, ohne es zu ändern, plus ein Assert, der das Auftauchen JEDES anderen Gewichts "
+             "erkennt. Ein Stichprobengewicht ist keine klinische Variable: es verrät das Ziel nicht, "
+             "lässt das Modell aber auf dem Erhebungsdesign aufsetzen."),
+            ("Die serialisierte QSVM ist versionsübergreifend nicht ladbar",
+             "Der Pickle schleppt die ZZFeatureMap mitsamt ihren ParameterExpression mit. Wechselt "
+             "Qiskit die Version, scheitert die Deserialisierung — und Serverless aktualisiert ohne "
+             "Vorwarnung.",
+             "Das Laden ist in try/except gefasst: schlägt es fehl, springt TRAINING_MODE auf True und "
+             "das Notebook trainiert neu, statt abzubrechen. Es bleibt in allen drei Szenarien "
+             "einsatzfähig."),
+        ],
+        "gov_footer_note": ("Die Zahlen dieser Seite stammen aus den ausgeführten Ausgaben der Notebooks des "
+                            "Repositoriums und aus <code>TECHNICAL_NOTES.md</code>; keine ist geschätzt. Die "
+                            "Anwendung kann sie nicht live abfragen, weil Streamlit Community Cloud nur auf "
+                            "das Repositorium zugreift, nicht auf Unity Catalog Volumes.<br><br>"
+                            "Zusammenfassung der Qualitätssuite: <b>{fuente}</b>."),
+        "gov_suite_src_csv": "gelesen aus validacion_silver_dfe.csv",
+        "gov_suite_src_nb": "aus dem Notebook verifizierte Werte",
+
+        # ── Seite 3 · Ergebnisse ──
+        "res_eyebrow": "Triangulierter Vergleich",
+        "res_title": "Ergebnisse",
+        "res_subtitle": "LightGBM vs. SVM-RBF vs. QSVM auf demselben Testsatz ({n} Instanzen).",
+        "res_threshold": "Schwelle",
+        "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
+        "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
+                        "svm_rbf": "SVC.predict() — Vorzeichen von decision_function",
+                        "qsvm": "decision_function > 0 (keine Wahrscheinlichkeit)"},
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Abgeglichen</span> — die vier '
+                           "Metriken aller drei Modelle wurden aus den Scores je Instanz neu berechnet und "
+                           "stimmen mit den veröffentlichten überein."),
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Nicht abgeglichen</span> — {fallos}',
+        "res_no_scores": "Scores nicht verfügbar",
+        "res_threshold_note": ("<b>Die drei Modelle sind an unterschiedlichen Schwellen gemessen.</b> Jedes "
+                               "nutzt seinen natürlichen Schnittpunkt — LightGBM "
+                               "<code>predict_proba ≥ 0,50</code>; SVM-RBF das Vorzeichen von "
+                               "<code>decision_function</code>, was auf der gespeicherten "
+                               "Wahrscheinlichkeitsskala ≈ 0,22 entspricht; QSVM "
+                               "<code>decision_function &gt; 0</code>, was keine Wahrscheinlichkeit ist. "
+                               "Jede Matrix reproduziert exakt an ihrer eigenen Schwelle, aber <b>nur der "
+                               "AUC-ROC ist zwischen Modellen vergleichbar</b>: er ist die einzige der vier "
+                               "Metriken, die vom Schnittpunkt unabhängig ist. Zur Einordnung: die SVM-RBF, "
+                               "bei 0,50 wie LightGBM ausgewertet, ergäbe Accuracy 0,9190, aber nur 131 "
+                               "richtig Positive statt 172."),
+        "res_roc_title": "ROC-Kurven",
+        "res_roc_sub_real": ("Echte empirische Kurven, Punkt für Punkt über die 1.567 Testinstanzen "
+                             "(dieselben Scores, die den AUC der Masterarbeit ergeben)."),
+        "res_roc_sub_synth": ("Exakter AUC · Form aus dem AUC rekonstruiert, wo Scores je Instanz fehlen."),
+        "res_cm_title": "Konfusionsmatrizen",
+        "res_cm_sub": ("Werte gegen den Classification Report jedes Modells geprüft und aus den Scores je "
+                       "Instanz neu berechnet. Jede Matrix entspricht der auf ihrer Karte genannten Schwelle"),
+        "res_cm_pred_no": "Vorhers.<br>Kein Diabetes",
+        "res_cm_pred_yes": "Vorhers.<br>Diabetes",
+        "res_cm_real_no": "Echt<br>Kein Diab.",
+        "res_cm_real_yes": "Echt<br>Diabetes",
+        "res_cm_tags": {"tn": "RN", "fp": "FP", "fn": "FN", "tp": "RP"},
+        "res_metrics_title": "Metrikvergleich",
+        "res_metrics_sub": ("Die vier Metriken werden über die 1.567 Instanzen berechnet. Accuracy, MCC und "
+                            "F1-Macro bestrafen das Klassenungleichgewicht sehr wohl — aber sie hängen von "
+                            "der Schwelle ab, und jedes Modell nutzt seine eigene: vergleiche alles außer "
+                            "dem AUC-ROC mit Vorsicht"),
+        "res_metric_desc": {
+            "auc": "Fläche unter der ROC-Kurve: Fähigkeit, Diabetes von Nicht-Diabetes zu trennen. 0,5 = Zufall, 1 = perfekt.",
+            "f1_macro": "Harmonisches Mittel aus Precision und Recall, je Klasse gemittelt (ungewichtet). Bestraft das Ungleichgewicht.",
+            "accuracy": "Anteil der insgesamt richtigen Vorhersagen. Bei unausgewogenen Klassen kann er nur die Mehrheitsklasse widerspiegeln.",
+            "mcc": "Matthews-Korrelationskoeffizient: Gesamtgüte, robust gegen Ungleichgewicht. 0 = Zufall, 1 = perfekt.",
+        },
+        "res_qsvm_note": ("<b>Anmerkung zum QSVM-Experiment.</b> Die QSVM wurde auf einer stratifizierten "
+                          "Stichprobe von 500 Instanzen trainiert (Aufwand O(n²) des Quantenkernels) und auf "
+                          "den vollständigen 1.567 des Tests ausgewertet. AUC-ROC = 0,5493 zeigt, dass das "
+                          "Modell die zufällige Klassifikation kaum übertrifft — Recall ≈ 0 für die Klasse "
+                          "Diabetes (1 von 220), Accuracy = 0,8602 spiegelt nur den Anteil der "
+                          "Mehrheitsklasse. Der MCC ≈ 0 bestätigt das Fehlen echter Vorhersagekraft."),
+
+        # ── Seite 4 · SHAP-Analyse ──
+        "sh_eyebrow": "Interpretierbarkeit",
+        "sh_title": "SHAP-Analyse",
+        "sh_subtitle": ("Globale Variablenwichtigkeit — TreeExplainer (LightGBM) vs. "
+                        "KernelExplainer (SVM-RBF)."),
+        "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
+        "sh_hint": "Fahre über einen Balken, um die Bedeutung der Variablen zu sehen. {nota}",
+        "sh_sample_lgbm": "Exakte Werte (polynomieller Algorithmus) über die 1.567 Testinstanzen.",
+        "sh_sample_svm": ("Durch Stichproben genäherte Werte: Hintergrund aus 100 Instanzen, Beiträge über "
+                          "200 Testinstanzen."),
+        "sh_note_lgbm": ("<b>LBXGH (HbA1c)</b> dominiert mit großem Abstand (mittlerer SHAP = 1,1243), "
+                         "stimmig mit seiner Rolle als primärer diagnostischer Marker für Typ-2-Diabetes "
+                         "(ADA: HbA1c ≥ 6,5 %). <b>RIDAGEYR (Alter, 0,4654)</b> spiegelt den Anstieg der "
+                         "Prävalenz mit dem Alter. <b>LBXGLU</b> und <b>LBDLDL</b> vervollständigen den "
+                         "biochemischen Block. <b>WTINT2YR</b> (Position 6) ist ein Artefakt des "
+                         "NHANES-Erhebungsdesigns, keine klinische Variable."),
+        "sh_note_svm": ("Das Ranking der SVM-RBF stimmt bei den dominanten Variablen mit LightGBM überein "
+                        "(<b>LBXGH</b>, <b>LBXGLU</b>, <b>LBDLDL</b>, <b>RIDAGEYR</b>), was die klinische "
+                        "Gültigkeit des Befunds stärkt, weil er damit vom Algorithmus unabhängig und "
+                        "methodisch robuster wird. KernelExplainer behandelt das Modell als Blackbox und "
+                        "ist deshalb auf jeden Klassifikator anwendbar."),
+        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Abbildung 27)",
+        "sh_fig_lgbm_cap": ("Jeder Punkt ist eine Testinstanz; die Farbe zeigt den Wert der Variablen (rot "
+                            "hoch, blau niedrig) und die waagerechte Lage ihren Einfluss auf die Vorhersage. "
+                            "LBXGH und RIDAGEYR dominieren das Modell."),
+        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Abbildung 31)",
+        "sh_fig_svm_cap": ("Jeder Punkt ist eine Instanz; Farbe = Wert der Variablen, Lage = Einfluss. "
+                           "KernelExplainer über 200 Testinstanzen."),
+
+        # ── Seite 5 · Quantenschaltkreis ──
+        "qc_eyebrow": "Quantenkomponente",
+        "qc_title": "Quantenschaltkreis",
+        "qc_subtitle": ("Konfiguration der ZZFeatureMap und des FidelityQuantumKernel, implementiert in "
+                        "Qiskit auf Databricks CE."),
+        "qc_specs": ["Qubits (feature_dimension)", "Wiederholungen (reps)", "Entanglement", "Qiskit-Version"],
+        "qc_how_title": "So funktioniert es",
+        "qc_how_p1": ("Die <b>ZZFeatureMap</b> kodiert jede der 8 klinischen Variablen als Phasenwinkel "
+                      "(P-Gatter) auf einem eigenen Qubit, nachdem sie mit Hadamard-Gattern Superposition "
+                      "erzeugt hat. Ihr Unterscheidungsmerkmal ist die <b>Verschränkung</b> zwischen "
+                      "Qubit-Paaren über Gatter, die vom Kreuzprodukt zweier Variablen abhängen — "
+                      "Korrelationen, die der klassische RBF-Kernel nicht darstellen kann."),
+        "qc_how_p2": ("Der <b>FidelityQuantumKernel</b> misst die Ähnlichkeit zweier Patienten als die "
+                      "Fidelity zwischen ihren Quantenzuständen: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. Die "
+                      "Implementierung nutzt <code>StatevectorSampler</code> und simuliert den exakten "
+                      "Zustand ohne Rauschen — deterministische, reproduzierbare Ergebnisse."),
+        "qc_feat_title": "8 ausgewählte Features (Random Forest)",
+        "qc_xaxis": "RF-Wichtigkeit",
+        "qc_train_title": "Training und Auswertung",
+        "qc_tstats": ["Trainingsinstanzen", "Trainingszeit", "Testinstanzen",
+                      "Inferenzzeit", "Stützvektoren"],
+        "qc_note": ("Wegen des Aufwands O(n²) des Quantenkernels blieb das Training auf eine stratifizierte "
+                    "Stichprobe von 500 Instanzen beschränkt (die praktische Grenze von Databricks CE "
+                    "serverless liegt bei etwa 500-1.000). Die Auswertung erfolgte auf dem vollständigen "
+                    "Testsatz (1.567 Instanzen) in Losen von 100, mit einer Gesamtvorhersagezeit von "
+                    "144,5 Minuten."),
+        "qc_circuit_title": "Vollständiger Quantenschaltkreis (8 Qubits)",
+        "qc_circuit_sub": ("ZZFeatureMap mit reps=2: Kodierung (H + P), gefolgt von zwei Runden linearer "
+                           "Verschränkung zwischen benachbarten Qubits."),
+
+        # ── Seite 6 · Bloch-Kugel ──
+        "bl_eyebrow": "Quantenkodierung",
+        "bl_title": "Bloch-Kugel",
+        "bl_subtitle": "Wie die ZZFeatureMap den Wert einer klinischen Variablen als Quantenzustand |ψ⟩ kodiert.",
+        "bl_what_note": ("<b>Was die Bloch-Kugel ist.</b> Ein klassisches Bit kann nur 0 oder 1 "
+                         "sein. Ein Qubit lässt zusätzlich jede Mischung aus beidem zu, und diese "
+                         "Mischung passt nicht in eine einzige Zahl: es braucht eine Karte. Die "
+                         "Bloch-Kugel ist diese Karte — jeder mögliche Zustand eines Qubits ist ein "
+                         "Punkt auf der Oberfläche einer Kugel mit Radius 1. Der Nordpol ist "
+                         "<b>|0⟩</b> und der Südpol <b>|1⟩</b>; dazwischen liegen die "
+                         "Superpositionen, und je näher der Pfeil an einem Pol steht, desto "
+                         "wahrscheinlicher ist dieses Messergebnis. Hier wird der klinische Wert in "
+                         "den Winkel θ übersetzt, sodass der Schieberegler den Pfeil entlang eines "
+                         "Meridians von |0⟩ nach |1⟩ dreht."),
+        "bl_var": "Klinische Variable",
+        "bl_value": "Wert ({unidad})",
+        "bl_xnorm": "normiertes x",
+        "bl_theta": "θ = x_norm·π",
+        "bl_alpha": "α (Amplitude |0⟩)",
+        "bl_beta": "β (Amplitude |1⟩)",
+        "bl_rad": "rad",
+        "bl_note": ("<b>Eine didaktische Analogie des Prinzips der Winkelkodierung</b>, keine Nachbildung "
+                    "des Schaltkreises. Hier wird der auf [0,1] normierte klinische Wert zum "
+                    "<b>polaren</b> Winkel θ = x_norm·π, sodass der Vektor den Meridian von |0⟩ nach |1⟩ "
+                    "durchläuft und P(|0⟩) von 100 % auf 0 % fällt: die anschaulichste Art zu sehen, wie "
+                    "„eine Zahl zu einem Zustand wird“.<br><br>"
+                    "Die <b>echte ZZFeatureMap</b> tut etwas anderes: sie wendet H an und danach "
+                    "P(2·x<sub>i</sub>), und ein Phasengatter nach einer Hadamard lässt den Zustand "
+                    "<b>auf dem Äquator</b> — θ = π/2 fest, P(|0⟩) = P(|1⟩) = 50 % immer — und kodiert "
+                    "den Wert im <b>azimutalen</b> Winkel φ, nicht im polaren. Sie normiert auch nicht "
+                    "auf [0,1], sondern nutzt den skalierten Wert direkt. Deshalb veranschaulicht diese "
+                    "Kugel das Konzept, bildet den Schaltkreis aber nicht Schritt für Schritt ab. Die "
+                    "Verschränkung (Gatter P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) ist nur im "
+                    "gemeinsamen Raum der 8 Qubits darstellbar — siehe Quantenschaltkreis."),
+
+        # ── Seite 6 · Bloch-Kugel → Abschnitt Verschränkung ──
+        "bl_ent_title": "Verschränkung: zwei Qubits, ein einziger Zustand",
+        "bl_ent_sub": ("Die Grenze der Kugel von oben. Wende die beiden Gatter an und sieh, was mit dem "
+                       "lokalen Zustand jedes Qubits geschieht."),
+        "bl_ent_intro": ("<b>Wo die Bloch-Kugel aufhört zu taugen.</b> Für ein Qubit genügen eine Kugel "
+                         "und ein Pfeil. Bei zweien liegt die Versuchung nahe, zwei Kugeln zu zeichnen — "
+                         "und für die meisten Zustände geht das auf. Aber es gibt eine Familie von "
+                         "Zuständen, in der <b>kein Pfeil mehr zu zeichnen bleibt</b>: das Paar hat einen "
+                         "vollkommen bestimmten Zustand, und keines seiner beiden Mitglieder hat einen für "
+                         "sich. Das ist die Verschränkung, und sie entsteht aus zwei Gattern. Wende sie an "
+                         "und verfolge die drei Zahlen links."),
+        "bl_ent_btn_h": "1 · Hadamard auf q₀",
+        "bl_ent_btn_cnot": "2 · CNOT (Steuerung q₀ → Ziel q₁)",
+        "bl_ent_btn_reset": "Zurücksetzen auf |00⟩",
+        "bl_ent_step_note": [
+            ("<b>Ausgangspunkt.</b> Zwei Qubits, beide in |0⟩, kein Gatter angewandt. Der gemeinsame "
+             "Zustand ist |00⟩ und hat noch nichts Quantenhaftes: er entspricht genau zwei klassischen "
+             "Bits auf null. In der Q-Sphere gibt es einen einzigen Knoten am Nordpol, der die gesamte "
+             "Wahrscheinlichkeit trägt."),
+            ("<b>Superposition, noch nicht verschränkt.</b> Die Hadamard lässt q₀ auf halbem Weg "
+             "zwischen |0⟩ und |1⟩, während q₁ fest in |0⟩ bleibt: der gemeinsame Zustand ist "
+             "(|00⟩ + |10⟩)/√2. Die beiden Qubits sind weiterhin <b>unabhängig</b> — jedes hat seinen "
+             "eigenen reinen Zustand, und zwei Bloch-Kugeln würden sie vollständig beschreiben. Beachte, "
+             "dass die Länge des lokalen Vektors weiterhin 1 beträgt: es gibt einen Pfeil zu zeichnen."),
+            ("<b>Bell-Zustand.</b> Das CNOT kippt q₁ nur dann, wenn q₀ gleich 1 ist; auf eine "
+             "Superposition angewandt, bindet das beide Ergebnisse zu einem: (|00⟩ + |11⟩)/√2. Die "
+             "Knoten sind zu den Polen gewandert und der Äquator ist leer. Und hier zerbricht die Karte: "
+             "die Länge des lokalen Vektors ist gerade auf <b>0</b> gefallen — Qubit 0 liegt an keinem "
+             "Punkt seiner Kugel mehr, weil es für sich genommen <b>keinen Zustand mehr hat</b>."),
+        ],
+        "bl_ent_circuit_title": "Schaltkreis",
+        "bl_ent_circuit_alt": "Zwei-Qubit-Schaltkreis mit den bisher angewandten Gattern",
+        "bl_ent_qsphere_title": "Q-Sphere des gemeinsamen Zustands",
+        "bl_ent_kpi": ["Länge des lokalen Vektors |r| (q₀)", "Reinheit Tr(ρ₀²)",
+                       "Verschränkungsentropie"],
+        "bl_ent_bits": "Bit",
+        "bl_ent_hover_amp": "Amplitude:",
+        "bl_ent_hover_prob": "Wahrscheinlichkeit:",
+        "bl_ent_hover_shots": "Messungen",
+        "bl_ent_meas_title": "Messung",
+        "bl_ent_meas_sub": ("Die Q-Sphere zeigt den Zustand; dies zeigt das Einzige, was sich beobachten "
+                            "lässt. Wiederhole den Durchgang: der Anteil ist stabil, die genaue Anzahl nicht."),
+        "bl_ent_meas_n": "Anzahl der Messungen",
+        "bl_ent_meas_btn": "Messungen simulieren",
+        "bl_ent_meas_empty": "Wähle die Anzahl der Messungen und drücke „Messungen simulieren“.",
+        "bl_ent_meas_yaxis": "Wie oft erhalten",
+        "bl_ent_meas_note": [
+            ("Mit beiden Qubits in |0⟩ lautet das Ergebnis bei jedem Schuss <b>00</b>. Es gibt noch "
+             "nichts auszulosen: so verhalten sich zwei klassische Bits."),
+            ("<b>00</b> und <b>10</b> kommen zu gleichen Teilen heraus: q₀ verhält sich wie ein "
+             "Münzwurf, und q₁ ist 0, was auch geschieht. Die beiden Ergebnisse sind <b>unabhängig</b> "
+             "— das eine zu kennen sagt nichts über das andere."),
+            ("<b>Es kommen nur 00 und 11 heraus</b>, jeweils nahe 50 %. Die beiden leeren Balken sind "
+             "der Befund: <b>01 und 10 kommen nie vor</b>, kein einziges Mal in zehntausend Schüssen. "
+             "Jedes Qubit liefert weiterhin ein zufälliges Ergebnis, aber beide liefern <b>immer "
+             "dasselbe</b>: eines zu messen legt das andere augenblicklich fest. Diese perfekte "
+             "Korrelation ist die Verschränkung, vom Labor aus gesehen."),
+        ],
+        "bl_ent_impl_note": ("<b>Wie das berechnet ist.</b> Die vier Amplituden stammen aus <b>exakter</b> "
+                             "linearer Algebra in NumPy — den auf |00⟩ angewandten Matrizen von H⊗I und "
+                             "CNOT —, nicht aus einer Näherung, und die Messungen aus einer multinomialen "
+                             "Ziehung über |ψ|², also dem, was ein idealer rauschfreier Simulator tut. Das "
+                             "Panel <b>lädt kein Qiskit</b>: die ausgelieferte Umgebung besteht aus "
+                             "Streamlit, NumPy, Plotly und ONNX Runtime, während Qiskit in der "
+                             "Databricks-Pipeline lebt — dort wird die QSVM trainiert — und seine "
+                             "Abbildungen hier bereits gerendert ankommen, wie der 8-Qubit-Schaltkreis auf "
+                             "der Seite Quantenschaltkreis. Die Basiskonvention ist die des Lehrbuchs, "
+                             "|q₀q₁⟩ mit q₀ links; Qiskit nummeriert umgekehrt und schriebe „01“, wo der "
+                             "Zwischenschritt hier „10“ schreibt."),
+
+        # ── Seite 6 · Bloch-Kugel → die echte ZZFeatureMap (8 Qubits) ──
+        "bl_zz_title": "Die echte ZZFeatureMap: wo die Verschränkung stattfindet",
+        "bl_zz_sub": ("Dieselben Zahlen, nun über die 8 Qubits der QSVM dieser Masterarbeit. Bewege den "
+                      "Schieberegler am Seitenanfang und sieh, welche Qubits reagieren."),
+        "bl_zz_intro": ("<b>Von zwei Qubits zu den acht des Modells.</b> Jedes Qubit der ZZFeatureMap "
+                        "trägt <b>eine klinische Variable</b>: q₀ ist der HbA1c, q₁ die Glukose, und so "
+                        "weiter bis zum BMI. Bei 256 Amplituden gibt es kein Bild des Zustands mehr, das "
+                        "man anschauen könnte — weder Q-Sphere noch Histogramm —, aber es lassen sich "
+                        "weiterhin die <b>gleichen beiden Größen</b> aus dem vorigen Abschnitt messen: "
+                        "wie viel eigenen Zustand jedes Qubit behält und wie viel Information es mit "
+                        "jedem anderen teilt. Das ist kein Lehrbuchbeispiel mehr: es ist der Schaltkreis, "
+                        "mit dem das Modell trainiert wurde."),
+        "bl_zz_current": "Variable im Spiel: <b>{var} = {val} {unidad}</b>. Die anderen sieben auf ihrem Referenzwert.",
+        "bl_zz_r_title": "Eigener Zustand jedes Qubits",
+        "bl_zz_r_xaxis": "|r| — 1 = behält seinen Zustand · 0 = vollständig verschränkt",
+        "bl_zz_mi_title": "Wechselseitige Information zwischen Qubits",
+        "bl_zz_mi_cbar": "Bit",
+        "bl_zz_note": ("<b>Wie die Matrix zu lesen ist.</b> Jede Zelle sagt, wie viel Information zwei "
+                       "Qubits teilen: je heller, desto enger sind sie aneinander gebunden. Und es "
+                       "springt ins Auge, dass sich die Farbe <b>in einem Band entlang der Diagonalen "
+                       "sammelt</b> und die Ecken leer bleiben. Das ist kein Zufall: die ZZFeatureMap "
+                       "nutzt <code>entanglement=\"linear\"</code>, es gibt also <b>nur Gatter zwischen "
+                       "benachbarten Qubits</b>. Mit reps=2 reicht diese Korrelation höchstens vier "
+                       "Glieder weit; darüber hinaus ist sie <b>exakt null</b> (an 300 Profilen geprüft: "
+                       "ab Abstand ≥ 5 in der Kette 0,0000 Bit, ohne eine einzige Ausnahme). Die "
+                       "Topologie des Schaltkreises zeichnet sich von selbst.<br><br>"
+                       "Und es gibt eine zweite Sache, die man sieht, wenn man den Schieberegler oben "
+                       "bewegt: ändert man <b>eine</b> Variable, bewegen sich nur <b>ihr Qubit und "
+                       "dessen unmittelbare Nachbarn</b> — die übrigen ändern sich nicht um eine "
+                       "Nachkommastelle. Es ist derselbe Sachverhalt von der anderen Seite: der "
+                       "Lichtkegel des Schaltkreises, live."),
+        "bl_zz_caveat": ("<b>Ein Lesehinweis, und kein kleiner.</b> Die Verschränkung <b>wächst nicht mit "
+                         "dem klinischen Wert</b>: erhöht man den HbA1c über seinen Bereich, geht |r| des "
+                         "ersten Qubits 0,88 → 1,00 → 0,65 → 0,24 → 0,73 → 0,98 → 0,33. Rauf und runter. "
+                         "Der Grund ist, dass der Wert als Phasen<b>winkel</b> eingeht und Winkel "
+                         "<b>umlaufen</b>: zwei sehr verschiedene klinische Werte können bei fast "
+                         "gleichen Phasen landen. Bei standardisierten Features erreicht ein Extremfall "
+                         "x ≈ 5, und das Produkt 2·(π−xᵢ)(π−xⱼ) des Verschränkungsterms überschreitet 2π "
+                         "mehrfach. Das ist eine bekannte Grenze der unbeschränkten Winkelkodierung, und "
+                         "man sollte sie im Blick haben, bevor man diese Abbildungen liest, als maßen sie "
+                         "den klinischen Schweregrad: sie messen die Geometrie des Schaltkreises, nicht "
+                         "das Risiko."),
+
+        # ── Seite 7 · Live-Prädiktor ──
+        "lp_eyebrow": "Interaktive Inferenz",
+        "lp_title": "Live-Prädiktor",
+        "lp_subtitle": ("Wahrscheinlichkeit, dass ein klinisches Profil zu einer bereits mit Diabetes "
+                        "diagnostizierten Person gehört — LightGBM über die 8 wichtigsten Variablen."),
+        "lp_what_note": ("<b>Was dieses Formular schätzt.</b> Das Ziel der Pipeline ist "
+                         "<code>TARGET = (DIQ010 == 1)</code>, die Antwort auf <i>„Hat Ihnen jemals ein "
+                         "Arzt gesagt, dass Sie Diabetes haben?“</i>. Das Modell <b>erkennt</b> also "
+                         "<b>bereits diagnostizierten Diabetes</b>: es sagt nicht voraus, wer ihn "
+                         "entwickeln wird. Das ist eine Aufgabe der gleichzeitigen Erkennung, kein "
+                         "prospektives Risiko."),
+        "lp_real_note": ("<b>Echte Inferenz (ONNX).</b> Vorhersagen von LightGBM und SVM-RBF über "
+                         "<code>onnxruntime</code>, mit dem aus der Gold-Pipeline geladenen "
+                         "<code>StandardScaler</code>. Die 8 gezeigten Variablen sind die klinisch "
+                         "wichtigsten; die übrigen 81 Features werden auf dem Median des Trainingssatzes "
+                         "festgehalten. Die QSVM steht wegen des Aufwands O(n²) des Quantenkernels nicht "
+                         "in Echtzeit zur Verfügung: die Vorhersage der 1.567 Testinstanzen kostete "
+                         "144,5 Minuten."),
+        "lp_proxy_note": ("⚠ <b>Technischer und klinischer Hinweis.</b> Dieses Formular hat die echten "
+                          "serialisierten Modelle (<code>.onnx</code>) nicht angebunden — lege "
+                          "<code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>, "
+                          "<code>scaler_correcto.json</code> und <code>medianas_correctas.json</code> "
+                          "in <code>streamlit/models/</code>. Der unten gezeigte Wert ist ein "
+                          "<b>transparenter Platzhalter</b>: eine nach normierter SHAP-Wichtigkeit "
+                          "gewichtete Kombination, ausschließlich zu Layoutzwecken. <b>Er ist nicht die "
+                          "Ausgabe eines trainierten Modells</b> und darf nicht als Ergebnis zitiert "
+                          "werden. Auch die QSVM steht nicht in Echtzeit zur Verfügung (Aufwand O(n²) "
+                          "des Quantenkernels)."),
+        "lp_train_range": "Training: {mu} ± {sd} (±3 SD → {lo} bis {hi})",
+        "lp_extrapolates": "⚠ z = {z} — außerhalb des trainierten Bereichs: das Modell extrapoliert",
+        "lp_ada": "ADA-Kriterium: &lt; 5,7 normal · 5,7–6,4 Prädiabetes · ≥ 6,5 Diabetes",
+        "lp_who_model": "das Modell",
+        "lp_who_proxy": "der Platzhalter",
+        "lp_score_real": "Wahrscheinlichkeit einer bestehenden Diagnose",
+        "lp_score_proxy": "Layout-Score (Platzhalter)",
+        "lp_cat_low": "Gering",
+        "lp_cat_mid": "Mittel",
+        "lp_cat_high": "Hoch",
+        "lp_interp_low": ("Das Profil liegt deutlich unter der Entscheidungsschwelle (50 %): {quien} würde "
+                          "es als nicht diagnostiziert einstufen."),
+        "lp_interp_mid": "Der Wert nähert sich der Entscheidungsschwelle (50 %): Zone der Unsicherheit.",
+        "lp_interp_high": ("Der Wert überschreitet die Entscheidungsschwelle (50 %): {quien} würde dieses "
+                           "Profil als positiven Fall einstufen."),
+        # Dos puntos y no un adjetivo antepuesto: la categoría llega ya declinada desde
+        # lp_cat_* y en alemán la terminación del atributo depende del género y del caso
+        # ("hohe Übereinstimmung", "mittlere…"), que no se puede componer con un {cat}
+        # suelto. Así el rótulo es correcto con las tres, y en versalitas se lee igual.
+        "lp_badge": "Übereinstimmung: {cat}",
+        "lp_gauge_caption": ("Übereinstimmung mit einer bestehenden Diagnose: gering · mittel · hoch · "
+                             "&nbsp;Entscheidungsschwelle = 50 %"),
+        "lp_side_title": "Die beiden Modelle nebeneinander",
+        "lp_side_sub": ("Jede Wahrscheinlichkeit wird am Schnittpunkt ihres eigenen Modells beurteilt — sie "
+                        "sind nicht austauschbar"),
+        "lp_own_threshold": "Seine Schwelle",
+        "lp_would_classify": "Würde einstufen als",
+        "lp_positive": "positiv",
+        "lp_negative": "negativ",
+        "lp_disagree": ("<b>Die beiden Modelle weichen bei diesem Profil um {dif} voneinander ab.</b> Sie "
+                        "stimmen an den Extremen überein — klar gesunde oder klar diabetische Profile — "
+                        "und gehen im mittleren Band auseinander, also genau dort, wo eine Schätzung am "
+                        "nützlichsten wäre. Nimm es als Zeichen von Unsicherheit, nicht als Hinweis "
+                        "darauf, dass eines der beiden recht hat."),
+        "lp_curve_title": "Antwortkurve",
+        "lp_curve_var": "Zu durchlaufende Variable",
+        "lp_curve_yaxis": "Wahrscheinlichkeit",
+        "lp_curve_thr": "Schwelle",
+        "lp_ada_bands": ["normal", "Prädiabetes", "Diabetes"],
+        "lp_curve_note": ("Über diese Variable liefert LightGBM <b>{n} verschiedene Werte</b> auf den "
+                          "{total} Positionen des Schiebereglers: es ist eine Treppe, keine Rampe. Größte "
+                          "Stufen: {saltos}. Der Punkt markiert deinen aktuellen Wert."),
+        "lp_curve_none": "keine",
+        "lp_read_note": ("<b>Wie diese Ergebnisse zu lesen sind.</b> Da das Ziel eine <i>bereits "
+                         "gestellte</i> Diagnose ist, lernt das Modell auch den Effekt der "
+                         "<b>Behandlung</b>, nicht nur den der Krankheit. Das kehrt die klinische "
+                         "Bedeutung zweier Variablen um:"
+                         '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
+                         "<li><b>LDL-Cholesterin</b> — je höher das LDL, desto <i>geringer</i> die "
+                         "geschätzte Wahrscheinlichkeit (von 43 % auf 18 % über den Schieberegler). "
+                         "Diagnostizierte Personen sind meist mit Statinen behandelt.</li>"
+                         "<li><b>Nüchternglukose</b> — die Antwort ist U-förmig: sehr niedrige Werte "
+                         "heben die Schätzung ebenso wie hohe, wegen der Hypoglykämien behandelter "
+                         "Patienten.</li></ul>"
+                         '<div style="margin-top:10px;">Keine der beiden darf als veränderbarer '
+                         "Risikofaktor gelesen werden.</div>"),
+    },
+
+    # ═══════════════════════════════ FRANCÉS ═══════════════════════════════
+    # Francés de Francia, registro académico. Rige lo mismo que en los demás para lo que
+    # NO se traduce: nombres propios, librerías, códigos de variable NHANES y nombres de
+    # fichero del repositorio.
+    #
+    # NOTACIÓN NUMÉRICA: coma decimal como el español, pero el separador de MILLAR es un
+    # espacio inseparable, no un punto — "1 567", nunca "1.567". Es la única de las cinco
+    # lenguas que lo hace así, y por eso nf() dejó de ser un intercambio de dos signos y
+    # pasó a leer la pareja de separadores de un mapa (ver SEPARADORES en app.py). El
+    # signo de porcentaje también va precedido de espacio.
+    #
+    # ESPACIADO TIPOGRÁFICO: el francés pide espacio ANTES de los dos puntos y dentro de
+    # las comillas angulares. Aquí van espacios normales y no inseparables: el inseparable
+    # sería lo canónico, pero es un carácter invisible, y sembrar el catálogo de U+00A0
+    # que nadie ve al revisarlo cuesta más de lo que arregla — la diferencia se reduce a
+    # dónde puede partir la línea. La excepción es el separador de millar, que sí es
+    # inseparable porque ahí partir la línea rompería la cifra en dos.
+    #
+    # COMILLAS: las angulares francesas (« … »), con su espacio interior.
+    "fr": {
+        # ── Navigation et barre latérale ──
+        "nav": ["Aperçu", "Gouvernance", "Résultats", "Analyse SHAP",
+                "Circuit quantique", "Sphère de Bloch", "Prédicteur en direct"],
+        "sidebar_expand": "Déplier la barre latérale",
+        "sidebar_collapse": "Replier la barre latérale",
+        "search_label": "Rechercher",
+        "search_ph": "Rechercher dans le tableau de bord ou sur le web…",
+        "search_expand": "Rechercher — déplie la barre latérale",
+        "search_in": "dans {p}",
+        "search_none": "Aucun résultat dans le tableau de bord.",
+        "search_web": "Rechercher « {q} » dans :",
+        "theme_to_dark": "Passer au thème sombre",
+        "theme_to_light": "Passer au thème clair",
+        "lang_es_help": "Voir l'application en espagnol",
+        "lang_en_help": "Voir l'application en anglais",
+        "lang_de_help": "Voir l'application en allemand",
+        "lang_fr_help": "Voir l'application en français",
+        "lang_it_help": "Voir l'application en italien",
+        "footer_name": "Juan Albornoz C. · Mémoire de master 2026",
+        "footer_uni": "Universidad Europea de Valencia",
+        "footer_name_narrow": "JAC",
+        "footer_uni_narrow": "UEV",
+
+        # ── Page 1 · Aperçu ──
+        "ov_eyebrow": "Framework DataOps + QML",
+        "ov_title": "Aperçu",
+        "ov_subtitle": ("Pipeline de bout en bout sur Databricks CE + AWS S3, avec un QSVM quantique "
+                        "face à deux baselines classiques, validé sur des données cliniques réelles "
+                        "de l'étude NHANES (CDC)."),
+        "ov_lead": (
+            "Ce framework conçoit et met en œuvre un pipeline <b>DataOps de bout en bout</b> sur "
+            "<b>Databricks Community Edition</b>, avec <b>AWS S3</b> comme véritable couche de "
+            "stockage cloud et une architecture <b>Médaillon</b> (Bronze → Silver → Gold) sur Delta "
+            "Lake comme colonne vertébrale. Le cas d'usage prédit le diabète de type 2 à partir des "
+            "enregistrements de l'étude <b>NHANES</b> (CDC) — le jeu de données n'est pas l'objet de "
+            "la recherche, mais le véhicule qui démontre que l'architecture est viable, reproductible "
+            "et auditable sur des données réelles à grande échelle. Le cœur expérimental est une "
+            "<b>comparaison triangulée</b> entre LightGBM (baseline tabulaire), un SVM à noyau RBF "
+            "(pont structurel) et un <b>QSVM</b> avec FidelityQuantumKernel sous Qiskit, en gardant "
+            "le classifieur sous-jacent identique afin d'attribuer toute différence de performance à "
+            "l'effet du noyau quantique."),
+        "ov_stats_title": "Statistiques du jeu de données NHANES",
+        "ov_stats_sub": "Trois cycles biennaux intégrés · pipeline en couches Bronze → Silver → Gold",
+        "ov_stat_bronze": "Enregistrements Bronze",
+        "ov_stat_silver": "Enregistrements Silver",
+        "ov_stat_features": "Features Gold",
+        "ov_stat_balance": "Équilibre des classes",
+        "ov_medallion_title": "Architecture Médaillon",
+        "ov_medallion_sub": "Chaîne de valeur de la donnée (Curry, 2016) appliquée couche par couche",
+        "ov_layers": [
+            ("Bronze", "Ingestion depuis AWS S3 sans transformation. Préserve la source de vérité."),
+            ("Silver", "Nettoyage, imputation, winsorisation et validation de la qualité."),
+            ("Gold",   "Mise à l'échelle, encodage et partition stratifiée. Prêt à modéliser."),
+        ],
+        "ov_goto_gov": "Voir les contrôles de qualité et de traçabilité  →",
+        "ov_target_title": "Distribution de la variable cible (DIQ010)",
+        "ov_target_sub": "Cible binarisée : 1 = diabète diagnostiqué, 0 = le reste",
+        "ov_pie_no": "Pas de diabète",
+        "ov_pie_yes": "Diabète",
+        "ov_donut_center": "14 %",
+        "ov_donut_caption": "DIABÈTE",
+        "ov_tech_title": "Construit sur",
+        "ov_tech_sub": ("Plateforme, stockage et bibliothèques du pipeline, dans leur ordre "
+                        "d'intervention · l'inventaire complet, avec la justification de chaque "
+                        "choix, se trouve dans Gouvernance"),
+        "ov_compare_title": "Comparaison triangulée : objectif de l'expérience",
+        "ov_compare": [
+            ("LightGBM", "Baseline tabulaire de référence"),
+            ("SVM-RBF",  "Pont structurel vers la composante quantique"),
+            ("QSVM",     "FidelityQuantumKernel : même classifieur, noyau quantique"),
+        ],
+
+        # ── Variables NHANES (partagé : SHAP, Circuit, Bloch, Prédicteur) ──
+        # Les codes NHANES ne sont jamais traduits, seulement leur glose.
+        "var_short": {
+            "LBXGH": "HbA1c", "RIDAGEYR": "Âge", "LBXGLU": "Glycémie à jeun",
+            "LBDLDL": "Cholestérol LDL", "BMXWAIST": "Tour de taille",
+            "WTINT2YR": "Poids d'échantillon*", "BMXARML": "Longueur du bras",
+            "BMXLEG": "Longueur de jambe", "BMXBMI": "IMC",
+            "PAD680": "Activité sédentaire", "PAD645": "Activité modérée",
+            "PAQ640": "Renforcement musculaire", "BMXWT": "Poids corporel", "LBXIN": "Insuline",
+            "INDHHIN2": "Revenu du ménage", "DMDYRSUS": "Années aux États-Unis",
+            "BMXARMC": "Circonf. du bras", "PAQ670": "Activité intense",
+            "BPXSY1": "Pression systolique", "PAD630": "Activité mod. de loisir",
+            "DMDHHSZE": "Taille du ménage (enfants)", "BPXDI1": "Pression diastolique",
+            "LBXTR": "Triglycérides", "DMDMARTL_1": "État civil (marié)",
+            "DMDMARTL_5": "État civil (jamais marié)", "BPXPLS": "Pouls",
+            "DMDEDUC2_3": "Éducation (niveau 3)", "SDMVSTRA": "Strate d'échantillonnage",
+            "DMDMARTL_2": "État civil (veuf)", "DMDHHSZB": "Taille du ménage (adultes)",
+        },
+        "var_desc": {
+            "LBXGH":      "Hémoglobine glyquée (HbA1c) : glycémie moyenne des 2-3 derniers mois. Marqueur diagnostique primaire du diabète (ADA : ≥ 6,5 %).",
+            "RIDAGEYR":   "Âge du participant au moment de l'examen (années).",
+            "LBXGLU":     "Glycémie plasmatique à jeun : marqueur biochimique du contrôle glycémique (mg/dL).",
+            "LBDLDL":     "Cholestérol LDL calculé : fraction du cholestérol liée au risque cardiovasculaire (mg/dL).",
+            "BMXWAIST":   "Tour de taille : adiposité abdominale associée à l'insulinorésistance (cm).",
+            "WTINT2YR":   "Facteur de pondération de l'entretien NHANES. Artefact du plan de sondage, pas une variable clinique.",
+            "BMXARML":    "Longueur du bras (acromion → olécrane) : mesure anthropométrique (cm).",
+            "BMXLEG":     "Longueur maximale de la jambe (genou → sol) : mesure anthropométrique (cm).",
+            "BMXBMI":     "Indice de masse corporelle (poids/taille²) : adiposité corporelle globale (kg/m²).",
+            "PAD680":     "Minutes d'activité sédentaire par jour (temps assis ou allongé).",
+            "PAD645":     "Minutes hebdomadaires d'activité physique modérée (travail + loisirs).",
+            "PAQ640":     "Jours par semaine avec des activités de renforcement musculaire.",
+            "BMXWT":      "Poids corporel total (kg).",
+            "LBXIN":      "Insuline sérique à jeun : marqueur de l'insulinorésistance (µU/mL).",
+            "INDHHIN2":   "Niveau de revenu du ménage (variable socio-économique catégorielle).",
+            "DMDYRSUS":   "Nombre d'années de résidence aux États-Unis.",
+            "BMXARMC":    "Circonférence moyenne du bras : mesure anthropométrique (cm).",
+            "PAQ670":     "Minutes hebdomadaires d'activité de loisir intense.",
+            "BPXSY1":     "Pression artérielle systolique, première mesure (mmHg).",
+            "PAD630":     "Minutes hebdomadaires d'activité physique modérée de loisir.",
+            "DMDHHSZE":   "Composition du ménage : nombre d'enfants dans le foyer.",
+            "BPXDI1":     "Pression artérielle diastolique, première mesure (mmHg).",
+            "LBXTR":      "Triglycérides sériques : marqueur du profil lipidique (mg/dL).",
+            "DMDMARTL_1": "État civil = marié (variable indicatrice après encodage one-hot).",
+            "DMDMARTL_5": "État civil = jamais marié (variable indicatrice après encodage one-hot).",
+            "BPXPLS":     "Pouls : fréquence cardiaque au repos (battements/min).",
+            "DMDEDUC2_3": "Niveau d'études intermédiaire (lycée/GED) : variable indicatrice après encodage one-hot.",
+            "SDMVSTRA":   "Strate de variance du plan de sondage NHANES (variable méthodologique, non clinique).",
+            "DMDMARTL_2": "État civil = veuf (variable indicatrice après encodage one-hot).",
+            "DMDHHSZB":   "Composition du ménage : nombre d'adultes dans le foyer.",
+        },
+        "qsvm_labels": {
+            "LBXGH": "HbA1c", "LBXGLU": "Glycémie à jeun", "RIDAGEYR": "Âge",
+            "LBDLDL": "Cholestérol LDL", "BMXWAIST": "Tour de taille", "LBXIN": "Insuline",
+            "BMXLEG": "Longueur de jambe", "BMXBMI": "IMC",
+        },
+        "qsvm_units": {"años": "ans"},
+
+        # ── Page 2 · Gouvernance ──
+        "gov_eyebrow": "Gouvernance · DataOps",
+        "gov_title": "Gouvernance et qualité de la donnée",
+        "gov_subtitle": ("Les contrôles qui soutiennent le pipeline : ce qui est validé, ce qui est "
+                         "écarté et pourquoi, ce qui est consigné et avec quels frameworks. Tous les "
+                         "chiffres proviennent des sorties exécutées des notebooks."),
+        "gov_tabs": ["Qualité de la donnée", "Traçabilité et lignage", "Inventaire des frameworks"],
+        "gov_kpi_expect": "Attentes satisfaites",
+        "gov_kpi_passrate": "Taux de réussite de la suite",
+        "gov_kpi_records": "Enregistrements validés",
+        "gov_kpi_leakage": "Artefacts sans fuite",
+        "gov_funnel_title": "Entonnoir des enregistrements",
+        "gov_funnel_sub": ("Sur les {bronze} enregistrements de Bronze, {silver} survivent aux filtres "
+                           "de cohorte de Silver. Chaque palier répond à un critère explicite, pas à un "
+                           "nettoyage générique."),
+        "gov_hover_records": "Enregistrements",
+        "gov_hover_dropped": "Écartés",
+        "gov_embudo": [
+            ("Bronze — 3 cycles réunis",
+             "27 fichiers XPT · jointure par SEQN · 162 colonnes communes aux trois cycles"),
+            ("Filtre âge ≥ 18 ans", "Restriction à la population adulte"),
+            ("Filtre à jeun — LBXGLU non nul",
+             "Proxy du sous-groupe à jeun : PHAFSTMN n'est pas cohérent d'un cycle à l'autre"),
+            ("Filtre DIQ010 valide",
+             "Écarte les codes 7 « ne sait pas » et 9 « refuse de répondre », ainsi que les valeurs nulles"),
+        ],
+        "gov_dropped_title": "Enregistrements écartés par filtre",
+        "gov_split_label": "Partition Gold 80/20",
+        "gov_suite_title": "Suite de validation — dataframe-expectations",
+        "gov_suite_sub": ("Suite <code>{nombre}</code>, exécutée le {fecha} sur les {registros} "
+                          "enregistrements de Silver en {duracion} secondes. Great Expectations est "
+                          "incompatible avec les versions figées du runtime serverless : voici "
+                          "l'alternative adoptée."),
+        "gov_expectativas": [
+            ("Complétude", "TARGET", "au plus 0 valeur nulle"),
+            ("Complétude", "LBXGH", "au plus 0 valeur nulle"),
+            ("Complétude", "LBXGLU", "au plus 0 valeur nulle"),
+            ("Complétude", "RIDAGEYR", "au plus 0 valeur nulle"),
+            ("Complétude", "BMXBMI", "au plus 0 valeur nulle"),
+            ("Plages cliniques", "RIDAGEYR", "minimum entre 18 et 25"),
+            ("Plages cliniques", "RIDAGEYR", "maximum entre 70 et 120"),
+            ("Plages cliniques", "LBXGH", "minimum entre 3,0 et 6,0"),
+            ("Plages cliniques", "LBXGH", "maximum entre 8,0 et 20,0"),
+            ("Plages cliniques", "LBXGLU", "minimum entre 30 et 80"),
+            ("Plages cliniques", "LBXGLU", "maximum entre 150 et 500"),
+            ("Plages cliniques", "BMXBMI", "minimum entre 10,0 et 18"),
+            ("Plages cliniques", "BMXBMI", "maximum entre 40,0 et 80"),
+            ("Volume", "DataFrame", "au moins 7 000 lignes"),
+            ("Volume", "DataFrame", "au plus 9 000 lignes"),
+        ],
+        "gov_ops_title": "Opérations de qualité par couche",
+        "gov_silver_card": "Silver — nettoyage et assainissement",
+        "gov_gold_card": "Gold — préparation à la modélisation",
+        "gov_silver_ops": [
+            ("Variables DIQ exclues pour fuite", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
+            ("Colonnes creuses supprimées", "Seuil de >80 % de valeurs manquantes"),
+            ("Variables winsorisées", "Écrêtage des valeurs aberrantes à IQR × 3"),
+            ("Manquants après imputation", "De 75 855 à 0 dans le jeu SVM/QSVM (médiane + mode)"),
+        ],
+        "gov_gold_ops": [
+            ("Features après encodage", "One-hot de 5 variables catégorielles sur 84 features (106 colonnes avec TARGET)"),
+            ("Écartées par corrélation", "Seuil r > 0,90 entre paires de prédicteurs"),
+            ("Features finales", "L'ensemble sur lequel les trois modèles sont entraînés"),
+            ("Partition stratifiée", "80/20 · 14,03 % de positifs à l'entraînement, 14,04 % au test"),
+        ],
+        "gov_eff_title": "Features effectives face aux features nominales",
+        "gov_eff_sub": ("Compté d'après <code>scaler_correcto.json</code> : {const} des {total} colonnes "
+                        "ont une variance nulle et n'apportent aucune information au modèle"),
+        "gov_eff_nominal": "Features nominales",
+        "gov_eff_const": "Constantes (variance = 0)",
+        "gov_eff_effective": "Features effectives",
+        "gov_eff_note": ("C'est l'effet collatéral de la winsorisation IQR × 3 de Silver, appliquée aussi "
+                         "à des variables catégorielles encodées numériquement (réponses 1/2, langue de "
+                         "l'entretien, codes 7 et 9). Lorsque plus de 75 % de l'échantillon répond la même "
+                         "chose, l'écrêtage réduit la colonne à une valeur unique. Les plus écrêtées dans "
+                         "le notebook 02 — PAQ635, PAQ650, PAQ605, DMDHHSZA, DMDCITZN, SIALANG — sont "
+                         "exactement celles qui apparaissent ici comme constantes."),
+        "gov_lin_title": "Traçabilité sans MLflow",
+        "gov_lin_sub": "La contrainte qui conditionne le plus l'architecture du pipeline, et son atténuation.",
+        "gov_lin_limit_title": "Limitation",
+        "gov_lin_limit_body": ("L'intégration native de <b>MLflow</b> est désactivée dans Databricks "
+                               "Serverless gratuit. Tout appel à <code>mlflow.start_run()</code> ou "
+                               "<code>mlflow.log_metric()</code> produit des erreurs d'authentification : "
+                               "aucun suivi des expériences, des métriques ni des artefacts."),
+        "gov_lin_mit_title": "Atténuation — double mécanisme",
+        "gov_lin_mit_body": ("<b>Journaux de transactions de Delta Lake</b> — chaque écriture génère un "
+                             "enregistrement ACID avec version, horodatage et métriques d'opération."
+                             "<br><br><b>CSV de métriques par modèle</b> — chaque notebook persiste ses "
+                             "résultats dans Unity Catalog Volumes, et les figures les y lisent au lieu "
+                             "de les porter en dur."),
+        "gov_delta_title": "Historique Delta — couche Gold",
+        "gov_delta_sub": ("Les six versions les plus récentes sur les dix enregistrées. Delta purge les "
+                          "précédentes après 168 h de rétention : comportement attendu, et non une "
+                          "défaillance du pipeline."),
+        "gov_delta_cols": ["Version", "Horodatage", "Opération", "Lignes", "Taille"],
+        "gov_chain_title": "Chaîne de contrôle contre la fuite d'information",
+        "gov_chain_sub": ("Quatre barrières enchaînées. La troisième n'écarte aucune colonne — et c'est "
+                          "exactement ce que l'on veut voir : la preuve que les précédentes ont fait "
+                          "leur travail."),
+        "gov_leakage": [
+            ("Exclusion dans Silver",
+             "6 variables DIQ de traitement et de suivi sont supprimées avant la winsorisation : "
+             "elles sont une conséquence du diagnostic, non des prédicteurs de celui-ci."),
+            ("Vérification croisée",
+             "On vérifie qu'aucune DIQ ne survit dans les 2 Parquet de Silver ni dans les 13 de "
+             "Gold. Résultat : 15/15 artefacts propres."),
+            ("Filtre défensif du QSVM",
+             "Deuxième barrière avant la sélection par Random Forest. Elle n'écarte aucune colonne "
+             "(89 sur 89 passent) — précisément la preuve que la première a fonctionné."),
+            ("Garde-fou des poids de sondage",
+             "Arrête le pipeline si un poids de sondage autre que celui connu apparaît. WTINT2YR "
+             "atteint bel et bien la modélisation et est documenté à la décision 10."),
+        ],
+        "gov_scaler_card": "Mise à l'échelle sans fuite statistique",
+        "gov_scaler": [
+            ("Ajustement", "Sur train uniquement", "fit_transform sur train · transform sur test"),
+            ("Colonnes évaluées", "66", "Avec variance > 0"),
+            ("Colonnes constantes", "23", "Variance 0 — voir décision 08"),
+            ("Moyenne ≈ 0 · écart-type ≈ 1", "Vérifié", "Assert sur toutes les colonnes avec dispersion"),
+        ],
+        "gov_scaler_note": ("Le <b>StandardScaler</b> est ajusté exclusivement sur <b>train</b> : "
+                            "<code>fit_transform</code> à l'entraînement et <code>transform</code> au "
+                            "test. S'il était ajusté sur l'ensemble complet, la moyenne et l'écart-type "
+                            "du test fuiraient dans le prétraitement et les métriques seraient "
+                            "optimistes. La sélection des 8 variables du QSVM suit la même règle — le "
+                            "Random Forest n'est entraîné que sur <code>X_train_svm_scaled</code>."
+                            "<br><br>Le filtre de corrélation, en revanche, <b>est bien</b> calculé "
+                            "avant la partition. C'est documenté et assumé à la décision 09."),
+        "gov_e2e_title": "Vérification de bout en bout face aux modèles entraînés",
+        "gov_e2e_missing": ('<b style="color:{color};">Non vérifié.</b> Le jeu de test n\'est pas dans le '
+                            "dépôt, le tableau de bord ne peut donc pas vérifier seul que son chemin "
+                            "d'inférence reproduit ce qu'ont produit les modèles entraînés. Pour clore ce "
+                            "point, exécutez les deux cellules de "
+                            "<code>notebooks/INSTRUCCIONES_exportar_golden_set.md</code> et copiez "
+                            "<code>golden_lgbm.npz</code> et <code>golden_svm.npz</code> dans "
+                            "<code>streamlit/models/</code>. Tant qu'ils manquent, cette page n'affirme "
+                            "rien qu'elle n'ait pu vérifier."),
+        "gov_e2e_unavailable": "non disponible",
+        "gov_e2e_ok_val": "{n} lignes · écart max. {dif}",
+        "gov_e2e_bad_val": "DIVERGENCE · écart max. {dif}",
+        "gov_e2e_scaled": "met à l'échelle et appelle le modèle ONNX",
+        "gov_e2e_raw": "appelle le modèle ONNX sans mise à l'échelle",
+        "gov_e2e_path": "Le tableau de bord {accion}",
+        "gov_e2e_ok_title": "✓ Chemin d'inférence vérifié",
+        "gov_e2e_fail_title": "⚠ Le chemin d'inférence ne reproduit pas les modèles",
+        "gov_e2e_note": ("Chaque ligne du <i>golden set</i> est une instance réelle du test accompagnée "
+                         "de la probabilité renvoyée par le modèle entraîné dans son notebook. Le "
+                         "tableau de bord la fait passer par son propre chemin — vecteur brut, mise à "
+                         "l'échelle du SVM seulement, conversion en <code>float32</code>, session ONNX "
+                         "et lecture du tenseur de sortie — puis compare. Tolérance {tol} ; le bruit "
+                         "attendu du travail en <code>float32</code> est de l'ordre de 10⁻⁷."),
+        "gov_stack_title": "Frameworks par couche",
+        "gov_stack_sub": ("Le premier badge de chaque carte est le framework qui structure la couche ; "
+                          "les autres l'accompagnent."),
+        "gov_stack": [
+            ("ingestion",
+             "boto3 remplace spark.conf, bloqué sous Serverless (décision 01). Trois asserts "
+             "d'intégrité : 27/27 fichiers, la jointure par SEQN ne duplique pas de lignes, et "
+             "Delta concorde avec pandas."),
+            ("qualité",
+             "Le framework de qualité de ce mémoire. Great Expectations est incompatible avec "
+             "l'environnement (décision 03). Suite de 15 attentes sur 3 dimensions, avec des "
+             "preuves persistées en CSV."),
+            ("préparation",
+             "Mise à l'échelle ajustée sur train uniquement, partition stratifiée à graine fixe "
+             "et export du contrat de service (scaler et médianes en JSON)."),
+            ("modèle",
+             "Interprétabilité exacte par l'algorithme polynomial sur les 1 567 instances de "
+             "test, et vérification que le modèle ONNX reproduit le PKL à 100 %."),
+            ("modèle",
+             "SHAP agnostique au modèle, au prix de plusieurs heures : calculé une fois sur 200 "
+             "instances et persisté sur disque pour être réutilisé."),
+            ("modèle",
+             "Pas de support ONNX : le format n'admet pas d'opérations quantiques (décision 05). "
+             "La traçabilité repose sur un CSV de métriques avec les 14 champs de configuration."),
+        ],
+        "gov_dec_title": "Registre des décisions",
+        "gov_dec_sub": ("Les onze limitations documentées dans TECHNICAL_NOTES, avec leur atténuation. "
+                        "Trois conditionnent l'architecture, six sont assumées et documentées sans "
+                        "correction — car la corriger invaliderait les résultats déjà obtenus — et deux "
+                        "sont résolues sans reliquat."),
+        "gov_dec_tags": {"critical": "Architecture", "warning": "Assumée", "good": "Résolue"},
+        "gov_dec_problem": "Problème · ",
+        "gov_dec_solution": "Solution adoptée · ",
+        "gov_decisiones": [
+            ("spark.conf bloqué sous Serverless",
+             "La configuration des identifiants AWS via spark.conf.set renvoie CONFIG_NOT_AVAILABLE, "
+             "le mécanisme standard pour connecter Spark à S3.",
+             "boto3 comme client alternatif. S3 reste le stockage d'origine et Unity Catalog Volumes "
+             "la couche de traitement."),
+            ("MLflow bloqué sous Serverless",
+             "L'intégration native de MLflow est désactivée dans l'offre gratuite : aucun suivi des "
+             "expériences, des métriques ni des artefacts.",
+             "Double mécanisme de remplacement : les journaux de transactions de Delta Lake "
+             "fournissent version, horodatage et métriques d'opération ; et chaque notebook persiste "
+             "ses métriques en CSV."),
+            ("Great Expectations incompatible",
+             "Il exige une combinaison pandas/numpy qui entre en conflit avec les versions figées du "
+             "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
+             "dataframe-expectations 0.7.0 comme alternative compatible. 15 attentes sur Silver dans "
+             "trois dimensions. Résultat 15/15, taux de réussite 1,0."),
+            ("QSVM — coût de calcul O(n²)",
+             "Sur les 6 264 instances d'entraînement, la matrice de noyau exigerait environ "
+             "39 millions d'évaluations du circuit. À 1 500, le noyau épuise la mémoire.",
+             "Entraînement sur un échantillon stratifié de 500 instances (~22 min) en préservant le "
+             "ratio 86/14. L'évaluation utilise bien le test complet, pour que les métriques restent "
+             "comparables."),
+            ("QSVM — pas de support ONNX natif",
+             "Le format ONNX n'admet pas d'opérations quantiques : ni skl2onnx ni onnxmltools ne "
+             "peuvent sérialiser un noyau fondé sur la simulation d'états.",
+             "Sérialisation avec joblib. Le modèle exige l'environnement Qiskit pour l'inférence, si "
+             "bien que le QSVM n'entre pas dans le Prédicteur en direct."),
+            ("Versions de Qiskit non figeables",
+             "Le fichier immutable_package_constraints.txt de Databricks bloque l'installation de "
+             "versions précises : pas de reproductibilité exacte de version.",
+             "Le pipeline tourne avec les versions de l'environnement (2.5.0 / 0.9.0 / 0.4.0), dont "
+             "l'API est compatible, et elles sont consignées par une vérification explicite au début "
+             "de l'exécution."),
+            ("Perte de variables due à la durée de session",
+             "Les opérations longues (22 min d'entraînement, 132 de prédiction) peuvent épuiser la "
+             "session serverless et emporter les variables en mémoire.",
+             "Persistance immédiate après chaque opération coûteuse et mode TRAINING_MODE qui "
+             "recharge depuis le disque lors des exécutions suivantes."),
+            ("Winsorisation appliquée à des catégorielles encodées",
+             "NHANES encode numériquement de nombreuses catégorielles. Si plus de 75 % partagent une "
+             "valeur, IQR = 0, les bornes s'effondrent et clip() transforme la variable en constante. "
+             "10 colonnes se sont ainsi effondrées.",
+             "Documenté sans modification : corriger altérerait Silver, Gold et les trois modèles. "
+             "Les colonnes constantes ne biaisent rien — le modèle n'en tire aucun signal — mais de "
+             "l'information est perdue. La correction est identifiée comme travail futur."),
+            ("Corrélation calculée avant la partition",
+             "Le filtre r > 0,90 est calculé sur le jeu complet : les 16 colonnes écartées sont donc "
+             "décidées en utilisant aussi les observations de test.",
+             "Documenté sans modification. Cela n'affecte ni la mise à l'échelle ni la sélection de "
+             "features du QSVM, toutes deux ajustées sur train uniquement, mais la sélection cesse "
+             "d'être strictement aveugle au test."),
+            ("Poids de sondage WTINT2YR parmi les features",
+             "La jointure intracyclique duplique WTSAF2YR sur trois colonnes. WTINT2YR n'est pas sur "
+             "la liste d'exclusion et survit au filtre de corrélation : c'est l'une des 89 features.",
+             "Documenté sans modification, avec un assert qui détecte l'apparition de TOUT autre "
+             "poids. Un poids de sondage n'est pas une variable clinique : il ne divulgue pas la "
+             "cible, mais laisse le modèle s'appuyer sur le plan de l'enquête."),
+            ("Le QSVM sérialisé n'est pas rechargeable d'une version à l'autre",
+             "Le pickle entraîne avec lui la ZZFeatureMap et ses ParameterExpression. Si Qiskit change "
+             "de version, la désérialisation échoue — et Serverless met à jour sans prévenir.",
+             "Le chargement est enveloppé dans un try/except : en cas d'échec, TRAINING_MODE passe à "
+             "True et le notebook réentraîne au lieu d'abandonner. Il reste opérationnel dans les "
+             "trois scénarios possibles."),
+        ],
+        "gov_footer_note": ("Les chiffres de cette page proviennent des sorties exécutées des notebooks "
+                            "du dépôt et de <code>TECHNICAL_NOTES.md</code> ; aucun n'est estimé. "
+                            "L'application ne peut pas les consulter en direct, car Streamlit Community "
+                            "Cloud n'accède qu'au dépôt, pas à Unity Catalog Volumes.<br><br>"
+                            "Résumé de la suite de qualité : <b>{fuente}</b>."),
+        "gov_suite_src_csv": "lu depuis validacion_silver_dfe.csv",
+        "gov_suite_src_nb": "valeurs vérifiées du notebook",
+
+        # ── Page 3 · Résultats ──
+        "res_eyebrow": "Comparaison triangulée",
+        "res_title": "Résultats",
+        "res_subtitle": "LightGBM vs SVM-RBF vs QSVM sur le même jeu de test ({n} instances).",
+        "res_threshold": "Seuil",
+        "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
+        "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
+                        "svm_rbf": "SVC.predict() — signe de decision_function",
+                        "qsvm": "decision_function > 0 (n'est pas une probabilité)"},
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Réconciliées</span> — les '
+                           "quatre métriques des trois modèles ont été recalculées à partir des scores "
+                           "par instance et coïncident avec celles publiées."),
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Non réconciliées</span> — {fallos}',
+        "res_no_scores": "scores non disponibles",
+        "res_threshold_note": ("<b>Les trois modèles sont mesurés à des seuils différents.</b> Chacun "
+                               "utilise son point de coupure naturel — LightGBM "
+                               "<code>predict_proba ≥ 0,50</code> ; SVM-RBF le signe de "
+                               "<code>decision_function</code>, qui sur l'échelle de probabilité "
+                               "enregistrée équivaut à ≈ 0,22 ; QSVM <code>decision_function &gt; 0</code>, "
+                               "qui n'est pas une probabilité. Chaque matrice se reproduit exactement à "
+                               "son propre seuil, mais <b>seule l'AUC-ROC est comparable entre "
+                               "modèles</b> : c'est la seule des quatre métriques indépendante du point "
+                               "de coupure. À titre de référence, le SVM-RBF évalué à 0,50 comme "
+                               "LightGBM donnerait une accuracy de 0,9190 mais seulement 131 vrais "
+                               "positifs au lieu de 172."),
+        "res_roc_title": "Courbes ROC",
+        "res_roc_sub_real": ("Courbes empiriques réelles, point par point sur les 1 567 instances du "
+                             "test (les mêmes scores que ceux qui donnent l'AUC du mémoire)."),
+        "res_roc_sub_synth": ("AUC exacte · forme reconstruite à partir de l'AUC là où les scores par "
+                              "instance manquent."),
+        "res_cm_title": "Matrices de confusion",
+        "res_cm_sub": ("Valeurs vérifiées face au classification report de chaque modèle, et recalculées "
+                       "à partir des scores par instance. Chaque matrice correspond au seuil indiqué sur "
+                       "sa carte"),
+        "res_cm_pred_no": "Préd.<br>Pas de diabète",
+        "res_cm_pred_yes": "Préd.<br>Diabète",
+        "res_cm_real_no": "Réel<br>Pas de diab.",
+        "res_cm_real_yes": "Réel<br>Diabète",
+        "res_cm_tags": {"tn": "VN", "fp": "FP", "fn": "FN", "tp": "VP"},
+        "res_metrics_title": "Comparaison des métriques",
+        "res_metrics_sub": ("Les quatre métriques portent sur les 1 567 instances. Accuracy, MCC et "
+                            "F1-macro pénalisent bien le déséquilibre des classes — mais elles dépendent "
+                            "du seuil, et chaque modèle utilise le sien : comparez avec prudence tout ce "
+                            "qui n'est pas l'AUC-ROC"),
+        "res_metric_desc": {
+            "auc": "Aire sous la courbe ROC : capacité à séparer diabète et non-diabète. 0,5 = hasard, 1 = parfait.",
+            "f1_macro": "Moyenne harmonique de la précision et du rappel, moyennée par classe (sans pondération). Pénalise le déséquilibre.",
+            "accuracy": "Proportion de prédictions correctes au total. Avec des classes déséquilibrées, elle peut ne refléter que la classe majoritaire.",
+            "mcc": "Coefficient de corrélation de Matthews : qualité globale robuste au déséquilibre. 0 = hasard, 1 = parfait.",
+        },
+        "res_qsvm_note": ("<b>Note sur l'expérience QSVM.</b> Le QSVM a été entraîné sur un échantillon "
+                          "stratifié de 500 instances (coût O(n²) du noyau quantique) et évalué sur les "
+                          "1 567 du test complet. AUC-ROC = 0,5493 indique que le modèle dépasse à peine "
+                          "la classification aléatoire — rappel ≈ 0 pour la classe diabète (1 sur 220), "
+                          "et une accuracy de 0,8602 qui ne reflète que la proportion de la classe "
+                          "majoritaire. Le MCC ≈ 0 confirme l'absence de véritable capacité prédictive."),
+
+        # ── Page 4 · Analyse SHAP ──
+        "sh_eyebrow": "Interprétabilité",
+        "sh_title": "Analyse SHAP",
+        "sh_subtitle": ("Importance globale des variables — TreeExplainer (LightGBM) vs "
+                        "KernelExplainer (SVM-RBF)."),
+        "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
+        "sh_hint": "Survolez chaque barre pour voir la signification de la variable. {nota}",
+        "sh_sample_lgbm": "Valeurs exactes (algorithme polynomial) sur les 1 567 instances du test.",
+        "sh_sample_svm": ("Valeurs approchées par échantillonnage : fond de 100 instances, contributions "
+                          "sur 200 instances de test."),
+        "sh_note_lgbm": ("<b>LBXGH (HbA1c)</b> domine largement (SHAP moyen = 1,1243), en cohérence avec "
+                         "son rôle de marqueur diagnostique primaire du diabète de type 2 (ADA : "
+                         "HbA1c ≥ 6,5 %). <b>RIDAGEYR (âge, 0,4654)</b> reflète l'augmentation de la "
+                         "prévalence avec l'âge. <b>LBXGLU</b> et <b>LBDLDL</b> complètent le bloc "
+                         "biochimique. <b>WTINT2YR</b> (position 6) est un artefact du plan de sondage "
+                         "NHANES, pas une variable clinique."),
+        "sh_note_svm": ("Le classement du SVM-RBF coïncide avec LightGBM sur les variables dominantes "
+                        "(<b>LBXGH</b>, <b>LBXGLU</b>, <b>LBDLDL</b>, <b>RIDAGEYR</b>), ce qui renforce "
+                        "la validité clinique du résultat en le rendant indépendant de l'algorithme et "
+                        "méthodologiquement plus robuste. KernelExplainer traite le modèle comme une "
+                        "boîte noire, applicable à n'importe quel classifieur."),
+        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Figure 27)",
+        "sh_fig_lgbm_cap": ("Chaque point est une instance du test ; la couleur indique la valeur de la "
+                            "variable (rouge élevé, bleu bas) et la position horizontale son impact sur "
+                            "la prédiction. LBXGH et RIDAGEYR dominent le modèle."),
+        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Figure 31)",
+        "sh_fig_svm_cap": ("Chaque point est une instance ; couleur = valeur de la variable, position = "
+                           "impact. KernelExplainer sur 200 instances du test."),
+
+        # ── Page 5 · Circuit quantique ──
+        "qc_eyebrow": "Composante quantique",
+        "qc_title": "Circuit quantique",
+        "qc_subtitle": ("Configuration de la ZZFeatureMap et du FidelityQuantumKernel implémentés sous "
+                        "Qiskit sur Databricks CE."),
+        "qc_specs": ["Qubits (feature_dimension)", "Répétitions (reps)", "Intrication", "Version de Qiskit"],
+        "qc_how_title": "Comment ça marche",
+        "qc_how_p1": ("La <b>ZZFeatureMap</b> encode chacune des 8 variables cliniques comme un angle de "
+                      "phase (porte P) sur un qubit indépendant, après avoir créé la superposition avec "
+                      "des portes de Hadamard. Son élément distinctif est l'<b>intrication</b> entre "
+                      "paires de qubits au moyen de portes qui dépendent du produit croisé de deux "
+                      "variables — des corrélations que le noyau RBF classique ne peut pas représenter."),
+        "qc_how_p2": ("Le <b>FidelityQuantumKernel</b> mesure la similarité entre deux patients comme la "
+                      "fidélité entre leurs états quantiques : <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. "
+                      "L'implémentation utilise <code>StatevectorSampler</code> et simule l'état exact "
+                      "sans bruit — des résultats déterministes et reproductibles."),
+        "qc_feat_title": "8 features sélectionnées (Random Forest)",
+        "qc_xaxis": "Importance RF",
+        "qc_train_title": "Entraînement et évaluation",
+        "qc_tstats": ["Instances d'entraînement", "Temps d'entraînement", "Instances de test",
+                      "Temps d'inférence", "Vecteurs de support"],
+        "qc_note": ("En raison du coût O(n²) du noyau quantique, l'entraînement s'est limité à un "
+                    "échantillon stratifié de 500 instances (la limite opérationnelle de Databricks CE "
+                    "serverless se situe autour de 500-1 000). L'évaluation a porté sur le test complet "
+                    "(1 567 instances) par lots de 100, pour un temps total de prédiction de "
+                    "144,5 minutes."),
+        "qc_circuit_title": "Circuit quantique complet (8 qubits)",
+        "qc_circuit_sub": ("ZZFeatureMap avec reps=2 : encodage (H + P) suivi de deux tours d'intrication "
+                           "linéaire entre qubits adjacents."),
+
+        # ── Page 6 · Sphère de Bloch ──
+        "bl_eyebrow": "Encodage quantique",
+        "bl_title": "Sphère de Bloch",
+        "bl_subtitle": "Comment la ZZFeatureMap encode la valeur d'une variable clinique comme état quantique |ψ⟩.",
+        "bl_what_note": ("<b>Ce qu'est la sphère de Bloch.</b> Un bit classique ne peut valoir "
+                         "que 0 ou 1. Un qubit admet en plus n'importe quel mélange des deux, et "
+                         "ce mélange ne tient pas dans un seul nombre : il faut une carte. La "
+                         "sphère de Bloch est cette carte — chaque état possible d'un qubit est "
+                         "un point à la surface d'une sphère de rayon 1. Le pôle nord est "
+                         "<b>|0⟩</b> et le pôle sud <b>|1⟩</b> ; entre les deux se trouvent les "
+                         "superpositions, et plus la flèche est proche d'un pôle, plus ce "
+                         "résultat est probable à la mesure. Ici la valeur clinique se traduit en "
+                         "l'angle θ, si bien que déplacer le curseur fait tourner la flèche le "
+                         "long d'un méridien, de |0⟩ à |1⟩."),
+        "bl_var": "Variable clinique",
+        "bl_value": "Valeur ({unidad})",
+        "bl_xnorm": "x normalisé",
+        "bl_theta": "θ = x_norm·π",
+        "bl_alpha": "α (amplitude |0⟩)",
+        "bl_beta": "β (amplitude |1⟩)",
+        "bl_rad": "rad",
+        "bl_note": ("<b>Analogie didactique du principe d'encodage angulaire</b>, et non une réplique du "
+                    "circuit. Ici la valeur clinique normalisée sur [0,1] devient l'angle <b>polaire</b> "
+                    "θ = x_norm·π, de sorte que le vecteur parcourt le méridien de |0⟩ à |1⟩ et que "
+                    "P(|0⟩) varie de 100 % à 0 % : c'est la façon la plus lisible de voir « un nombre "
+                    "devient un état ».<br><br>"
+                    "La <b>vraie ZZFeatureMap</b> fait autre chose : elle applique H puis "
+                    "P(2·x<sub>i</sub>), et une porte de phase après une Hadamard laisse l'état <b>sur "
+                    "l'équateur</b> — θ = π/2 fixe, P(|0⟩) = P(|1⟩) = 50 % toujours — en encodant la "
+                    "donnée dans l'angle <b>azimutal</b> φ, et non dans le polaire. Elle ne normalise "
+                    "pas non plus sur [0,1] : elle utilise directement la valeur mise à l'échelle. Voilà "
+                    "pourquoi cette sphère illustre le concept sans reproduire le circuit pas à pas. "
+                    "L'intrication (portes P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) n'est représentable "
+                    "que dans l'espace conjoint des 8 qubits — voir Circuit quantique."),
+
+        # ── Page 6 · Sphère de Bloch → section intrication ──
+        "bl_ent_title": "Intrication : deux qubits, un seul état",
+        "bl_ent_sub": ("La limite de la sphère ci-dessus. Appliquez les deux portes et regardez ce "
+                       "qu'il advient de l'état local de chaque qubit."),
+        "bl_ent_intro": ("<b>Là où la sphère de Bloch cesse de servir.</b> Avec un qubit, une sphère "
+                         "et une flèche suffisent. Avec deux, la tentation est d'en dessiner deux — et "
+                         "pour la plupart des états cela fonctionne. Mais il existe une famille d'états "
+                         "où <b>il ne reste aucune flèche à dessiner</b> : la paire possède un état "
+                         "parfaitement défini et aucun de ses deux membres n'en a un séparément. C'est "
+                         "cela, l'intrication, et elle se construit avec deux portes. Appliquez-les et "
+                         "suivez les trois chiffres de gauche."),
+        "bl_ent_btn_h": "1 · Hadamard sur q₀",
+        "bl_ent_btn_cnot": "2 · CNOT (contrôle q₀ → cible q₁)",
+        "bl_ent_btn_reset": "Réinitialiser à |00⟩",
+        "bl_ent_step_note": [
+            ("<b>Point de départ.</b> Deux qubits, tous deux en |0⟩, aucune porte appliquée. L'état "
+             "conjoint est |00⟩ et n'a encore rien de quantique : il équivaut exactement à deux bits "
+             "classiques mis à zéro. Sur la Q-sphere il n'y a qu'un seul nœud, au pôle nord, qui "
+             "emporte toute la probabilité."),
+            ("<b>Superposition, pas encore d'intrication.</b> La Hadamard laisse q₀ à mi-chemin entre "
+             "|0⟩ et |1⟩, tandis que q₁ reste fermement en |0⟩ : l'état conjoint est "
+             "(|00⟩ + |10⟩)/√2. Les deux qubits restent <b>indépendants</b> — chacun a son propre "
+             "état pur et deux sphères de Bloch suffiraient à les décrire. Notez que la longueur du "
+             "vecteur local vaut toujours 1 : il y a une flèche à dessiner."),
+            ("<b>État de Bell.</b> Le CNOT retourne q₁ seulement lorsque q₀ vaut 1 ; appliqué à une "
+             "superposition, cela lie les deux résultats en un seul : (|00⟩ + |11⟩)/√2. Les nœuds "
+             "sont partis aux pôles et l'équateur est vide. Et c'est ici que la carte se rompt : la "
+             "longueur du vecteur local vient de tomber à <b>0</b> — le qubit 0 n'est plus en aucun "
+             "point de sa sphère, car séparément il <b>n'a plus d'état</b>."),
+        ],
+        "bl_ent_circuit_title": "Circuit",
+        "bl_ent_circuit_alt": "Circuit à deux qubits avec les portes appliquées jusqu'ici",
+        "bl_ent_qsphere_title": "Q-sphere de l'état conjoint",
+        "bl_ent_kpi": ["Longueur du vecteur local |r| (q₀)", "Pureté Tr(ρ₀²)",
+                       "Entropie d'intrication"],
+        "bl_ent_bits": "bits",
+        "bl_ent_hover_amp": "Amplitude :",
+        "bl_ent_hover_prob": "Probabilité :",
+        "bl_ent_hover_shots": "mesures",
+        "bl_ent_meas_title": "Mesure",
+        "bl_ent_meas_sub": ("La Q-sphere montre l'état ; ceci montre la seule chose observable. "
+                            "Relancez le tirage : la proportion est stable, le compte exact ne l'est pas."),
+        "bl_ent_meas_n": "Nombre de mesures",
+        "bl_ent_meas_btn": "Simuler les mesures",
+        "bl_ent_meas_empty": "Choisissez combien de mesures et appuyez sur « Simuler les mesures ».",
+        "bl_ent_meas_yaxis": "Nombre d'occurrences",
+        "bl_ent_meas_note": [
+            ("Avec les deux qubits en |0⟩, le résultat est <b>00</b> à chaque tir. Il n'y a encore "
+             "rien à tirer au sort : c'est le comportement de deux bits classiques."),
+            ("<b>00</b> et <b>10</b> sortent à parts égales : q₀ se comporte comme un tirage à pile "
+             "ou face et q₁ vaut 0 quoi qu'il arrive. Les deux résultats sont <b>indépendants</b> — "
+             "connaître l'un ne dit rien de l'autre."),
+            ("<b>Seuls 00 et 11 sortent</b>, à près de 50 % chacun. Les deux barres vides sont le "
+             "fait marquant : <b>01 et 10 n'apparaissent jamais</b>, pas une fois sur dix mille "
+             "tirs. Chaque qubit donne toujours un résultat au hasard, mais les deux donnent "
+             "<b>toujours le même</b> : mesurer l'un détermine l'autre instantanément. Cette "
+             "corrélation parfaite, c'est l'intrication vue depuis le laboratoire."),
+        ],
+        "bl_ent_impl_note": ("<b>Comment c'est calculé.</b> Les quatre amplitudes proviennent d'une "
+                             "algèbre linéaire <b>exacte</b> sous NumPy — les matrices de H⊗I et du "
+                             "CNOT appliquées à |00⟩ —, et non d'une approximation ; et les mesures "
+                             "d'un tirage multinomial sur |ψ|², ce que fait un simulateur idéal sans "
+                             "bruit. Ce panneau <b>ne charge pas Qiskit</b> : l'environnement déployé "
+                             "est Streamlit, NumPy, Plotly et ONNX Runtime, tandis que Qiskit vit dans "
+                             "le pipeline Databricks — là où le QSVM est entraîné — et ses figures "
+                             "arrivent ici déjà rendues, comme le circuit à 8 qubits de la page Circuit "
+                             "quantique. La convention de base est celle des manuels, |q₀q₁⟩ avec q₀ à "
+                             "gauche ; Qiskit numérote à l'envers et écrirait « 01 » là où l'étape "
+                             "intermédiaire écrit ici « 10 »."),
+
+        # ── Page 6 · Sphère de Bloch → la vraie ZZFeatureMap (8 qubits) ──
+        "bl_zz_title": "La vraie ZZFeatureMap : où se produit l'intrication",
+        "bl_zz_sub": ("Les mêmes chiffres, maintenant sur les 8 qubits du QSVM du mémoire. Déplacez "
+                      "le curseur en haut de la page et regardez quels qubits réagissent."),
+        "bl_zz_intro": ("<b>De deux qubits aux huit du modèle.</b> Chaque qubit de la ZZFeatureMap "
+                        "porte <b>une variable clinique</b> : q₀ est l'HbA1c, q₁ la glycémie, et "
+                        "ainsi de suite jusqu'à l'IMC. Avec 256 amplitudes, il n'y a plus de figure "
+                        "de l'état à regarder — ni Q-sphere ni histogramme —, mais on peut toujours "
+                        "mesurer les <b>deux mêmes grandeurs</b> que dans la section précédente : "
+                        "combien d'état propre il reste à chaque qubit, et combien d'information il "
+                        "partage avec chacun des autres. Ce n'est plus un exemple de manuel : c'est "
+                        "le circuit avec lequel le modèle a été entraîné."),
+        "bl_zz_current": "Variable en jeu : <b>{var} = {val} {unidad}</b>. Les sept autres à leur valeur de référence.",
+        "bl_zz_r_title": "État propre de chaque qubit",
+        "bl_zz_r_xaxis": "|r| — 1 = conserve son état · 0 = totalement intriqué",
+        "bl_zz_mi_title": "Information mutuelle entre qubits",
+        "bl_zz_mi_cbar": "bits",
+        "bl_zz_note": ("<b>Comment lire la matrice.</b> Chaque cellule dit combien d'information deux "
+                       "qubits partagent : plus c'est allumé, plus ils sont liés. Et il saute aux yeux "
+                       "que la couleur <b>se concentre en une bande le long de la diagonale</b> tandis "
+                       "que les coins restent vides. Ce n'est pas un hasard : la ZZFeatureMap utilise "
+                       "<code>entanglement=\"linear\"</code>, autrement dit <b>il n'y a de portes "
+                       "qu'entre qubits voisins</b>. Avec reps=2, cette corrélation atteint au plus "
+                       "quatre maillons de distance ; au-delà elle vaut <b>exactement zéro</b> "
+                       "(vérifié sur 300 profils : à une distance ≥ 5 dans la chaîne, 0,0000 bit sans "
+                       "une seule exception). La topologie du circuit se dessine toute seule.<br><br>"
+                       "Et il y a une seconde chose que l'on voit en déplaçant le curseur du haut : en "
+                       "changeant <b>une</b> variable, seuls <b>son qubit et ses voisins immédiats</b> "
+                       "bougent — les autres ne changent pas d'une décimale. C'est le même fait vu de "
+                       "l'autre côté : le cône de lumière du circuit, en direct."),
+        "bl_zz_caveat": ("<b>Un avertissement de lecture, et non des moindres.</b> L'intrication <b>ne "
+                         "croît pas avec la valeur clinique</b> : en montant l'HbA1c sur sa plage, le "
+                         "|r| du premier qubit fait 0,88 → 1,00 → 0,65 → 0,24 → 0,73 → 0,98 → 0,33. Il "
+                         "monte et descend. La raison est que la donnée entre comme un <b>angle</b> de "
+                         "phase et que les angles <b>font le tour</b> : deux valeurs cliniques très "
+                         "différentes peuvent aboutir à des phases presque identiques. Avec des "
+                         "features standardisées, un cas extrême atteint x ≈ 5, et le produit "
+                         "2·(π−xᵢ)(π−xⱼ) du terme d'intrication dépasse 2π plusieurs fois. C'est une "
+                         "limitation connue de l'encodage angulaire non borné, et il convient de la "
+                         "garder à l'esprit avant de lire ces figures comme si elles mesuraient une "
+                         "gravité clinique : elles mesurent la géométrie du circuit, pas le risque."),
+
+        # ── Page 7 · Prédicteur en direct ──
+        "lp_eyebrow": "Inférence interactive",
+        "lp_title": "Prédicteur en direct",
+        "lp_subtitle": ("Probabilité qu'un profil clinique corresponde à une personne déjà "
+                        "diagnostiquée diabétique — LightGBM sur les 8 variables les plus importantes."),
+        "lp_what_note": ("<b>Ce que ce formulaire estime.</b> La cible du pipeline est "
+                         "<code>TARGET = (DIQ010 == 1)</code>, la réponse à <i>« un médecin vous a-t-il "
+                         "déjà dit que vous aviez du diabète ? »</i>. Le modèle <b>détecte donc un "
+                         "diabète déjà diagnostiqué</b> : il ne prédit pas qui va le développer. C'est "
+                         "une tâche de détection concomitante, pas de risque prospectif."),
+        "lp_real_note": ("<b>Inférence réelle (ONNX).</b> Prédictions de LightGBM et de SVM-RBF via "
+                         "<code>onnxruntime</code>, avec le <code>StandardScaler</code> récupéré du "
+                         "pipeline Gold. Les 8 variables affichées sont celles de plus grande "
+                         "importance clinique ; les 81 features restantes sont fixées à la médiane du "
+                         "jeu d'entraînement. Le QSVM n'est pas disponible en temps réel à cause du "
+                         "coût O(n²) du noyau quantique : prédire les 1 567 instances du test a pris "
+                         "144,5 minutes."),
+        "lp_proxy_note": ("⚠ <b>Avertissement technique et clinique.</b> Ce formulaire n'a pas les "
+                          "vrais modèles sérialisés (<code>.onnx</code>) connectés — placez "
+                          "<code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>, "
+                          "<code>scaler_correcto.json</code> et <code>medianas_correctas.json</code> "
+                          "dans <code>streamlit/models/</code>. Le score affiché ci-dessous est un "
+                          "<b>substitut transparent</b> : une combinaison pondérée par l'importance "
+                          "SHAP normalisée, à seules fins de maquette. <b>Ce n'est la sortie d'aucun "
+                          "modèle entraîné</b> et cela ne doit pas être cité comme résultat. Le QSVM "
+                          "n'est pas davantage disponible en temps réel (coût O(n²) du noyau "
+                          "quantique)."),
+        "lp_train_range": "Entraînement : {mu} ± {sd} (±3 σ → {lo} à {hi})",
+        "lp_extrapolates": "⚠ z = {z} — hors de la plage entraînée : le modèle extrapole",
+        "lp_ada": "Critère ADA : &lt; 5,7 normal · 5,7–6,4 prédiabète · ≥ 6,5 diabète",
+        "lp_who_model": "le modèle",
+        "lp_who_proxy": "le substitut",
+        "lp_score_real": "Probabilité d'un diagnostic existant",
+        "lp_score_proxy": "Score de maquette (substitut)",
+        "lp_cat_low": "faible",
+        "lp_cat_mid": "intermédiaire",
+        "lp_cat_high": "élevée",
+        "lp_interp_low": ("Le profil se situe nettement sous le seuil de décision (50 %) : {quien} le "
+                          "classerait comme non diagnostiqué."),
+        "lp_interp_mid": "La valeur approche le seuil de décision (50 %) : zone d'incertitude.",
+        "lp_interp_high": ("La valeur dépasse le seuil de décision (50 %) : {quien} classerait ce profil "
+                           "comme un cas positif."),
+        # L'adjectif suit le nom en français, donc {cat} arrive déjà accordé au féminin
+        # depuis lp_cat_* et se place après « Compatibilité ».
+        "lp_badge": "Compatibilité {cat}",
+        "lp_gauge_caption": ("Compatibilité avec un diagnostic existant : faible · intermédiaire · "
+                             "élevée · &nbsp;seuil de décision = 50 %"),
+        "lp_side_title": "Les deux modèles, côte à côte",
+        "lp_side_sub": ("Chaque probabilité se juge au point de coupure de son propre modèle — ils ne "
+                        "sont pas interchangeables"),
+        "lp_own_threshold": "Son seuil",
+        "lp_would_classify": "Classerait comme",
+        "lp_positive": "positif",
+        "lp_negative": "négatif",
+        "lp_disagree": ("<b>Les deux modèles divergent de {dif} sur ce profil.</b> Ils s'accordent aux "
+                        "extrêmes — profils clairement sains ou clairement diabétiques — et divergent "
+                        "dans la bande intermédiaire, justement là où une estimation serait la plus "
+                        "utile. Prenez-le comme un signal d'incertitude, non comme le signe que l'un "
+                        "des deux a raison."),
+        "lp_curve_title": "Courbe de réponse",
+        "lp_curve_var": "Variable à parcourir",
+        "lp_curve_yaxis": "Probabilité",
+        "lp_curve_thr": "seuil",
+        "lp_ada_bands": ["normal", "prédiabète", "diabète"],
+        "lp_curve_note": ("Sur cette variable, LightGBM renvoie <b>{n} valeurs distinctes</b> sur les "
+                          "{total} positions du curseur : c'est un escalier, pas une rampe. Plus "
+                          "grandes marches : {saltos}. Le point marque votre valeur actuelle."),
+        "lp_curve_none": "aucune",
+        "lp_read_note": ("<b>Comment lire ces résultats.</b> Comme la cible est un diagnostic <i>déjà "
+                         "posé</i>, le modèle apprend aussi l'effet du <b>traitement</b>, et pas "
+                         "seulement celui de la maladie. Cela inverse le sens clinique de deux "
+                         "variables :"
+                         '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
+                         "<li><b>Cholestérol LDL</b> — plus le LDL est élevé, <i>plus faible</i> est la "
+                         "probabilité estimée (de 43 % à 18 % en parcourant le curseur). Les personnes "
+                         "diagnostiquées sont généralement traitées par statines.</li>"
+                         "<li><b>Glycémie à jeun</b> — la réponse a une forme en U : les valeurs très "
+                         "basses élèvent l'estimation autant que les hautes, à cause des hypoglycémies "
+                         "des patients sous traitement.</li></ul>"
+                         '<div style="margin-top:10px;">Aucune des deux ne doit se lire comme un '
+                         "facteur de risque modifiable.</div>"),
+    },
+
+    # ═══════════════════════════════ ITALIANO ══════════════════════════════
+    # Italiano estándar, registro académico. Rige lo mismo que en los demás para lo que
+    # NO se traduce: nombres propios, librerías, códigos de variable NHANES y nombres de
+    # fichero del repositorio.
+    #
+    # NOTACIÓN NUMÉRICA: idéntica a la española — coma decimal y punto de millar—, así
+    # que las cifras dentro de estas frases se copian tal cual del catálogo español. El
+    # espacio antes del signo de porcentaje sigue el mismo criterio del SI que allí: el
+    # uso corriente italiano lo omite a menudo, pero esta es una memoria científica y la
+    # aplicación ya lo aplica en las otras cuatro lenguas.
+    #
+    # COMILLAS: las angulares italianas, PEGADAS al texto («testo»), sin el espacio
+    # interior que sí lleva el francés.
+    #
+    # APÓSTROFO: se usa el tipográfico (') y no el recto, que es lo que espera el lector
+    # italiano —"dell'informazione", no "dell'informazione" con la comilla de máquina—.
+    "it": {
+        # ── Navigazione e barra laterale ──
+        "nav": ["Panoramica", "Governance", "Risultati", "Analisi SHAP",
+                "Circuito quantistico", "Sfera di Bloch", "Predittore in diretta"],
+        "sidebar_expand": "Espandi la barra laterale",
+        "sidebar_collapse": "Comprimi la barra laterale",
+        "search_label": "Cerca",
+        "search_ph": "Cerca nella dashboard o sul web…",
+        "search_expand": "Cerca — espande la barra laterale",
+        "search_in": "in {p}",
+        "search_none": "Nessun risultato nella dashboard.",
+        "search_web": "Cerca «{q}» in:",
+        "theme_to_dark": "Passa al tema scuro",
+        "theme_to_light": "Passa al tema chiaro",
+        "lang_es_help": "Vedi l'applicazione in spagnolo",
+        "lang_en_help": "Vedi l'applicazione in inglese",
+        "lang_de_help": "Vedi l'applicazione in tedesco",
+        "lang_fr_help": "Vedi l'applicazione in francese",
+        "lang_it_help": "Vedi l'applicazione in italiano",
+        "footer_name": "Juan Albornoz C. · Tesi di laurea magistrale 2026",
+        "footer_uni": "Universidad Europea de Valencia",
+        "footer_name_narrow": "JAC",
+        "footer_uni_narrow": "UEV",
+
+        # ── Pagina 1 · Panoramica ──
+        "ov_eyebrow": "Framework DataOps + QML",
+        "ov_title": "Panoramica",
+        "ov_subtitle": ("Pipeline end-to-end su Databricks CE + AWS S3, con una QSVM quantistica a "
+                        "confronto con due baseline classiche, validata su dati clinici reali dello "
+                        "studio NHANES (CDC)."),
+        "ov_lead": (
+            "Questo framework progetta e implementa una pipeline <b>DataOps end-to-end</b> su "
+            "<b>Databricks Community Edition</b>, con <b>AWS S3</b> come vero livello di archiviazione "
+            "cloud e un'architettura <b>Medallion</b> (Bronze → Silver → Gold) su Delta Lake come "
+            "spina dorsale. Come caso d'uso si predice il diabete di tipo 2 a partire dai record dello "
+            "studio <b>NHANES</b> (CDC) — il dataset non è l'oggetto della ricerca, ma il veicolo per "
+            "dimostrare che l'architettura è praticabile, riproducibile e verificabile su dati reali "
+            "su larga scala. Il nucleo sperimentale è un <b>confronto triangolato</b> fra LightGBM "
+            "(baseline tabellare), una SVM con kernel RBF (ponte strutturale) e una <b>QSVM</b> con "
+            "FidelityQuantumKernel in Qiskit, mantenendo identico il classificatore sottostante per "
+            "attribuire qualsiasi differenza di prestazioni all'effetto del kernel quantistico."),
+        "ov_stats_title": "Statistiche del dataset NHANES",
+        "ov_stats_sub": "Tre cicli biennali integrati · pipeline a livelli Bronze → Silver → Gold",
+        "ov_stat_bronze": "Record Bronze",
+        "ov_stat_silver": "Record Silver",
+        "ov_stat_features": "Feature Gold",
+        "ov_stat_balance": "Bilanciamento delle classi",
+        "ov_medallion_title": "Architettura Medallion",
+        "ov_medallion_sub": "Catena del valore del dato (Curry, 2016) applicata livello per livello",
+        "ov_layers": [
+            ("Bronze", "Ingestione da AWS S3 senza trasformazioni. Preserva la fonte di verità."),
+            ("Silver", "Pulizia, imputazione, winsorizzazione e validazione della qualità."),
+            ("Gold",   "Scalatura, codifica e partizione stratificata. Pronto per la modellazione."),
+        ],
+        "ov_goto_gov": "Vedi i controlli di qualità e di lineage  →",
+        "ov_target_title": "Distribuzione della variabile target (DIQ010)",
+        "ov_target_sub": "Target binarizzato: 1 = diabete diagnosticato, 0 = il resto",
+        "ov_pie_no": "Nessun diabete",
+        "ov_pie_yes": "Diabete",
+        "ov_donut_center": "14 %",
+        "ov_donut_caption": "DIABETE",
+        "ov_tech_title": "Costruito su",
+        "ov_tech_sub": ("Piattaforma, archiviazione e librerie della pipeline, nell'ordine in cui "
+                        "intervengono · l'inventario completo, con la motivazione di ogni scelta, "
+                        "si trova in Governance"),
+        "ov_compare_title": "Confronto triangolato: obiettivo dell'esperimento",
+        "ov_compare": [
+            ("LightGBM", "Baseline tabellare di riferimento"),
+            ("SVM-RBF",  "Ponte strutturale verso la componente quantistica"),
+            ("QSVM",     "FidelityQuantumKernel: stesso classificatore, kernel quantistico"),
+        ],
+
+        # ── Variabili NHANES (condivise: SHAP, Circuito, Bloch, Predittore) ──
+        # I codici NHANES non si traducono mai, solo la loro glossa.
+        "var_short": {
+            "LBXGH": "HbA1c", "RIDAGEYR": "Età", "LBXGLU": "Glicemia a digiuno",
+            "LBDLDL": "Colesterolo LDL", "BMXWAIST": "Circonf. vita",
+            "WTINT2YR": "Peso campionario*", "BMXARML": "Lunghezza braccio",
+            "BMXLEG": "Lunghezza gamba", "BMXBMI": "IMC",
+            "PAD680": "Attività sedentaria", "PAD645": "Attività moderata",
+            "PAQ640": "Rafforzamento muscolare", "BMXWT": "Peso corporeo", "LBXIN": "Insulina",
+            "INDHHIN2": "Reddito familiare", "DMDYRSUS": "Anni negli USA",
+            "BMXARMC": "Circonf. braccio", "PAQ670": "Attività intensa",
+            "BPXSY1": "Pressione sistolica", "PAD630": "Attività mod. ricreativa",
+            "DMDHHSZE": "Dimensione nucleo (bambini)", "BPXDI1": "Pressione diastolica",
+            "LBXTR": "Trigliceridi", "DMDMARTL_1": "Stato civile (coniugato)",
+            "DMDMARTL_5": "Stato civile (mai coniugato)", "BPXPLS": "Polso",
+            "DMDEDUC2_3": "Istruzione (livello 3)", "SDMVSTRA": "Strato campionario",
+            "DMDMARTL_2": "Stato civile (vedovo)", "DMDHHSZB": "Dimensione nucleo (adulti)",
+        },
+        "var_desc": {
+            "LBXGH":      "Emoglobina glicata (HbA1c): glicemia media degli ultimi 2-3 mesi. Marcatore diagnostico primario del diabete (ADA: ≥ 6,5 %).",
+            "RIDAGEYR":   "Età del partecipante al momento dell'esame (anni).",
+            "LBXGLU":     "Glicemia plasmatica a digiuno: marcatore biochimico del controllo glicemico (mg/dL).",
+            "LBDLDL":     "Colesterolo LDL calcolato: la frazione del colesterolo legata al rischio cardiovascolare (mg/dL).",
+            "BMXWAIST":   "Circonferenza della vita: adiposità addominale associata all'insulino-resistenza (cm).",
+            "WTINT2YR":   "Fattore di ponderazione campionaria dell'intervista NHANES. Artefatto del disegno campionario, non una variabile clinica.",
+            "BMXARML":    "Lunghezza del braccio (acromion → olecrano): misura antropometrica (cm).",
+            "BMXLEG":     "Lunghezza massima della gamba (ginocchio → suolo): misura antropometrica (cm).",
+            "BMXBMI":     "Indice di massa corporea (peso/altezza²): adiposità corporea complessiva (kg/m²).",
+            "PAD680":     "Minuti di attività sedentaria al giorno (tempo seduti o sdraiati).",
+            "PAD645":     "Minuti settimanali di attività fisica moderata (lavoro + tempo libero).",
+            "PAQ640":     "Giorni a settimana con attività di rafforzamento muscolare.",
+            "BMXWT":      "Peso corporeo totale (kg).",
+            "LBXIN":      "Insulina sierica a digiuno: marcatore di insulino-resistenza (µU/mL).",
+            "INDHHIN2":   "Livello di reddito del nucleo familiare (variabile socioeconomica categoriale).",
+            "DMDYRSUS":   "Numero di anni di residenza negli Stati Uniti.",
+            "BMXARMC":    "Circonferenza media del braccio: misura antropometrica (cm).",
+            "PAQ670":     "Minuti settimanali di attività ricreativa intensa.",
+            "BPXSY1":     "Pressione arteriosa sistolica, prima misurazione (mmHg).",
+            "PAD630":     "Minuti settimanali di attività fisica moderata ricreativa.",
+            "DMDHHSZE":   "Composizione del nucleo familiare: numero di bambini nel nucleo.",
+            "BPXDI1":     "Pressione arteriosa diastolica, prima misurazione (mmHg).",
+            "LBXTR":      "Trigliceridi sierici: marcatore del profilo lipidico (mg/dL).",
+            "DMDMARTL_1": "Stato civile = coniugato (variabile dummy dopo la codifica one-hot).",
+            "DMDMARTL_5": "Stato civile = mai coniugato (variabile dummy dopo la codifica one-hot).",
+            "BPXPLS":     "Polso: frequenza cardiaca a riposo (battiti/min).",
+            "DMDEDUC2_3": "Livello di istruzione intermedio (diploma/GED): variabile dummy dopo la codifica one-hot.",
+            "SDMVSTRA":   "Strato di varianza del disegno campionario NHANES (variabile metodologica, non clinica).",
+            "DMDMARTL_2": "Stato civile = vedovo (variabile dummy dopo la codifica one-hot).",
+            "DMDHHSZB":   "Composizione del nucleo familiare: numero di adulti nel nucleo.",
+        },
+        "qsvm_labels": {
+            "LBXGH": "HbA1c", "LBXGLU": "Glicemia a digiuno", "RIDAGEYR": "Età",
+            "LBDLDL": "Colesterolo LDL", "BMXWAIST": "Circonf. vita", "LBXIN": "Insulina",
+            "BMXLEG": "Lunghezza gamba", "BMXBMI": "IMC",
+        },
+        "qsvm_units": {"años": "anni"},
+
+        # ── Pagina 2 · Governance ──
+        "gov_eyebrow": "Governance · DataOps",
+        "gov_title": "Governance e qualità del dato",
+        "gov_subtitle": ("I controlli che reggono la pipeline: che cosa si valida, che cosa si scarta e "
+                         "perché, che cosa resta registrato e con quali framework. Tutte le cifre "
+                         "provengono dagli output eseguiti dei notebook."),
+        "gov_tabs": ["Qualità del dato", "Lineage e tracciabilità", "Inventario dei framework"],
+        "gov_kpi_expect": "Aspettative superate",
+        "gov_kpi_passrate": "Pass rate della suite",
+        "gov_kpi_records": "Record validati",
+        "gov_kpi_leakage": "Artefatti senza leakage",
+        "gov_funnel_title": "Imbuto dei record",
+        "gov_funnel_sub": ("Dei {bronze} record di Bronze ne sopravvivono {silver} ai filtri di coorte "
+                           "di Silver. Ogni gradino risponde a un criterio esplicito, non a una pulizia "
+                           "generica."),
+        "gov_hover_records": "Record",
+        "gov_hover_dropped": "Scartati",
+        "gov_embudo": [
+            ("Bronze — 3 cicli uniti",
+             "27 file XPT · join per SEQN · 162 colonne comuni ai tre cicli"),
+            ("Filtro età ≥ 18 anni", "Restrizione alla popolazione adulta"),
+            ("Filtro digiuno — LBXGLU non nullo",
+             "Proxy del sottogruppo a digiuno: PHAFSTMN non è coerente fra i cicli"),
+            ("Filtro DIQ010 valido",
+             "Scarta i codici 7 «non so» e 9 «rifiuta di rispondere», e i valori nulli"),
+        ],
+        "gov_dropped_title": "Record scartati per filtro",
+        "gov_split_label": "Partizione Gold 80/20",
+        "gov_suite_title": "Suite di validazione — dataframe-expectations",
+        "gov_suite_sub": ("Suite <code>{nombre}</code>, eseguita il {fecha} sui {registros} record di "
+                          "Silver in {duracion} secondi. Great Expectations è incompatibile con le "
+                          "versioni fissate del runtime serverless: questa è l'alternativa adottata."),
+        "gov_expectativas": [
+            ("Completezza", "TARGET", "al massimo 0 valori nulli"),
+            ("Completezza", "LBXGH", "al massimo 0 valori nulli"),
+            ("Completezza", "LBXGLU", "al massimo 0 valori nulli"),
+            ("Completezza", "RIDAGEYR", "al massimo 0 valori nulli"),
+            ("Completezza", "BMXBMI", "al massimo 0 valori nulli"),
+            ("Intervalli clinici", "RIDAGEYR", "minimo fra 18 e 25"),
+            ("Intervalli clinici", "RIDAGEYR", "massimo fra 70 e 120"),
+            ("Intervalli clinici", "LBXGH", "minimo fra 3,0 e 6,0"),
+            ("Intervalli clinici", "LBXGH", "massimo fra 8,0 e 20,0"),
+            ("Intervalli clinici", "LBXGLU", "minimo fra 30 e 80"),
+            ("Intervalli clinici", "LBXGLU", "massimo fra 150 e 500"),
+            ("Intervalli clinici", "BMXBMI", "minimo fra 10,0 e 18"),
+            ("Intervalli clinici", "BMXBMI", "massimo fra 40,0 e 80"),
+            ("Volume", "DataFrame", "almeno 7.000 righe"),
+            ("Volume", "DataFrame", "al massimo 9.000 righe"),
+        ],
+        "gov_ops_title": "Operazioni di qualità per livello",
+        "gov_silver_card": "Silver — pulizia e risanamento",
+        "gov_gold_card": "Gold — preparazione alla modellazione",
+        "gov_silver_ops": [
+            ("Variabili DIQ escluse per leakage", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
+            ("Colonne sparse eliminate", "Soglia di >80 % di valori mancanti"),
+            ("Variabili winsorizzate", "Taglio degli outlier a IQR × 3"),
+            ("Mancanti dopo l'imputazione", "Da 75.855 a 0 nel dataset SVM/QSVM (mediana + moda)"),
+        ],
+        "gov_gold_ops": [
+            ("Feature dopo la codifica", "One-hot di 5 variabili categoriali su 84 feature (106 colonne con TARGET)"),
+            ("Scartate per correlazione", "Soglia r > 0,90 fra coppie di predittori"),
+            ("Feature finali", "L'insieme con cui si addestrano i tre modelli"),
+            ("Partizione stratificata", "80/20 · 14,03 % di positivi nel train, 14,04 % nel test"),
+        ],
+        "gov_eff_title": "Feature effettive rispetto alle feature nominali",
+        "gov_eff_sub": ("Contato su <code>scaler_correcto.json</code>: {const} delle {total} colonne "
+                        "hanno varianza zero e non apportano informazione al modello"),
+        "gov_eff_nominal": "Feature nominali",
+        "gov_eff_const": "Costanti (varianza = 0)",
+        "gov_eff_effective": "Feature effettive",
+        "gov_eff_note": ("È l'effetto collaterale della winsorizzazione IQR × 3 di Silver, applicata "
+                         "anche a variabili categoriali codificate numericamente (risposte 1/2, lingua "
+                         "dell'intervista, codici 7 e 9). Quando più del 75 % del campione risponde allo "
+                         "stesso modo, il taglio riduce la colonna a un unico valore. Le più tagliate "
+                         "nel notebook 02 — PAQ635, PAQ650, PAQ605, DMDHHSZA, DMDCITZN, SIALANG — sono "
+                         "esattamente quelle che qui risultano costanti."),
+        "gov_lin_title": "Tracciabilità senza MLflow",
+        "gov_lin_sub": "Il vincolo che condiziona di più l'architettura della pipeline, e la sua mitigazione.",
+        "gov_lin_limit_title": "Limitazione",
+        "gov_lin_limit_body": ("L'integrazione nativa di <b>MLflow</b> è disabilitata in Databricks "
+                               "Serverless gratuito. Qualsiasi chiamata a <code>mlflow.start_run()</code> "
+                               "o <code>mlflow.log_metric()</code> produce errori di autenticazione: non "
+                               "c'è registrazione di esperimenti, metriche né artefatti."),
+        "gov_lin_mit_title": "Mitigazione — doppio meccanismo",
+        "gov_lin_mit_body": ("<b>Transaction log di Delta Lake</b> — ogni scrittura genera un record "
+                             "ACID con versione, timestamp e metriche di operazione.<br><br>"
+                             "<b>CSV di metriche per modello</b> — ogni notebook rende persistenti i "
+                             "propri risultati in Unity Catalog Volumes, e le figure li leggono da lì "
+                             "invece di portarli scritti a mano."),
+        "gov_delta_title": "Cronologia Delta — livello Gold",
+        "gov_delta_sub": ("Le sei versioni più recenti fra le dieci registrate. Delta elimina le "
+                          "precedenti dopo 168 h di conservazione: comportamento atteso, non un guasto "
+                          "della pipeline."),
+        "gov_delta_cols": ["Versione", "Timestamp", "Operazione", "Righe", "Dimensione"],
+        "gov_chain_title": "Catena di custodia contro la fuga di informazione",
+        "gov_chain_sub": ("Quattro barriere concatenate. La terza non scarta nessuna colonna — ed è "
+                          "esattamente ciò che si vuole vedere: la prova che le precedenti hanno fatto "
+                          "il loro lavoro."),
+        "gov_leakage": [
+            ("Esclusione in Silver",
+             "Si eliminano 6 variabili DIQ di trattamento e follow-up prima della winsorizzazione: "
+             "sono una conseguenza della diagnosi, non predittori di essa."),
+            ("Verifica incrociata",
+             "Si controlla che nessuna DIQ sopravviva nei 2 Parquet di Silver né nei 13 di Gold. "
+             "Risultato: 15/15 artefatti puliti."),
+            ("Filtro difensivo della QSVM",
+             "Seconda barriera prima della selezione con Random Forest. Non scarta nessuna colonna "
+             "(89 su 89 passano) — proprio la prova che la prima ha funzionato."),
+            ("Guardia sui pesi campionari",
+             "Ferma la pipeline se compare un peso campionario diverso da quello noto. WTINT2YR "
+             "arriva davvero alla modellazione ed è documentato nella decisione 10."),
+        ],
+        "gov_scaler_card": "Scalatura senza fuga statistica",
+        "gov_scaler": [
+            ("Adattamento", "Solo sul train", "fit_transform sul train · transform sul test"),
+            ("Colonne valutate", "66", "Con varianza > 0"),
+            ("Colonne costanti", "23", "Varianza 0 — vedi decisione 08"),
+            ("Media ≈ 0 · dev. ≈ 1", "Verificato", "Assert su tutte le colonne con dispersione"),
+        ],
+        "gov_scaler_note": ("Lo <b>StandardScaler</b> si adatta esclusivamente sul <b>train</b>: "
+                            "<code>fit_transform</code> in addestramento e <code>transform</code> nel "
+                            "test. Se si adattasse sull'insieme completo, la media e la deviazione "
+                            "standard del test filtrerebbero nel preprocessing e le metriche "
+                            "risulterebbero ottimistiche. La selezione delle 8 variabili della QSVM "
+                            "segue la stessa regola — il Random Forest si addestra solo su "
+                            "<code>X_train_svm_scaled</code>.<br><br>Il filtro di correlazione, invece, "
+                            "<b>viene</b> calcolato prima di partizionare. È documentato e accettato "
+                            "nella decisione 09."),
+        "gov_e2e_title": "Verifica end-to-end rispetto ai modelli addestrati",
+        "gov_e2e_missing": ('<b style="color:{color};">Non verificato.</b> Il set di test non è nel '
+                            "repository, quindi la dashboard non può controllare da sola che il suo "
+                            "percorso di inferenza riproduca ciò che hanno prodotto i modelli "
+                            "addestrati. Per chiudere il punto, esegui le due celle di "
+                            "<code>notebooks/INSTRUCCIONES_exportar_golden_set.md</code> e copia "
+                            "<code>golden_lgbm.npz</code> e <code>golden_svm.npz</code> in "
+                            "<code>streamlit/models/</code>. Finché mancano, questa pagina non afferma "
+                            "nulla che non abbia potuto verificare."),
+        "gov_e2e_unavailable": "non disponibile",
+        "gov_e2e_ok_val": "{n} righe · diff. max {dif}",
+        "gov_e2e_bad_val": "DISCORDA · diff. max {dif}",
+        "gov_e2e_scaled": "scala e chiama il modello ONNX",
+        "gov_e2e_raw": "chiama il modello ONNX senza scalare",
+        "gov_e2e_path": "La dashboard {accion}",
+        "gov_e2e_ok_title": "✓ Percorso di inferenza verificato",
+        "gov_e2e_fail_title": "⚠ Il percorso di inferenza non riproduce i modelli",
+        "gov_e2e_note": ("Ogni riga del <i>golden set</i> è un'istanza reale del test accompagnata dalla "
+                         "probabilità restituita dal modello addestrato nel suo notebook. La dashboard "
+                         "la fa passare per il proprio percorso — vettore grezzo, scalatura solo per la "
+                         "SVM, conversione in <code>float32</code>, sessione ONNX e lettura del tensore "
+                         "di output — e confronta. Tolleranza {tol}; il rumore atteso lavorando in "
+                         "<code>float32</code> è dell'ordine di 10⁻⁷."),
+        "gov_stack_title": "Framework per livello",
+        "gov_stack_sub": ("Il primo distintivo di ogni scheda è il framework che regge il livello; gli "
+                          "altri lo accompagnano."),
+        "gov_stack": [
+            ("ingestione",
+             "boto3 sostituisce spark.conf, bloccato in Serverless (decisione 01). Tre assert di "
+             "integrità: 27/27 file, il join per SEQN non duplica righe, e Delta coincide con "
+             "pandas."),
+            ("qualità",
+             "Il framework di qualità di questa tesi. Great Expectations è incompatibile con "
+             "l'ambiente (decisione 03). Suite di 15 aspettative su 3 dimensioni, con evidenza "
+             "resa persistente in CSV."),
+            ("preparazione",
+             "Scalatura adattata solo sul train, partizione stratificata con seme fisso ed "
+             "esportazione del contratto di serving (scaler e mediane in JSON)."),
+            ("modello",
+             "Interpretabilità esatta tramite algoritmo polinomiale sulle 1.567 istanze di test, "
+             "e verifica che il modello ONNX riproduca il PKL al 100 %."),
+            ("modello",
+             "SHAP agnostico rispetto al modello, al costo di ore: calcolato una volta su 200 "
+             "istanze e reso persistente su disco per riutilizzarlo."),
+            ("modello",
+             "Nessun supporto ONNX: il formato non ammette operazioni quantistiche "
+             "(decisione 05). La tracciabilità ricade su un CSV di metriche con i 14 campi di "
+             "configurazione."),
+        ],
+        "gov_dec_title": "Registro delle decisioni",
+        "gov_dec_sub": ("Le undici limitazioni documentate in TECHNICAL_NOTES, con la relativa "
+                        "mitigazione. Tre condizionano l'architettura, sei sono accettate e documentate "
+                        "senza correzione — perché correggerle invaliderebbe i risultati già ottenuti — "
+                        "e due restano risolte senza residui."),
+        "gov_dec_tags": {"critical": "Architettura", "warning": "Accettata", "good": "Risolta"},
+        "gov_dec_problem": "Problema · ",
+        "gov_dec_solution": "Soluzione adottata · ",
+        "gov_decisiones": [
+            ("spark.conf bloccato in Serverless",
+             "La configurazione delle credenziali AWS tramite spark.conf.set restituisce "
+             "CONFIG_NOT_AVAILABLE, il meccanismo standard per collegare Spark a S3.",
+             "boto3 come client alternativo. S3 resta l'archiviazione di origine e Unity Catalog "
+             "Volumes il livello di elaborazione."),
+            ("MLflow bloccato in Serverless",
+             "L'integrazione nativa di MLflow è disabilitata nel piano gratuito: non c'è "
+             "registrazione di esperimenti, metriche né artefatti.",
+             "Doppio meccanismo sostitutivo: i transaction log di Delta Lake forniscono versione, "
+             "timestamp e metriche di operazione; e ogni notebook rende persistenti le proprie "
+             "metriche in CSV."),
+            ("Great Expectations incompatibile",
+             "Richiede una combinazione pandas/numpy che confligge con le versioni fissate del "
+             "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
+             "dataframe-expectations 0.7.0 come alternativa compatibile. 15 aspettative su Silver in "
+             "tre dimensioni. Risultato 15/15, pass rate 1,0."),
+            ("QSVM — costo computazionale O(n²)",
+             "Sulle 6.264 istanze di train, la matrice del kernel richiederebbe circa 39 milioni di "
+             "valutazioni del circuito. Con 1.500 il kernel esaurisce la memoria.",
+             "Addestramento su un campione stratificato di 500 istanze (~22 min) preservando il "
+             "rapporto 86/14. La valutazione usa invece il test completo, perché le metriche restino "
+             "confrontabili."),
+            ("QSVM — nessun supporto ONNX nativo",
+             "Il formato ONNX non ammette operazioni quantistiche: né skl2onnx né onnxmltools "
+             "possono serializzare un kernel basato sulla simulazione di stati.",
+             "Serializzazione con joblib. Il modello richiede l'ambiente Qiskit per l'inferenza, "
+             "perciò la QSVM non entra nel Predittore in diretta."),
+            ("Versioni di Qiskit non fissabili",
+             "Il file immutable_package_constraints.txt di Databricks blocca l'installazione di "
+             "versioni specifiche, quindi non c'è riproducibilità esatta di versione.",
+             "La pipeline gira con le versioni dell'ambiente (2.5.0 / 0.9.0 / 0.4.0), la cui API è "
+             "compatibile, e restano registrate da una verifica esplicita all'inizio "
+             "dell'esecuzione."),
+            ("Perdita di variabili per durata della sessione",
+             "Le operazioni lunghe (22 min di addestramento, 132 di predizione) possono esaurire la "
+             "sessione serverless e portarsi via le variabili in memoria.",
+             "Persistenza immediata dopo ogni operazione costosa e modalità TRAINING_MODE che "
+             "ricarica da disco nelle esecuzioni successive."),
+            ("Winsorizzazione applicata a categoriali codificate",
+             "NHANES codifica numericamente molte categoriali. Se più del 75 % condivide un valore, "
+             "IQR = 0, i limiti collassano e clip() trasforma la variabile in una costante. "
+             "10 colonne sono collassate così.",
+             "Documentato senza modificare: correggerlo altererebbe Silver, Gold e i tre modelli. Le "
+             "colonne costanti non introducono distorsioni — il modello non ne estrae segnale — ma "
+             "si perde informazione. La correzione è indicata come lavoro futuro."),
+            ("Correlazione calcolata prima di partizionare",
+             "Il filtro r > 0,90 si calcola sul dataset completo, quindi le 16 colonne scartate "
+             "vengono decise usando anche le osservazioni di test.",
+             "Documentato senza modificare. Non influisce né sulla scalatura né sulla selezione di "
+             "feature della QSVM, entrambe adattate solo sul train, ma la selezione smette di essere "
+             "rigorosamente cieca rispetto al test."),
+            ("Peso campionario WTINT2YR fra le feature",
+             "Il join intraciclo duplica WTSAF2YR su tre colonne. WTINT2YR non è nell'elenco di "
+             "esclusione e sopravvive al filtro di correlazione: è una delle 89 feature.",
+             "Documentato senza modificare, con l'aggiunta di un assert che rileva la comparsa di "
+             "QUALSIASI altro peso. Un peso campionario non è una variabile clinica: non rivela il "
+             "target, ma lascia che il modello si appoggi al disegno dell'indagine."),
+            ("La QSVM serializzata non è ricaricabile fra versioni",
+             "Il pickle si porta dietro la ZZFeatureMap con le sue ParameterExpression. Se Qiskit "
+             "cambia versione, la deserializzazione fallisce — e Serverless aggiorna senza preavviso.",
+             "Il caricamento è avvolto in try/except: se fallisce, TRAINING_MODE passa a True e il "
+             "notebook riaddestra invece di interrompersi. Resta operativo in tutti e tre gli "
+             "scenari possibili."),
+        ],
+        "gov_footer_note": ("Le cifre di questa pagina provengono dagli output eseguiti dei notebook del "
+                            "repository e da <code>TECHNICAL_NOTES.md</code>; nessuna è stimata. "
+                            "L'applicazione non può consultarle in diretta perché Streamlit Community "
+                            "Cloud accede solo al repository, non a Unity Catalog Volumes.<br><br>"
+                            "Riepilogo della suite di qualità: <b>{fuente}</b>."),
+        "gov_suite_src_csv": "letto da validacion_silver_dfe.csv",
+        "gov_suite_src_nb": "valori verificati dal notebook",
+
+        # ── Pagina 3 · Risultati ──
+        "res_eyebrow": "Confronto triangolato",
+        "res_title": "Risultati",
+        "res_subtitle": "LightGBM vs. SVM-RBF vs. QSVM sullo stesso set di test ({n} istanze).",
+        "res_threshold": "Soglia",
+        "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
+        "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
+                        "svm_rbf": "SVC.predict() — segno di decision_function",
+                        "qsvm": "decision_function > 0 (non è una probabilità)"},
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Riconciliate</span> — le '
+                           "quattro metriche dei tre modelli sono state ricalcolate dagli score per "
+                           "istanza e coincidono con quelle pubblicate."),
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Non riconciliate</span> — {fallos}',
+        "res_no_scores": "score non disponibili",
+        "res_threshold_note": ("<b>I tre modelli sono misurati a soglie diverse.</b> Ciascuno usa il "
+                               "proprio punto di taglio naturale — LightGBM "
+                               "<code>predict_proba ≥ 0,50</code>; SVM-RBF il segno di "
+                               "<code>decision_function</code>, che sulla scala di probabilità salvata "
+                               "equivale a ≈ 0,22; QSVM <code>decision_function &gt; 0</code>, che non è "
+                               "una probabilità. Ogni matrice si riproduce esattamente alla propria "
+                               "soglia, ma <b>solo l'AUC-ROC è confrontabile fra modelli</b>: è l'unica "
+                               "delle quattro metriche indipendente dal punto di taglio. Come "
+                               "riferimento, la SVM-RBF valutata a 0,50 come LightGBM darebbe accuracy "
+                               "0,9190 ma solo 131 veri positivi invece di 172."),
+        "res_roc_title": "Curve ROC",
+        "res_roc_sub_real": ("Curve empiriche reali, punto per punto sulle 1.567 istanze del test (gli "
+                             "stessi score che danno l'AUC della tesi)."),
+        "res_roc_sub_synth": ("AUC esatta · forma ricostruita a partire dall'AUC dove mancano gli score "
+                              "per istanza."),
+        "res_cm_title": "Matrici di confusione",
+        "res_cm_sub": ("Valori verificati rispetto al classification report di ogni modello, e "
+                       "ricalcolati dagli score per istanza. Ogni matrice corrisponde alla soglia "
+                       "indicata nella sua scheda"),
+        "res_cm_pred_no": "Prev.<br>Nessun diabete",
+        "res_cm_pred_yes": "Prev.<br>Diabete",
+        "res_cm_real_no": "Reale<br>Nessun diab.",
+        "res_cm_real_yes": "Reale<br>Diabete",
+        "res_cm_tags": {"tn": "VN", "fp": "FP", "fn": "FN", "tp": "VP"},
+        "res_metrics_title": "Confronto delle metriche",
+        "res_metrics_sub": ("Le quattro metriche si applicano sulle 1.567 istanze. Accuracy, MCC e "
+                            "F1-macro penalizzano davvero lo sbilanciamento delle classi — ma dipendono "
+                            "dalla soglia, e ogni modello usa la propria: confronta con cautela tutto "
+                            "ciò che non sia l'AUC-ROC"),
+        "res_metric_desc": {
+            "auc": "Area sotto la curva ROC: capacità di separare diabete e non-diabete. 0,5 = caso, 1 = perfetto.",
+            "f1_macro": "Media armonica di precisione e richiamo mediata per classe (non pesata). Penalizza lo sbilanciamento.",
+            "accuracy": "Proporzione di predizioni corrette totali. Con classi sbilanciate può riflettere solo la classe maggioritaria.",
+            "mcc": "Coefficiente di correlazione di Matthews: qualità complessiva robusta allo sbilanciamento. 0 = caso, 1 = perfetto.",
+        },
+        "res_qsvm_note": ("<b>Nota sull'esperimento QSVM.</b> La QSVM è stata addestrata su un campione "
+                          "stratificato di 500 istanze (costo O(n²) del kernel quantistico) e valutata "
+                          "sulle 1.567 del test completo. AUC-ROC = 0,5493 indica che il modello supera "
+                          "a malapena la classificazione casuale — richiamo ≈ 0 per la classe diabete "
+                          "(1 su 220), e accuracy = 0,8602 che riflette solo la proporzione della classe "
+                          "maggioritaria. L'MCC ≈ 0 conferma l'assenza di reale capacità predittiva."),
+
+        # ── Pagina 4 · Analisi SHAP ──
+        "sh_eyebrow": "Interpretabilità",
+        "sh_title": "Analisi SHAP",
+        "sh_subtitle": ("Importanza globale delle variabili — TreeExplainer (LightGBM) vs. "
+                        "KernelExplainer (SVM-RBF)."),
+        "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
+        "sh_hint": "Passa il cursore su ogni barra per vedere il significato della variabile. {nota}",
+        "sh_sample_lgbm": "Valori esatti (algoritmo polinomiale) sulle 1.567 istanze del test.",
+        "sh_sample_svm": ("Valori approssimati per campionamento: sfondo di 100 istanze, contributi su "
+                          "200 istanze di test."),
+        "sh_note_lgbm": ("<b>LBXGH (HbA1c)</b> domina con ampio margine (SHAP medio = 1,1243), coerente "
+                         "con il suo ruolo di marcatore diagnostico primario del diabete di tipo 2 "
+                         "(ADA: HbA1c ≥ 6,5 %). <b>RIDAGEYR (età, 0,4654)</b> riflette l'aumento della "
+                         "prevalenza con l'età. <b>LBXGLU</b> e <b>LBDLDL</b> completano il blocco "
+                         "biochimico. <b>WTINT2YR</b> (posizione 6) è un artefatto del disegno "
+                         "campionario NHANES, non una variabile clinica."),
+        "sh_note_svm": ("La classifica della SVM-RBF coincide con LightGBM sulle variabili dominanti "
+                        "(<b>LBXGH</b>, <b>LBXGLU</b>, <b>LBDLDL</b>, <b>RIDAGEYR</b>), il che rafforza "
+                        "la validità clinica del risultato rendendolo indipendente dall'algoritmo e "
+                        "metodologicamente più robusto. KernelExplainer tratta il modello come una "
+                        "scatola nera, applicabile a qualsiasi classificatore."),
+        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Figura 27)",
+        "sh_fig_lgbm_cap": ("Ogni punto è un'istanza del test; il colore indica il valore della "
+                            "variabile (rosso alto, blu basso) e la posizione orizzontale il suo impatto "
+                            "sulla predizione. LBXGH e RIDAGEYR dominano il modello."),
+        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Figura 31)",
+        "sh_fig_svm_cap": ("Ogni punto è un'istanza; colore = valore della variabile, posizione = "
+                           "impatto. KernelExplainer su 200 istanze del test."),
+
+        # ── Pagina 5 · Circuito quantistico ──
+        "qc_eyebrow": "Componente quantistica",
+        "qc_title": "Circuito quantistico",
+        "qc_subtitle": ("Configurazione della ZZFeatureMap e del FidelityQuantumKernel implementati in "
+                        "Qiskit su Databricks CE."),
+        "qc_specs": ["Qubit (feature_dimension)", "Ripetizioni (reps)", "Entanglement", "Versione di Qiskit"],
+        "qc_how_title": "Come funziona",
+        "qc_how_p1": ("La <b>ZZFeatureMap</b> codifica ciascuna delle 8 variabili cliniche come un "
+                      "angolo di fase (porta P) su un qubit indipendente, dopo aver creato la "
+                      "sovrapposizione con porte di Hadamard. Il suo elemento distintivo è "
+                      "l'<b>entanglement</b> fra coppie di qubit mediante porte che dipendono dal "
+                      "prodotto incrociato di due variabili — correlazioni che il kernel RBF classico "
+                      "non può rappresentare."),
+        "qc_how_p2": ("Il <b>FidelityQuantumKernel</b> misura la somiglianza fra due pazienti come la "
+                      "fedeltà fra i loro stati quantistici: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. "
+                      "L'implementazione usa <code>StatevectorSampler</code> e simula lo stato esatto "
+                      "senza rumore — risultati deterministici e riproducibili."),
+        "qc_feat_title": "8 feature selezionate (Random Forest)",
+        "qc_xaxis": "Importanza RF",
+        "qc_train_title": "Addestramento e valutazione",
+        "qc_tstats": ["Istanze di addestramento", "Tempo di addestramento", "Istanze di test",
+                      "Tempo di inferenza", "Vettori di supporto"],
+        "qc_note": ("Per il costo O(n²) del kernel quantistico, l'addestramento è stato limitato a un "
+                    "campione stratificato di 500 istanze (il limite operativo di Databricks CE "
+                    "serverless si colloca intorno a 500-1.000). La valutazione è stata fatta sul test "
+                    "completo (1.567 istanze) a lotti di 100, con un tempo totale di predizione di "
+                    "144,5 minuti."),
+        "qc_circuit_title": "Circuito quantistico completo (8 qubit)",
+        "qc_circuit_sub": ("ZZFeatureMap con reps=2: codifica (H + P) seguita da due giri di "
+                           "entanglement lineare fra qubit adiacenti."),
+
+        # ── Pagina 6 · Sfera di Bloch ──
+        "bl_eyebrow": "Codifica quantistica",
+        "bl_title": "Sfera di Bloch",
+        "bl_subtitle": "Come la ZZFeatureMap codifica il valore di una variabile clinica come stato quantistico |ψ⟩.",
+        "bl_what_note": ("<b>Che cos'è la sfera di Bloch.</b> Un bit classico può valere solo 0 "
+                         "o 1. Un qubit ammette in più qualsiasi miscela dei due, e quella "
+                         "miscela non entra in un solo numero: serve una mappa. La sfera di Bloch "
+                         "è quella mappa — ogni stato possibile di un qubit è un punto sulla "
+                         "superficie di una sfera di raggio 1. Il polo nord è <b>|0⟩</b> e il polo "
+                         "sud <b>|1⟩</b>; in mezzo stanno le sovrapposizioni, e più la freccia si "
+                         "avvicina a un polo, più quel risultato è probabile alla misura. Qui il "
+                         "valore clinico si traduce nell'angolo θ, così muovere il cursore fa "
+                         "ruotare la freccia lungo un meridiano, da |0⟩ a |1⟩."),
+        "bl_var": "Variabile clinica",
+        "bl_value": "Valore ({unidad})",
+        "bl_xnorm": "x normalizzato",
+        "bl_theta": "θ = x_norm·π",
+        "bl_alpha": "α (ampiezza |0⟩)",
+        "bl_beta": "β (ampiezza |1⟩)",
+        "bl_rad": "rad",
+        "bl_note": ("<b>Analogia didattica del principio di codifica angolare</b>, non una replica del "
+                    "circuito. Qui il valore clinico normalizzato su [0,1] diventa l'angolo "
+                    "<b>polare</b> θ = x_norm·π, così il vettore percorre il meridiano da |0⟩ a |1⟩ e "
+                    "P(|0⟩) varia dal 100 % allo 0 %: è il modo più leggibile di vedere «un numero "
+                    "diventa uno stato».<br><br>"
+                    "La <b>vera ZZFeatureMap</b> fa qualcosa di diverso: applica H e poi "
+                    "P(2·x<sub>i</sub>), e una porta di fase dopo una Hadamard lascia lo stato "
+                    "<b>sull'equatore</b> — θ = π/2 fisso, P(|0⟩) = P(|1⟩) = 50 % sempre — "
+                    "codificando il dato nell'angolo <b>azimutale</b> φ, non nel polare. Non "
+                    "normalizza nemmeno su [0,1]: usa direttamente il valore scalato. Per questo "
+                    "questa sfera illustra il concetto, ma non riproduce passo per passo il circuito. "
+                    "L'entanglement (porte P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) è rappresentabile "
+                    "solo nello spazio congiunto degli 8 qubit — vedi Circuito quantistico."),
+
+        # ── Pagina 6 · Sfera di Bloch → sezione entanglement ──
+        "bl_ent_title": "Entanglement: due qubit, un solo stato",
+        "bl_ent_sub": ("Il limite della sfera qui sopra. Applica le due porte e guarda che cosa "
+                       "succede allo stato locale di ciascun qubit."),
+        "bl_ent_intro": ("<b>Dove la sfera di Bloch smette di servire.</b> Con un qubit bastano una "
+                         "sfera e una freccia. Con due, la tentazione è disegnare due sfere — e per la "
+                         "maggior parte degli stati funziona. Ma esiste una famiglia di stati in cui "
+                         "<b>non resta nessuna freccia da disegnare</b>: la coppia ha uno stato "
+                         "perfettamente definito e nessuno dei suoi due membri ce l'ha separatamente. "
+                         "Questo è l'entanglement, e si costruisce con due porte. Applicale e segui le "
+                         "tre cifre a sinistra."),
+        "bl_ent_btn_h": "1 · Hadamard su q₀",
+        "bl_ent_btn_cnot": "2 · CNOT (controllo q₀ → bersaglio q₁)",
+        "bl_ent_btn_reset": "Reimposta a |00⟩",
+        "bl_ent_step_note": [
+            ("<b>Punto di partenza.</b> Due qubit, entrambi in |0⟩, nessuna porta applicata. Lo stato "
+             "congiunto è |00⟩ e non ha ancora nulla di quantistico: equivale esattamente a due bit "
+             "classici messi a zero. Nella Q-sphere c'è un unico nodo, al polo nord, che si prende "
+             "tutta la probabilità."),
+            ("<b>Sovrapposizione, ancora senza entanglement.</b> La Hadamard lascia q₀ a metà strada "
+             "fra |0⟩ e |1⟩, mentre q₁ resta saldo in |0⟩: lo stato congiunto è (|00⟩ + |10⟩)/√2. I "
+             "due qubit restano <b>indipendenti</b> — ciascuno ha il proprio stato puro e due sfere "
+             "di Bloch basterebbero a descriverli. Nota che la lunghezza del vettore locale vale "
+             "ancora 1: c'è una freccia da disegnare."),
+            ("<b>Stato di Bell.</b> Il CNOT ribalta q₁ solo quando q₀ vale 1; applicato a una "
+             "sovrapposizione, questo lega i due esiti in uno solo: (|00⟩ + |11⟩)/√2. I nodi sono "
+             "andati ai poli e l'equatore è rimasto vuoto. Ed è qui che la mappa si rompe: la "
+             "lunghezza del vettore locale è appena caduta a <b>0</b> — il qubit 0 non è più in "
+             "nessun punto della sua sfera, perché separatamente <b>non ha più stato</b>."),
+        ],
+        "bl_ent_circuit_title": "Circuito",
+        "bl_ent_circuit_alt": "Circuito a due qubit con le porte applicate finora",
+        "bl_ent_qsphere_title": "Q-sphere dello stato congiunto",
+        "bl_ent_kpi": ["Lunghezza del vettore locale |r| (q₀)", "Purezza Tr(ρ₀²)",
+                       "Entropia di entanglement"],
+        "bl_ent_bits": "bit",
+        "bl_ent_hover_amp": "Ampiezza:",
+        "bl_ent_hover_prob": "Probabilità:",
+        "bl_ent_hover_shots": "misure",
+        "bl_ent_meas_title": "Misura",
+        "bl_ent_meas_sub": ("La Q-sphere mostra lo stato; questo mostra l'unica cosa osservabile. "
+                            "Ripeti il lancio: la proporzione è stabile, il conteggio esatto no."),
+        "bl_ent_meas_n": "Numero di misure",
+        "bl_ent_meas_btn": "Simula le misure",
+        "bl_ent_meas_empty": "Scegli quante misure e premi «Simula le misure».",
+        "bl_ent_meas_yaxis": "Volte ottenuto",
+        "bl_ent_meas_note": [
+            ("Con entrambi i qubit in |0⟩ il risultato è <b>00</b> a ogni lancio. Non c'è ancora "
+             "nulla da sorteggiare: è il comportamento di due bit classici."),
+            ("Escono <b>00</b> e <b>10</b> in parti uguali: q₀ si comporta come una monetina e q₁ "
+             "vale 0 qualunque cosa accada. I due esiti sono <b>indipendenti</b> — conoscerne uno "
+             "non dice nulla dell'altro."),
+            ("<b>Escono solo 00 e 11</b>, vicino al 50 % ciascuno. Le due barre vuote sono il dato: "
+             "<b>01 e 10 non compaiono mai</b>, nemmeno una volta su diecimila lanci. Ogni qubit "
+             "continua a dare un esito casuale, ma i due danno <b>sempre lo stesso</b>: misurarne "
+             "uno determina l'altro all'istante. Quella correlazione perfetta è l'entanglement "
+             "visto dal laboratorio."),
+        ],
+        "bl_ent_impl_note": ("<b>Come è calcolato.</b> Le quattro ampiezze vengono da algebra lineare "
+                             "<b>esatta</b> in NumPy — le matrici di H⊗I e del CNOT applicate a |00⟩ —, "
+                             "non da un'approssimazione, e le misure da un campionamento multinomiale "
+                             "su |ψ|², che è ciò che fa un simulatore ideale senza rumore. Il pannello "
+                             "<b>non carica Qiskit</b>: l'ambiente distribuito è Streamlit, NumPy, "
+                             "Plotly e ONNX Runtime, mentre Qiskit vive nella pipeline di Databricks "
+                             "— dove si addestra la QSVM — e le sue figure arrivano qui già "
+                             "renderizzate, come il circuito a 8 qubit della pagina Circuito "
+                             "quantistico. La convenzione della base è quella dei manuali, |q₀q₁⟩ con "
+                             "q₀ a sinistra; Qiskit numera al contrario e scriverebbe «01» dove il "
+                             "passo intermedio qui scrive «10»."),
+
+        # ── Pagina 6 · Sfera di Bloch → la vera ZZFeatureMap (8 qubit) ──
+        "bl_zz_title": "La vera ZZFeatureMap: dove avviene l'entanglement",
+        "bl_zz_sub": ("Le stesse cifre, ora sugli 8 qubit della QSVM della tesi. Muovi il cursore "
+                      "all'inizio della pagina e guarda quali qubit reagiscono."),
+        "bl_zz_intro": ("<b>Da due qubit agli otto del modello.</b> Ogni qubit della ZZFeatureMap "
+                        "porta <b>una variabile clinica</b>: q₀ è l'HbA1c, q₁ la glicemia, e così "
+                        "via fino all'IMC. Con 256 ampiezze non c'è più una figura dello stato da "
+                        "guardare — né Q-sphere né istogramma —, ma si possono comunque misurare le "
+                        "<b>stesse due grandezze</b> della sezione precedente: quanto stato proprio "
+                        "resta a ciascun qubit, e quanta informazione condivide con ognuno degli "
+                        "altri. Questo non è più un esempio da manuale: è il circuito con cui il "
+                        "modello è stato addestrato."),
+        "bl_zz_current": "Variabile in gioco: <b>{var} = {val} {unidad}</b>. Le altre sette al loro valore di riferimento.",
+        "bl_zz_r_title": "Stato proprio di ciascun qubit",
+        "bl_zz_r_xaxis": "|r| — 1 = conserva il suo stato · 0 = del tutto in entanglement",
+        "bl_zz_mi_title": "Informazione mutua fra qubit",
+        "bl_zz_mi_cbar": "bit",
+        "bl_zz_note": ("<b>Come leggere la matrice.</b> Ogni cella dice quanta informazione due qubit "
+                       "condividono: più è accesa, più sono legati. E salta all'occhio che il colore "
+                       "<b>si concentra in una banda lungo la diagonale</b> mentre gli angoli restano "
+                       "vuoti. Non è un caso: la ZZFeatureMap usa <code>entanglement=\"linear\"</code>, "
+                       "cioè <b>ci sono porte solo fra qubit vicini</b>. Con reps=2 quella correlazione "
+                       "arriva al massimo a quattro anelli di distanza; oltre vale <b>esattamente "
+                       "zero</b> (verificato su 300 profili: a distanza ≥ 5 nella catena, 0,0000 bit "
+                       "senza una sola eccezione). La topologia del circuito si disegna da sé.<br><br>"
+                       "E c'è una seconda cosa che si vede muovendo il cursore in alto: cambiando "
+                       "<b>una</b> variabile si muovono solo <b>il suo qubit e i vicini immediati</b> "
+                       "— gli altri non cambiano di un decimale. È lo stesso fatto visto dall'altro "
+                       "lato: il cono di luce del circuito, in diretta."),
+        "bl_zz_caveat": ("<b>Un avvertimento di lettura, e non da poco.</b> L'entanglement <b>non "
+                         "cresce con il valore clinico</b>: alzando l'HbA1c lungo il suo intervallo, "
+                         "|r| del primo qubit fa 0,88 → 1,00 → 0,65 → 0,24 → 0,73 → 0,98 → 0,33. Sale "
+                         "e scende. Il motivo è che il dato entra come un <b>angolo</b> di fase e gli "
+                         "angoli <b>fanno il giro</b>: due valori clinici molto diversi possono finire "
+                         "in fasi quasi uguali. Con le feature standardizzate un caso estremo arriva a "
+                         "x ≈ 5, e il prodotto 2·(π−xᵢ)(π−xⱼ) del termine di entanglement supera 2π "
+                         "più volte. È una limitazione nota della codifica angolare non limitata, e "
+                         "conviene tenerla presente prima di leggere queste figure come se misurassero "
+                         "la gravità clinica: misurano la geometria del circuito, non il rischio."),
+
+        # ── Pagina 7 · Predittore in diretta ──
+        "lp_eyebrow": "Inferenza interattiva",
+        "lp_title": "Predittore in diretta",
+        "lp_subtitle": ("Probabilità che un profilo clinico corrisponda a una persona già "
+                        "diagnosticata con diabete — LightGBM sulle 8 variabili di maggiore "
+                        "importanza."),
+        "lp_what_note": ("<b>Che cosa stima questo modulo.</b> L'obiettivo della pipeline è "
+                         "<code>TARGET = (DIQ010 == 1)</code>, la risposta a <i>«un medico le ha mai "
+                         "detto che ha il diabete?»</i>. Il modello quindi <b>rileva un diabete già "
+                         "diagnosticato</b>: non predice chi lo svilupperà. È un compito di "
+                         "rilevamento concomitante, non di rischio prospettico."),
+        "lp_real_note": ("<b>Inferenza reale (ONNX).</b> Predizioni di LightGBM e SVM-RBF tramite "
+                         "<code>onnxruntime</code>, con lo <code>StandardScaler</code> recuperato dalla "
+                         "pipeline Gold. Le 8 variabili mostrate sono quelle di maggiore importanza "
+                         "clinica; le restanti 81 feature sono fissate alla mediana dell'insieme di "
+                         "addestramento. La QSVM non è disponibile in tempo reale per il costo O(n²) "
+                         "del kernel quantistico: predire le 1.567 istanze del test è costato "
+                         "144,5 minuti."),
+        "lp_proxy_note": ("⚠ <b>Avviso tecnico e clinico.</b> Questo modulo non ha collegati i modelli "
+                          "serializzati reali (<code>.onnx</code>) — colloca "
+                          "<code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>, "
+                          "<code>scaler_correcto.json</code> e <code>medianas_correctas.json</code> in "
+                          "<code>streamlit/models/</code>. Il punteggio mostrato sotto è un "
+                          "<b>sostituto trasparente</b>: una combinazione pesata per importanza SHAP "
+                          "normalizzata, solo a fini di impaginazione. <b>Non è l'output di alcun "
+                          "modello addestrato</b> e non deve essere citato come risultato. Nemmeno la "
+                          "QSVM è disponibile in tempo reale (costo O(n²) del kernel quantistico)."),
+        "lp_train_range": "Addestramento: {mu} ± {sd} (±3 σ → da {lo} a {hi})",
+        "lp_extrapolates": "⚠ z = {z} — fuori dall'intervallo addestrato: il modello estrapola",
+        "lp_ada": "Criterio ADA: &lt; 5,7 normale · 5,7–6,4 prediabete · ≥ 6,5 diabete",
+        "lp_who_model": "il modello",
+        "lp_who_proxy": "il sostituto",
+        "lp_score_real": "Probabilità di una diagnosi esistente",
+        "lp_score_proxy": "Punteggio di impaginazione (sostituto)",
+        "lp_cat_low": "bassa",
+        "lp_cat_mid": "intermedia",
+        "lp_cat_high": "alta",
+        "lp_interp_low": ("Il profilo resta nettamente sotto la soglia di decisione (50 %): {quien} lo "
+                          "classificherebbe come non diagnosticato."),
+        "lp_interp_mid": "Il valore si avvicina alla soglia di decisione (50 %): zona di incertezza.",
+        "lp_interp_high": ("Il valore supera la soglia di decisione (50 %): {quien} classificherebbe "
+                           "questo profilo come caso positivo."),
+        # In italiano l'aggettivo segue il nome, quindi {cat} arriva già concordato al
+        # femminile da lp_cat_* e si colloca dopo «Compatibilità».
+        "lp_badge": "Compatibilità {cat}",
+        "lp_gauge_caption": ("Compatibilità con una diagnosi esistente: bassa · intermedia · alta · "
+                             "&nbsp;soglia di decisione = 50 %"),
+        "lp_side_title": "I due modelli, fianco a fianco",
+        "lp_side_sub": ("Ogni probabilità si giudica con il punto di taglio del proprio modello — non "
+                        "sono intercambiabili"),
+        "lp_own_threshold": "La sua soglia",
+        "lp_would_classify": "Classificherebbe come",
+        "lp_positive": "positivo",
+        "lp_negative": "negativo",
+        "lp_disagree": ("<b>I due modelli divergono di {dif} su questo profilo.</b> Concordano agli "
+                        "estremi — profili chiaramente sani o chiaramente diabetici — e divergono nella "
+                        "fascia intermedia, che è proprio dove una stima sarebbe più utile. Prendilo "
+                        "come segnale di incertezza, non come prova che uno dei due abbia ragione."),
+        "lp_curve_title": "Curva di risposta",
+        "lp_curve_var": "Variabile da percorrere",
+        "lp_curve_yaxis": "Probabilità",
+        "lp_curve_thr": "soglia",
+        "lp_ada_bands": ["normale", "prediabete", "diabete"],
+        "lp_curve_note": ("Su questa variabile LightGBM restituisce <b>{n} valori distinti</b> nelle "
+                          "{total} posizioni del cursore: è una scala a gradini, non una rampa. Gradini "
+                          "maggiori: {saltos}. Il punto segna il tuo valore attuale."),
+        "lp_curve_none": "nessuno",
+        "lp_read_note": ("<b>Come leggere questi risultati.</b> Poiché l'obiettivo è una diagnosi "
+                         "<i>già emessa</i>, il modello impara anche l'effetto del <b>trattamento</b>, "
+                         "non solo quello della malattia. Questo inverte il senso clinico di due "
+                         "variabili:"
+                         '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
+                         "<li><b>Colesterolo LDL</b> — più alto è l'LDL, <i>minore</i> è la probabilità "
+                         "stimata (dal 43 % al 18 % percorrendo il cursore). Chi è diagnosticato di "
+                         "solito è in terapia con statine.</li>"
+                         "<li><b>Glicemia a digiuno</b> — la risposta ha forma di U: i valori molto "
+                         "bassi alzano la stima quanto quelli alti, per via delle ipoglicemie dei "
+                         "pazienti in terapia.</li></ul>"
+                         '<div style="margin-top:10px;">Nessuna delle due va letta come un fattore di '
+                         "rischio modificabile.</div>"),
+    },
 }
 
 
@@ -1582,28 +3885,51 @@ _SEARCH_PAGE_TITLES = {f"{p}_title" for p in SEARCH_PREFIX}
 # Términos que un lector buscaría pero que no aparecen literalmente en ningún rótulo:
 # nombres propios de tecnología, siglas y sinónimos. No generan fila propia — se suman
 # al texto buscable de SU página, de modo que "Qiskit" lleva al Circuito Cuántico
-# aunque ninguna sección se llame así. Van en los dos idiomas en la misma lista porque
-# son notación técnica: nadie traduce "AUC" ni "ZZFeatureMap".
+# aunque ninguna sección se llame así. Van los CINCO idiomas en la misma lista y no una
+# lista por idioma: unos son notación técnica que nadie traduce ("AUC", "ZZFeatureMap")
+# y los demás no estorban — buscar en alemán no puede devolver una página equivocada,
+# porque cada término está asignado a la página a la que pertenece en cualquier idioma.
+# Y ese solapamiento es además una ventaja: "circuit" sirve al inglés y al francés a la
+# vez, y "diabete" al francés y al italiano, así que la lista crece bastante menos que
+# el número de lenguas.
+# Sin tildes ni diéresis hace falta escribirlos: _plano() las quita en los dos lados de
+# la comparación, así que "Qualität" y "qualitat" encuentran lo mismo.
 SEARCH_ALIAS = {
-    "overview":   ["NHANES", "medallon", "medallion", "bronze", "silver", "gold",
-                   "dataset", "pipeline", "Databricks"],
-    "governance": ["Great Expectations", "calidad", "quality", "linaje", "lineage",
-                   "Delta Lake", "Unity Catalog", "DataOps", "auditoria", "audit"],
-    "results":    ["ROC", "AUC", "matriz de confusion", "confusion matrix", "F1",
-                   "recall", "precision", "LightGBM", "SVM", "RBF", "QSVM", "metricas",
-                   "metrics", "benchmark"],
-    "shap":       ["SHAP", "Shapley", "importancia", "importance", "beeswarm",
-                   "explicabilidad", "explainability", "XAI"],
+    "overview":   ["NHANES", "medallon", "medallion", "medaillon", "medaglione", "bronze",
+                   "silver", "gold", "dataset", "datensatz", "pipeline", "Databricks",
+                   "ubersicht", "apercu", "panoramica"],
+    "governance": ["Great Expectations", "calidad", "quality", "qualitat", "qualite",
+                   "linaje", "lineage", "Delta Lake", "Unity Catalog", "DataOps",
+                   "auditoria", "audit", "nachvollziehbarkeit", "governance",
+                   "tracabilite", "tracciabilita"],
+    "results":    ["ROC", "AUC", "matriz de confusion", "confusion matrix",
+                   "konfusionsmatrix", "matrice de confusion", "matrice di confusione",
+                   "F1", "recall", "precision", "LightGBM", "SVM", "RBF", "QSVM",
+                   "metricas", "metrics", "metriken", "metriques", "metriche",
+                   "benchmark", "ergebnisse", "resultats", "risultati"],
+    "shap":       ["SHAP", "Shapley", "importancia", "importance", "wichtigkeit",
+                   "importanza", "beeswarm", "explicabilidad", "explainability",
+                   "erklarbarkeit", "interpretabilite", "interpretabilita", "XAI"],
     "circuit":    ["Qiskit", "ZZFeatureMap", "qubit", "kernel cuantico", "quantum kernel",
-                   "circuito", "circuit", "puerta", "gate", "entrelazamiento",
-                   "entanglement", "IBM"],
-    "bloch":      ["Bloch", "esfera", "sphere", "estado", "state", "amplitud", "amplitude",
-                   "entrelazamiento", "entanglement", "Bell", "Q-sphere", "qsphere", "CNOT",
-                   "Hadamard", "medicion", "measurement", "superposicion", "superposition",
-                   "ZZFeatureMap", "informacion mutua", "mutual information", "matriz densidad",
-                   "density matrix", "8 qubits", "cono de luz", "light cone"],
-    "predictor":  ["ONNX", "inferencia", "inference", "umbral", "threshold", "slider",
-                   "prediccion", "prediction", "what-if", "simulador", "simulator"],
+                   "quantenkernel", "noyau quantique", "kernel quantistico", "circuito",
+                   "circuit", "schaltkreis", "puerta", "gate", "gatter", "porte",
+                   "entrelazamiento", "entanglement", "verschrankung", "intrication",
+                   "IBM"],
+    "bloch":      ["Bloch", "esfera", "sphere", "kugel", "sfera", "estado", "state",
+                   "zustand", "etat", "stato", "amplitud", "amplitude", "ampiezza",
+                   "entrelazamiento", "entanglement", "verschrankung", "intrication",
+                   "Bell", "Q-sphere", "qsphere", "CNOT", "Hadamard", "medicion",
+                   "measurement", "messung", "mesure", "misura", "superposicion",
+                   "superposition", "sovrapposizione", "ZZFeatureMap", "informacion mutua",
+                   "mutual information", "wechselseitige information",
+                   "information mutuelle", "informazione mutua", "matriz densidad",
+                   "density matrix", "dichtematrix", "8 qubits", "cono de luz",
+                   "light cone", "lichtkegel", "cone de lumiere", "cono di luce"],
+    "predictor":  ["ONNX", "inferencia", "inference", "inferenz", "inferenza", "umbral",
+                   "threshold", "schwelle", "seuil", "soglia", "slider", "schieberegler",
+                   "curseur", "cursore", "prediccion", "prediction", "vorhersage",
+                   "predizione", "what-if", "simulador", "simulator", "simulateur",
+                   "simulatore"],
 }
 
 
