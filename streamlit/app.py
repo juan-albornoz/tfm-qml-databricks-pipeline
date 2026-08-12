@@ -23,6 +23,12 @@ from typing import TypedDict
 from urllib.parse import quote_plus
 
 import numpy as np
+# La app no usa pandas, pero Streamlit lo importa por su cuenta y muy adentro
+# (option_menu -> create_instance -> is_dataframe_like -> determine_data_format).
+# Hecho ahi, en el hilo ScriptRunner, el modulo Cython pandas._libs.tslib revienta
+# con "SystemError: __pyx_defaults returned a result with an exception set".
+# Importarlo aqui arriba lo carga antes, y despues ya es un acierto en sys.modules.
+import pandas  # noqa: F401
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components   # solo para fijar <html lang>; ver más abajo
@@ -248,9 +254,15 @@ if "sidebar_narrow" not in st.session_state:
     st.session_state.sidebar_narrow = False
 if "lang" not in st.session_state:
     st.session_state.lang = i18n.DEFAULT_LANG
+# El desplegable de banderas se abre y se cierra con un CLIC, y su estado vive aquí y no en
+# la hoja de estilos: ver el bloque de _ABIERTO más abajo. La clave es NUESTRA y no el id de
+# un widget, así que sobrevive al st.rerun() del selector — el mismo motivo que _POS_TAB.
+if "lang_open" not in st.session_state:
+    st.session_state.lang_open = False
 
 _is_dark = st.session_state.theme == "dark"
 LANG = st.session_state.lang
+MENU_ABIERTO = st.session_state.lang_open
 
 def S(key):
     """Texto de la clave en el idioma activo, con caída al español si falta.
@@ -344,19 +356,27 @@ def _sel_lang(sufijo="", langs=None):
 
 LANGS_OTROS = [l for l in i18n.LANGS if l != LANG]
 
-# Estados en los que el desplegable se considera ABIERTO. Son tres y no uno porque cada
-# uno cubre un caso que los otros no:
-#   · :hover del contenedor — el caso normal con ratón. El contenedor va en
-#     display:contents, así que no tiene caja propia y su :hover depende de que el
-#     navegador lo propague desde los hijos.
-#   · :has(button:hover) — la misma condición pero resuelta como CONSULTA del árbol, sin
-#     depender de esa propagación. Es la red de seguridad de la anterior.
-#   · :focus-within — el teclado. Las banderas del panel siguen siendo enfocables con el
-#     tabulador aunque estén a opacidad 0 (por eso se ocultan así y no con visibility,
+# Estados en los que el desplegable se considera ABIERTO. Son dos y cubren cosas distintas:
+#   · el ESTADO DE SESIÓN (MENU_ABIERTO) — el caso normal: se despliega con un clic en la
+#     bandera activa y se queda quieto hasta que se elige idioma (o se vuelve a pulsar el
+#     disparador), pase lo que pase con el cursor entretanto. El selector es el contenedor a
+#     secas, sin condición: la condición ya la ha resuelto Python al decidir si esta línea
+#     entra o no en la hoja de estilos.
+#   · :has(button:focus-visible) — el teclado. Las banderas del panel siguen siendo enfocables
+#     con el tabulador aunque estén a opacidad 0 (por eso se ocultan así y no con visibility,
 #     que las sacaría del orden de tabulación), de modo que tabular hasta una la muestra.
-_ABIERTO = (".st-key-lang_switch:hover",
-            ".st-key-lang_switch:has(button:hover)",
-            ".st-key-lang_switch:focus-within")
+#     Va con :focus-visible y no con el :focus-within de antes porque el clic del ratón TAMBIÉN
+#     deja el foco en el disparador: con :focus-within, el segundo clic —el de plegar— habría
+#     cerrado el menú por estado y lo habría reabierto por foco en la misma pasada.
+#
+# Ya NO se abre con :hover, que es como funcionaba hasta ahora y era el fallo que esto repara.
+# El panel dependía de que el cursor no se saliera ni un píxel de una columna del ancho de UNA
+# bandera (_FLAG_ANCHO), y el navegador MUESTREA el puntero: al bajar deprisa hacia las últimas
+# la muestra caía fuera de esa columna, el grupo perdía el :hover y el menú se cerraba en la
+# cara de quien iba a elegir —solo bajando muy despacio se llegaba abajo—. Con el estado en
+# sesión el recorrido del ratón deja de importar: se abre, se elige, se cierra.
+_ABIERTO = ((".st-key-lang_switch",) if MENU_ABIERTO else ()) + (
+    ".st-key-lang_switch:has(button:focus-visible)",)
 
 def _sel_abierto(sufijo="", langs=None):
     """Selector de las banderas indicadas, pero solo con el desplegable abierto.
@@ -375,18 +395,15 @@ def _sel_abierto(sufijo="", langs=None):
 # 196 px del borde—; el desplegable la devuelve al ancho de una sola bandera.
 #
 # Todas las banderas guardan el MISMO aire (_MENU_HUECO), tanto entre el disparador y el
-# panel como entre las del panel: un solo ritmo vertical en vez de dos. Ese aire tiene un
-# coste que hay que pagar aparte — cada hueco es un punto donde el cursor no está sobre
-# ninguna de las cinco banderas, así que el :hover del grupo se apagaría y el panel se
-# cerraría justo mientras lo recorres. Cada bandera tapa SU hueco (el de debajo) con un
-# ::after que le pertenece; ver el puente en la hoja de estilos.
+# panel como entre las del panel: un solo ritmo vertical en vez de dos. Ese aire salía caro
+# mientras el menú se abría por :hover —cada hueco era un punto donde el cursor no estaba
+# sobre ninguna bandera, y ahí se cerraba—, y había que taparlo una a una con un ::after que
+# hacía de puente hacia la de abajo. Abriéndose por clic el hueco ya no significa nada: el
+# panel no escucha al cursor. Los puentes se han quitado, y con ellos la franja de clic que
+# se comían por debajo de cada bandera.
 _FLAG_ANCHO, _FLAG_ALTO = 26, 18
 _MENU_TOP, _MENU_HUECO, _MENU_BORDE = 14, 6, 22
 _MENU_CARET = 12                # lo que ocupa la flecha a la izquierda del disparador
-
-# Quién lleva puente: todas menos la última del panel, que no tiene nada debajo que
-# alcanzar. Se calcula aquí porque la hoja de estilos lo necesita como lista de selectores.
-LANGS_PUENTE = [LANG] + LANGS_OTROS[:-1]
 
 def _reparto(top, alto, hueco):
     """Coordenada `top` de cada bandera: la activa arriba, las demás en el panel.
@@ -628,6 +645,14 @@ def _flecha_mask(*trazos: str) -> str:
 # en ámbito —lo usa también SIDEBAR_WIDTH— y el CSS se regenera entero en cada rerun.
 FLECHA_TOGGLE = (_flecha_mask("M3 5v14", "M21 12H7", "m15 18 6-6-6-6") if narrow
                  else _flecha_mask("m9 6-6 6 6 6", "M3 12h14", "M21 19V5"))
+# El disco del toggle va en el tema CONTRARIO al de la app: claro sobre la barra oscura y oscuro
+# sobre la barra clara. Es el único control que se sale a propósito de la escala de superficies de
+# T(): con sidebar_bg de fondo se mimetizaba con la barra sobre cuyo borde se apoya, y es el gesto
+# que más se busca de un vistazo. Son los dos neutros del autor —los mismos que T() reparte entre
+# tinta y superficie—, aquí intercambiados, así que el par mantiene los 13,6:1 / 16,5:1 de contraste
+# entre flecha y disco en cada tema.
+TOGGLE_DISCO  = P_GRIS if _is_dark else P_CARBON
+TOGGLE_FLECHA = P_CARBON if _is_dark else P_GRIS
 # Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si usáramos
 # un azul fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
 # En claro NO se usa RAMP[0]: ese paso está calibrado para pintar DATO sobre blanco y como
@@ -709,16 +734,24 @@ section[data-testid="stSidebar"] div[style*="cursor: col-resize"] {{ pointer-eve
     height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important;
 }}
 /* El botón nativo para volver a expandir (cuando la sidebar está totalmente oculta) se
-   mantiene visible y estilizado, por si el usuario la colapsa del todo por otra vía. */
+   mantiene visible y estilizado, por si el usuario la colapsa del todo por otra vía.
+   Va en el mismo disco invertido que nuestro toggle (TOGGLE_DISCO): es la misma acción, así que
+   no puede tener dos aspectos según por dónde se llegue a ella. */
 [data-testid="collapsedControl"] button {{
-    background-color:{t['surface']} !important;
-    border:1px solid {t['border']} !important;
+    background-color:{TOGGLE_DISCO} !important;
+    color:{TOGGLE_FLECHA} !important;
+    border:1px solid {TOGGLE_DISCO} !important;
     border-radius:50% !important;
     box-shadow: 0 2px 6px rgba(20,30,40,0.10), 0 1px 3px rgba(20,30,40,0.08) !important;
     width:34px !important; height:34px !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }}
+/* El icono nativo es un <svg> con fill propio, no hereda el color del botón como sí hace nuestra
+   máscara por currentColor. Sin esto, la flecha se queda en su tono de origen sobre el disco
+   invertido y desaparece justo en el tema en que el disco pasa a ser de su mismo tono. */
+[data-testid="collapsedControl"] button svg {{ fill:{TOGGLE_FLECHA} !important; }}
 [data-testid="collapsedControl"] button:hover {{
-    background-color:{t['surface_alt']} !important;
+    background-color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
 }}
 /* Botones de la sidebar centrados en su columna */
 section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; justify-content:center; }}
@@ -730,17 +763,24 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     position:fixed !important; top:{16 + (40 if narrow else 64) // 2 - 12}px !important;
     left:{SIDEBAR_WIDTH} !important; transform:translateX(-50%) !important;
     width:24px !important; height:24px !important; min-height:24px !important; padding:0 !important;
-    border-radius:50% !important; border:1px solid {t['border']} !important;
-    background-color:{t['sidebar_bg']} !important; color:{t['text_secondary']} !important;
+    /* Disco en el tema contrario al de la app: ver TOGGLE_DISCO. El borde va del mismo color que
+       el relleno —y no en t['border']— para que sea un disco macizo: un aro en el tono de la barra
+       alrededor de un disco invertido le pondría un halo justo donde ya hay borde de sidebar. */
+    border-radius:50% !important; border:1px solid {TOGGLE_DISCO} !important;
+    background-color:{TOGGLE_DISCO} !important; color:{TOGGLE_FLECHA} !important;
     box-shadow: 0 1px 4px rgba(20,30,40,0.15), 0 1px 2px rgba(20,30,40,0.10) !important;
     z-index:1000 !important; margin:0 !important;
     /* Acompaña al borde de la sidebar en el mismo tiempo/curva que su transición de ancho, así el
        botón viaja pegado al borde en vez de saltar de golpe a su nueva posición. */
     transition: left 0.32s cubic-bezier(0.4,0,0.2,1), top 0.32s cubic-bezier(0.4,0,0.2,1),
-                color 0.15s ease, border-color 0.15s ease !important;
+                background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
 }}
+/* El realce lo lleva ahora el DISCO, no la flecha. Antes bastaba con teñir la flecha de ámbar
+   porque el disco iba en el tono de la barra; sobre el disco invertido, ese mismo ámbar quedaba
+   lavado (P_AMBAR sobre #E9E9E9 no llega a 2:1). Pintando el disco de marca y dejando la flecha en
+   su neutro, el par conserva contraste de sobra en los dos temas y el hover se lee incluso mejor. */
 .st-key-toggle_sidebar button:hover {{
-    color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
+    background-color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
 }}
 /* La flecha la dibuja el ::before, no un carácter en el rótulo: ver FLECHA_TOGGLE, donde se
    elige el sentido y se explica por qué va como máscara. El <p> solo tiene que centrarla.
@@ -795,9 +835,13 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
    superior derecha está libre y no hay nada con lo que chocar.
 
    ESTRUCTURA. La bandera del idioma activo es el DISPARADOR y ocupa sola la esquina; las
-   otras cuatro forman el PANEL, colgando justo debajo y ocultas hasta que el grupo recibe
-   cursor o foco. Antes las cinco iban en fila y medían 162 px de franja; ver la geometría
+   otras cuatro forman el PANEL, colgando justo debajo y ocultas hasta que se PULSA el
+   disparador. Antes las cinco iban en fila y medían 162 px de franja; ver la geometría
    y el porqué en el bloque _reparto() de arriba.
+
+   ABIERTO Y CERRADO son estado de sesión, no un :hover: el panel se despliega al pulsar la
+   bandera activa y se queda ahí hasta que se elige idioma o se vuelve a pulsar el disparador.
+   Ver el porqué —y qué fallaba con el hover— en el bloque _ABIERTO de arriba.
 
    TODOS los contenedores se disuelven con display:contents —el de la agrupación, el de
    cada elemento de Streamlit y el del propio botón—, no con el height:0 que usa el toggle
@@ -828,8 +872,8 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     border:1px solid {t['border']} !important;
     background-repeat:no-repeat !important; background-position:center !important;
     background-size:cover !important;
-    /* overflow visible: la flecha y el puente del disparador son pseudoelementos que
-       salen de la caja del botón, y Streamlit recorta los suyos por defecto. */
+    /* overflow visible: la flecha del disparador es un pseudoelemento que sale de la caja
+       del botón, y Streamlit recorta los suyos por defecto. */
     overflow:visible !important;
     box-shadow: 0 1px 3px rgba(20,30,40,0.18) !important;
     z-index:1001 !important;
@@ -863,24 +907,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     transition: transform 0.2s ease, border-top-color 0.16s ease;
     pointer-events:none;
 }}
-/* LOS PUENTES. Entre cada bandera y la siguiente hay {_MENU_HUECO} px de aire, y ese aire
-   es un sitio donde el cursor no está sobre ninguna: al cruzarlo, el grupo dejaría de
-   estar en :hover y el panel se cerraría en la cara de quien iba a elegir idioma. Cada
-   bandera tapa SU hueco —el de debajo— con este ::after, que le pertenece y por tanto
-   mantiene el grupo recorrido.
-   Solo hacia ABAJO, y no en las dos direcciones: así los puentes no se solapan entre sí
-   y cada punto del hueco pertenece a una sola bandera, sin ambigüedad sobre quién recibe
-   el clic. La última del panel no lleva puente porque debajo no hay nada que alcanzar.
-   El alto es exactamente el del hueco, ni un píxel más: pasarse taparía el borde superior
-   de la bandera de debajo y le robaría esa franja de clic. */
-{_sel_lang(" button::after", LANGS_PUENTE)} {{
-    content:""; position:absolute;
-    top:100%; left:-3px; right:-3px; height:{_MENU_HUECO}px;
-}}
 /* ── Panel: los idiomas inactivos ──
    Cerrado, se ocultan con opacidad y NO con visibility ni display: los dos últimos sacan
    el botón del orden de tabulación, y entonces el desplegable no se podría abrir con el
-   teclado. Con opacidad 0 siguen siendo enfocables, y el :focus-within del grupo los
+   teclado. Con opacidad 0 siguen siendo enfocables, y el :focus-visible del grupo los
    revela en cuanto el tabulador llega al primero. pointer-events:none evita que ese panel
    invisible intercepte clics dirigidos a la página. */
 {_sel_lang(" button", LANGS_OTROS)} {{
@@ -1870,14 +1900,12 @@ button[data-testid="stExpandSidebarButton"]:hover {{
     /* El desplegable de idioma SÍ sigue fijo en móvil (no es de la sidebar, es del lienzo),
        pero se arrima al borde y encoge un punto. El botón nativo de abrir la sidebar ocupa
        la esquina superior IZQUIERDA, así que no hay colisión posible. Aquí solo cambian las
-       medidas: las banderas, sus estados y el puente ya están definidos arriba y se heredan.
+       medidas: las banderas y sus estados ya están definidos arriba y se heredan. Que se abra
+       por toque y no por hover es además lo que hace que el menú funcione en una pantalla
+       táctil, donde no existe el estado sobre el que se apoyaba antes.
        Estas reglas no repiten los data-URI —_css_banderas(con_imagen=False)—, que son con
        diferencia lo más pesado de la hoja. */
     {CSS_FLAGS_MOVIL}
-    /* Los puentes tienen que medir exactamente el hueco de MÓVIL: si se quedaran con los
-       {_MENU_HUECO} px de escritorio taparían el primer milímetro de la bandera de debajo
-       y le robarían el clic justo en la pantalla donde el dedo es menos preciso. */
-    {_sel_lang(" button::after", LANGS_PUENTE)} {{ height:{_MENU_HUECO_M}px !important; }}
     .st-key-lang_{LANG} button::before {{ margin-right:4px !important; }}
     /* El reloj sigue a las banderas a su nueva posición y se queda SOLO con la hora: en un
        teléfono la franja superior es estrecha y la fecha es el dato prescindible de los dos
@@ -2803,15 +2831,28 @@ with st.sidebar:
 # bandera muerta.
 #
 # El contenedor NO es decorativo y no puede quitarse: es el ancestro común de las cinco
-# banderas, y de él cuelga la condición de «desplegable abierto» (.st-key-lang_switch:hover
-# / :has(button:hover) / :focus-within). Sin un ancestro propio habría que preguntarle al
-# bloque vertical de Streamlit, que envuelve la página entera. No ocupa sitio: la hoja de
-# estilos lo disuelve con display:contents junto con los envoltorios que Streamlit mete
-# dentro.
+# banderas, y de él cuelga la condición de «desplegable abierto» (.st-key-lang_switch a secas
+# cuando lo está, y :has(button:focus-visible) para el teclado). Sin un ancestro propio habría
+# que preguntarle al bloque vertical de Streamlit, que envuelve la página entera. No ocupa
+# sitio: la hoja de estilos lo disuelve con display:contents junto con los envoltorios que
+# Streamlit mete dentro.
+#
+# La bandera ACTIVA no cambia de idioma —ya es el idioma—, así que su clic es el que pliega y
+# despliega el panel. Las otras cuatro eligen idioma y lo cierran de paso: un menú que se queda
+# abierto después de elegir tapa la esquina de la página que acabas de traducir.
+#
+# El st.rerun() es obligatorio también para el simple abrir/cerrar, y no un lujo: la hoja de
+# estilos se escribe ARRIBA del script, mucho antes de estos botones, de modo que la pasada en
+# la que se pulsa ya ha emitido el CSS con el estado viejo. Sin el rerun el panel no se movería
+# hasta la siguiente interacción.
 with st.container(key="lang_switch"):
     for _lang in i18n.LANGS:
-        if st.button(" ", key=f"lang_{_lang}", help=S(f"lang_{_lang}_help")) and LANG != _lang:
-            st.session_state.lang = _lang
+        if st.button(" ", key=f"lang_{_lang}", help=S(f"lang_{_lang}_help")):
+            if _lang == LANG:
+                st.session_state.lang_open = not MENU_ABIERTO
+            else:
+                st.session_state.lang = _lang
+                st.session_state.lang_open = False
             st.rerun()
 
 # ── El idioma DECLARADO del documento ──
@@ -3136,7 +3177,7 @@ def esfera_base() -> go.Figure:
     return fig
 
 # ═══════════════════════════════════════════════════════════════════════
-# ENTRELAZAMIENTO DE DOS QUBITS  (sección final de la página Esfera de Bloch)
+# ENTRELAZAMIENTO DE TRES QUBITS  (sección final de la página Esfera de Bloch)
 # ═══════════════════════════════════════════════════════════════════════
 # POR QUÉ ESTO ES NUMPY Y NO QISKIT — la pregunta obvia en un TFM que entrena con Qiskit.
 # Qiskit vive en el PIPELINE, no en el panel: está en requirements.txt de la raíz (junto a
@@ -3149,7 +3190,7 @@ def esfera_base() -> go.Figure:
 # Traer qiskit + qiskit-aer + matplotlib solo para esta sección rompería esa separación por
 # dos motivos, y el segundo pesa más que el primero:
 #   · TAMAÑO — varios cientos de MB añadidos a un despliegue de Streamlit Cloud, para un
-#     estado de DOS qubits: cuatro amplitudes y dos matrices 4x4.
+#     estado de TRES qubits: ocho amplitudes y tres matrices 8x8.
 #   · TEMA — plot_state_qsphere() y plot_histogram() devuelven figuras de MATPLOTLIB: fondo
 #     blanco fijo, tipografía ajena y ciegas al tema. En una app que se pinta entera en Plotly
 #     y alterna claro/oscuro, esas dos figuras serían los únicos recuadros que no cambian.
@@ -3159,38 +3200,51 @@ def esfera_base() -> go.Figure:
 # reutiliza el vocabulario visual de la esfera de Bloch de arriba (superficie tenue, círculos
 # máximos, acento cuántico), que es lo que hace que las dos figuras se lean como una sola idea.
 
-# Orden de la base: el índice es 2·q0 + q1, con q0 a la IZQUIERDA del ket. Es la convención de
-# libro de texto, no la de Qiskit —que numera al revés y escribe |q1 q0⟩—. Para el estado de
-# Bell las dos coinciden en la etiqueta ("00" y "11" salen igual leídas por cualquier lado),
-# pero se deja dicho aquí porque en el paso intermedio SÍ se separan: tras la Hadamard sobre
-# q0 este código da "10" donde Qiskit escribiría "01".
-ENT_BASE = ("00", "01", "10", "11")
+# Orden de la base: el índice es 4·q0 + 2·q1 + q2, con q0 a la IZQUIERDA del ket. Es la
+# convención de libro de texto, no la de Qiskit —que numera al revés y escribe |q2 q1 q0⟩—.
+# Para el estado GHZ las dos coinciden en la etiqueta ("000" y "111" salen igual leídas por
+# cualquier lado), pero se deja dicho aquí porque en los pasos intermedios SÍ se separan: tras
+# la Hadamard sobre q0 este código da "100" donde Qiskit escribiría "001".
+ENT_N = 3
+# Las ocho etiquetas se GENERAN del índice en binario en vez de escribirse a mano: así la
+# lista y la convención de arriba no pueden discrepar. Escritas a mano, un solo par cambiado
+# de sitio daría un histograma con las barras bien altas y mal rotuladas, que es el tipo de
+# fallo que nadie ve.
+ENT_BASE = tuple(format(i, f"0{ENT_N}b") for i in range(2 ** ENT_N))
 
 _H1 = np.array([[1, 1], [1, -1]], dtype=float) / np.sqrt(2)
-# H actúa sobre q0 y la identidad sobre q1. El producto de Kronecker EN ESE ORDEN es lo que
-# fija la convención de arriba: el factor izquierdo es el qubit más significativo del índice.
-ENT_H0 = np.kron(_H1, np.eye(2))
-# CNOT con control q0 y objetivo q1: intercambia |10⟩ y |11⟩ (índices 2 y 3) y deja |00⟩ y
-# |01⟩ intactos — el objetivo se voltea solo cuando el control vale 1.
-ENT_CNOT = np.array([[1, 0, 0, 0],
-                     [0, 1, 0, 0],
-                     [0, 0, 0, 1],
-                     [0, 0, 1, 0]], dtype=float)
+# CNOT de dos qubits: intercambia |10⟩ y |11⟩ (índices 2 y 3) y deja |00⟩ y |01⟩ intactos —
+# el objetivo se voltea solo cuando el control vale 1.
+_CNOT1 = np.array([[1, 0, 0, 0],
+                   [0, 1, 0, 0],
+                   [0, 0, 0, 1],
+                   [0, 0, 1, 0]], dtype=float)
+# Cada puerta se sube al espacio de los tres qubits con productos de Kronecker, y el ORDEN de
+# los factores es lo que fija la convención de arriba: el factor izquierdo es el qubit más
+# significativo del índice. Se levantan así, y no con la maquinaria tensorial de la sección
+# del ZZFeatureMap, porque a esta escala son matrices 8×8 que caben enteras en pantalla: la
+# estructura del circuito —quién actúa sobre quién y quién se queda al margen— está a la
+# vista en los propios kron.
+ENT_H0 = np.kron(_H1, np.eye(4))              # H sobre q0; q1 y q2 sin tocar
+ENT_CNOT01 = np.kron(_CNOT1, np.eye(2))       # control q0 → objetivo q1; q2 al margen
+ENT_CNOT12 = np.kron(np.eye(2), _CNOT1)       # control q1 → objetivo q2; q0 al margen
+# El circuito, en orden. La tupla ES la secuencia: el paso n son las n primeras puertas, y
+# añadir una cuarta sería añadirla aquí y en el SVG, sin tocar la lógica.
+ENT_PUERTAS = (ENT_H0, ENT_CNOT01, ENT_CNOT12)
 
 
 def ent_statevector(paso: int) -> np.ndarray:
-    """Vector de estado de los dos qubits tras `paso` puertas, partiendo de |00⟩.
+    """Vector de estado de los tres qubits tras `paso` puertas, partiendo de |000⟩.
 
-    Se RECALCULA entero desde |00⟩ en cada rerun en vez de guardarse en session_state y
+    Se RECALCULA entero desde |000⟩ en cada rerun en vez de guardarse en session_state y
     mutarse: el estado que persiste es solo el entero `paso`, así que no hay forma de que
     el vector se desincronice del circuito dibujado ni de que un rerun a mitad de camino
     (cambio de tema, de idioma) lo deje aplicado dos veces.
     """
-    psi = np.array([1.0, 0.0, 0.0, 0.0])
-    if paso >= 1:
-        psi = ENT_H0 @ psi
-    if paso >= 2:
-        psi = ENT_CNOT @ psi
+    psi = np.zeros(2 ** ENT_N)
+    psi[0] = 1.0
+    for puerta in ENT_PUERTAS[:paso]:
+        psi = puerta @ psi
     return psi
 
 
@@ -3223,41 +3277,75 @@ def _entropia_vn(rho: np.ndarray) -> float:
     return abs(float(-np.sum(lam * np.log2(lam)))) if lam.size else 0.0
 
 
-def ent_local(psi: np.ndarray) -> dict:
-    """Lo que queda del qubit 0 cuando se ignora al otro, y cuánto se ha perdido por el camino.
+def _concurrencia(rho: np.ndarray) -> float:
+    """Concurrencia de Wootters de un par de qubits MEZCLADO: 0 separable, 1 máximo.
 
-    ESTA es la evidencia dura de que un estado de Bell no cabe en dos esferas de Bloch. Al
-    trazar fuera el qubit 1 queda la matriz densidad reducida ρ₀, y de ella salen tres cifras
-    que dicen lo mismo desde tres ángulos:
+    Hace falta una medida distinta de la entropía, y no es un capricho de notación: la ρ del
+    par q₀q₁ llega mezclada —es lo que queda tras trazar fuera q₂— y la entropía de
+    entrelazamiento solo mide pares en estado PURO. Aplicada a una mezcla contaría además la
+    ignorancia clásica sobre el qubit que se ha trazado, y marcaría entrelazamiento donde solo
+    hay correlación: exactamente la confusión que esta sección quiere deshacer.
+
+    La receta es la de Wootters, que para dos qubits da la respuesta EXACTA y no una cota: se
+    voltea el estado con ρ̃ = (σy⊗σy)·ρ*·(σy⊗σy), se ordenan de mayor a menor las raíces de los
+    autovalores de ρ·ρ̃ y C = max(0, λ₁ − λ₂ − λ₃ − λ₄). Ese producto no es hermítico, pero sus
+    autovalores son reales y no negativos; el clip a cero es contra el redondeo, que los saca a
+    -1e-17 cuando valen 0, y np.sqrt de un negativo daría nan.
+    """
+    sy = np.array([[0, -1j], [1j, 0]])
+    yy = np.kron(sy, sy)
+    lam = np.sqrt(np.clip(np.real(np.linalg.eigvals(rho @ yy @ rho.conj() @ yy)), 0.0, None))
+    lam = np.sort(lam)[::-1]
+    return float(max(0.0, lam[0] - lam[1] - lam[2] - lam[3]))
+
+
+def ent_local(psi: np.ndarray) -> dict:
+    """Lo que queda de q₀ cuando se ignora al resto, y lo que queda del PAR q₀q₁ sin q₂.
+
+    ESTA es la evidencia dura de que un estado entrelazado no cabe en tres esferas de Bloch.
+    Al trazar fuera los otros qubits queda la matriz densidad reducida ρ₀, y de ella salen tres
+    cifras que dicen lo mismo desde tres ángulos:
 
       · |r| — longitud del vector de Bloch de q0. Vale 1 mientras el estado sea puro (la
         flecha llega a la superficie: hay un punto que dibujar) y 0 en el estado de Bell.
         Cero no es "apunta a otro sitio": es que NO HAY flecha, el vector se ha quedado en el
         centro y ningún punto de la esfera describe a ese qubit por separado.
       · Pureza Tr(ρ₀²) — 1 en un estado puro, 0,5 en la mezcla máxima de un qubit.
-      · Entropía de entrelazamiento — la de von Neumann de ρ₀, en bits. 0 si los dos qubits
-        son separables, 1 en un estado de Bell, que es el máximo para un par.
+      · Entropía de entrelazamiento — la de von Neumann de ρ₀, en bits. 0 si q₀ es separable
+        del resto, 1 cuando está entrelazado al máximo con ellos.
 
     Las tres son redundantes a propósito (|r| = √(2·pureza − 1) es exacta, no aproximada):
     quien viene del lado clínico lee la longitud, quien viene del cuántico lee la entropía.
+
+    La CUARTA es la que solo tiene sentido habiendo un tercer qubit, y es la razón de que la
+    sección llegue hasta tres: la concurrencia del par q₀q₁ tras trazar fuera q₂. Su lectura a
+    lo largo del recorrido es 0 → 0 → 1 → 0, y ese último cero es el dato de la sección. En el
+    paso 2 el par ES un estado de Bell —q₂ mira desde fuera, sin entrar—; el tercer CNOT lo
+    entrelaza con los otros dos y, al hacerlo, DESHACE el lazo del par: quedan correlacionados
+    (medir uno predice el otro) pero ya no entrelazados. El entrelazamiento del GHZ es global,
+    no la suma de lazos entre parejas, y es lo que hay que tener en la cabeza para leer la
+    matriz de información mutua del ZZFeatureMap de ocho qubits que viene justo debajo.
     """
-    rho0 = _rho_reducida(psi.reshape(2, 2), [0])
+    tensor = psi.reshape((2,) * ENT_N)
+    rho0 = _rho_reducida(tensor, [0])
     pureza = float(np.real(np.trace(rho0 @ rho0)))
     # El max(0, ...) no es paranoia gratuita: en el estado de Bell la pureza sale 0,4999...
     # por redondeo de coma flotante y el radicando se va a -1e-16, que da nan.
     r = float(np.sqrt(max(0.0, 2.0 * pureza - 1.0)))
-    return dict(pureza=pureza, r=r, entropia=_entropia_vn(rho0))
+    return dict(pureza=pureza, r=r, entropia=_entropia_vn(rho0),
+                concurrencia=_concurrencia(_rho_reducida(tensor, [0, 1])))
 
 
 def ent_qsphere_fig(psi: np.ndarray):
     """Q-sphere del estado CONJUNTO: un nodo por estado base, no una flecha por qubit.
 
-    La Q-sphere existe justamente porque la esfera de Bloch no escala: con dos qubits ya no
-    hay dos flechas que dibujar, hay un solo estado en un espacio de cuatro dimensiones. La
-    convención es la de Qiskit: la LATITUD la fija el peso de Hamming del estado base —|00⟩
-    en el polo norte, |11⟩ en el sur, los de peso 1 en el ecuador— y el ÁREA del nodo es
-    proporcional a su probabilidad. Así el paso de |00⟩ a Bell se ve como lo que es: un único
-    nodo en el polo que se parte en dos, uno en cada polo, y nada en el ecuador.
+    La Q-sphere existe justamente porque la esfera de Bloch no escala: con tres qubits ya no
+    hay tres flechas que dibujar, hay un solo estado en un espacio de ocho dimensiones. La
+    convención es la de Qiskit: la LATITUD la fija el peso de Hamming del estado base —|000⟩
+    en el polo norte, |111⟩ en el sur, y los pesos 1 y 2 en dos anillos intermedios— y el ÁREA
+    del nodo es proporcional a su probabilidad. Así el paso de |000⟩ a GHZ se ve como lo que
+    es: un único nodo en el polo que se parte en dos, uno en cada polo, y los dos anillos de
+    en medio vacíos.
 
     Se dibuja con el mismo repertorio que la esfera de Bloch de esta página (superficie tenue
     con lighting, tres círculos máximos, acento cuántico para el dato) para que las dos
@@ -3266,15 +3354,16 @@ def ent_qsphere_fig(psi: np.ndarray):
     """
     fig = esfera_base()
 
-    # Un anillo por peso de Hamming. Con 2 qubits son tres: {00} arriba, {01,10} en el
-    # ecuador y {11} abajo. El reparto azimutal dentro del anillo es uniforme, que con dos
-    # estados los deja enfrentados a 0 y π.
+    # Un anillo por peso de Hamming. Con 3 qubits son cuatro: {000} en el polo norte, los tres
+    # de peso 1 y los tres de peso 2 en dos anillos intermedios (a z = ⅓ y −⅓, no en el
+    # ecuador: con n impar ningún peso cae justo en la mitad) y {111} en el polo sur. El
+    # reparto azimutal dentro del anillo es uniforme, así que los tríos salen a 120°.
     por_peso = {}
     for idx, etiqueta in enumerate(ENT_BASE):
         por_peso.setdefault(etiqueta.count("1"), []).append((idx, etiqueta))
 
     for peso, miembros in por_peso.items():
-        z = 1.0 - peso                       # = 1 − 2·peso/n con n = 2
+        z = 1.0 - 2.0 * peso / ENT_N         # polo norte peso 0, polo sur peso n
         radio = float(np.sqrt(max(0.0, 1.0 - z * z)))
         for j, (idx, etiqueta) in enumerate(miembros):
             phi = 2 * np.pi * j / len(miembros)
@@ -3441,7 +3530,7 @@ def zz_metricas(valores: tuple) -> tuple:
 
 
 def ent_circuito_svg(paso: int, medir: bool) -> str:
-    """Diagrama del circuito de 2 qubits, dibujado con la paleta activa.
+    """Diagrama del circuito de 3 qubits, dibujado con la paleta activa.
 
     Va como SVG EN LÍNEA y no como PNG —que es lo que hace la página Circuito Cuántico— por
     la diferencia de fondo entre las dos: allí el circuito es fijo, sale del notebook y se
@@ -3451,44 +3540,58 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
     """
     hilo, tinta = t["border_strong"], t["text"]
     apagado = t["text_muted"]
-    y0, y1 = 46, 100
-    piezas = [
+    # Un hilo por qubit, al mismo paso vertical (54 px) y con el mismo aire arriba y abajo que
+    # entre hilos: la altura del viewBox sale de esa cuenta, no de un número ajustado a ojo.
+    YS = (46, 100, 154)
+    piezas = []
+    for etiqueta, y in zip(("q₀", "q₁", "q₂"), YS):
         # Hilos: se dibujan enteros de un extremo a otro y las puertas se pintan encima.
-        f'<line x1="74" y1="{y0}" x2="446" y2="{y0}" stroke="{hilo}" stroke-width="1.6"/>',
-        f'<line x1="74" y1="{y1}" x2="446" y2="{y1}" stroke="{hilo}" stroke-width="1.6"/>',
-        f'<text x="8" y="{y0 + 5}" fill="{tinta}" font-family="{FONT_MONO}" font-size="14">q₀ |0⟩</text>',
-        f'<text x="8" y="{y1 + 5}" fill="{tinta}" font-family="{FONT_MONO}" font-size="14">q₁ |0⟩</text>',
-    ]
+        piezas.append(
+            f'<line x1="74" y1="{y}" x2="446" y2="{y}" stroke="{hilo}" stroke-width="1.6"/>'
+            f'<text x="8" y="{y + 5}" fill="{tinta}" font-family="{FONT_MONO}" '
+            f'font-size="14">{etiqueta} |0⟩</text>')
+
+    def _cnot(x, y_control, y_objetivo):
+        """CNOT en notación canónica: punto relleno en el control, ⊕ en el objetivo y la
+        vertical que los une. El ⊕ se dibuja con dos segmentos y no con un carácter, que
+        dependería de que la fuente lo traiga."""
+        return (f'<line x1="{x}" y1="{y_control}" x2="{x}" y2="{y_objetivo}" '
+                f'stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+                f'<circle cx="{x}" cy="{y_control}" r="5.5" fill="{C_QUANTUM}"/>'
+                f'<circle cx="{x}" cy="{y_objetivo}" r="13" fill="{t["surface_alt"]}" '
+                f'stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+                f'<line x1="{x}" y1="{y_objetivo - 13}" x2="{x}" y2="{y_objetivo + 13}" '
+                f'stroke="{C_QUANTUM}" stroke-width="1.8"/>'
+                f'<line x1="{x - 13}" y1="{y_objetivo}" x2="{x + 13}" y2="{y_objetivo}" '
+                f'stroke="{C_QUANTUM}" stroke-width="1.8"/>')
+
     # Las puertas ya aplicadas van en el acento cuántico; las que aún no, no se dibujan. El
     # diagrama es el registro de lo hecho, no el guion de lo que falta — para eso están los
     # botones, que ya dicen cuál toca.
     if paso >= 1:
         piezas.append(
-            f'<rect x="120" y="{y0 - 20}" width="40" height="40" rx="7" '
+            f'<rect x="120" y="{YS[0] - 20}" width="40" height="40" rx="7" '
             f'fill="{t["surface_alt"]}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
-            f'<text x="140" y="{y0 + 6}" text-anchor="middle" fill="{C_QUANTUM}" '
+            f'<text x="140" y="{YS[0] + 6}" text-anchor="middle" fill="{C_QUANTUM}" '
             f'font-family="{FONT_MONO}" font-size="17" font-weight="600">H</text>')
+    # Los dos CNOT van escalonados y no en la misma columna: el segundo depende del primero
+    # —controla sobre el qubit que el primero acaba de voltear—, y ponerlos alineados los
+    # leería como simultáneos, que es justo lo contrario de la cadena que dibujan.
     if paso >= 2:
-        # CNOT en notación canónica: punto relleno en el control, ⊕ en el objetivo y la
-        # vertical que los une. El ⊕ se dibuja con dos segmentos y no con un carácter, que
-        # dependería de que la fuente lo traiga.
-        piezas.append(
-            f'<line x1="232" y1="{y0}" x2="232" y2="{y1}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
-            f'<circle cx="232" cy="{y0}" r="5.5" fill="{C_QUANTUM}"/>'
-            f'<circle cx="232" cy="{y1}" r="13" fill="{t["surface_alt"]}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
-            f'<line x1="232" y1="{y1 - 13}" x2="232" y2="{y1 + 13}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
-            f'<line x1="219" y1="{y1}" x2="245" y2="{y1}" stroke="{C_QUANTUM}" stroke-width="1.8"/>')
+        piezas.append(_cnot(212, YS[0], YS[1]))
+    if paso >= 3:
+        piezas.append(_cnot(272, YS[1], YS[2]))
     if medir:
         # Medidor: el arco con la aguja, el símbolo de siempre. En tinta apagada porque la
         # medición no es una puerta más — es donde el estado cuántico deja de existir.
-        for y in (y0, y1):
+        for y in YS:
             piezas.append(
                 f'<rect x="330" y="{y - 20}" width="40" height="40" rx="7" '
                 f'fill="{t["surface_alt"]}" stroke="{apagado}" stroke-width="1.6"/>'
                 f'<path d="M332 {y + 9} A 18 18 0 0 1 368 {y + 9}" fill="none" '
                 f'stroke="{apagado}" stroke-width="1.6"/>'
                 f'<line x1="350" y1="{y + 9}" x2="363" y2="{y - 7}" stroke="{apagado}" stroke-width="1.6"/>')
-    return (f'<svg viewBox="0 0 460 146" width="100%" height="auto" '
+    return (f'<svg viewBox="0 0 460 {YS[-1] + YS[0]}" width="100%" height="auto" '
             f'style="display:block; max-width:460px; margin:0 auto;" '
             f'role="img" aria-label="{html.escape(S("bl_ent_circuit_alt"))}">'
             + "".join(piezas) + "</svg>")
@@ -3718,20 +3821,25 @@ elif page == "governance":
             f'<div class="section-sub">{S("gov_suite_sub").format(nombre=GOV_SUITE["nombre"], fecha=GOV_SUITE["fecha"], registros=mil(GOV_SUITE["registros"]), duracion=nf(GOV_SUITE["duracion_s"], 4))}</div>',
             unsafe_allow_html=True)
 
-        _expectativas = S("gov_expectativas")
-        _filas, _dim_previa = [], None
-        for dim, col, regla in _expectativas:
-            if dim != _dim_previa:
-                _n = sum(1 for d, _, _ in _expectativas if d == dim)
-                _filas.append(f'<div class="gov-dim">{dim} · {_n}</div>')
-                _dim_previa = dim
-            _filas.append(
+        # Mismo plegado que el Registro de decisiones (tab C): un expander por dimensión en vez
+        # de las 15 expectativas seguidas en una sola tarjeta. Lo que era la cabecera .gov-dim
+        # pasa a ser el rótulo del expander, conservando el "{dimensión} · {n}" —el recuento
+        # sigue siendo el de todas sus filas—, y el recuadro lo pone ya el propio widget: envolver
+        # esto en .info-card dejaría borde dentro de borde. El vestido del expander es la regla
+        # global de [data-testid="stExpander"], así que sigue al tema igual que en decisiones.
+        _grupos = {}
+        for dim, col, regla in S("gov_expectativas"):
+            _grupos.setdefault(dim, []).append(
                 f'<div class="gov-check">'
                 f'<span class="gov-dot" style="background:{STATUS["good"]};"></span>'
                 f'<span class="gov-col">{col}</span>'
                 f'<span class="gov-rule">{regla}</span>'
                 f'<span class="gov-state" style="color:{STATUS["good"]};">passed</span></div>')
-        st.markdown(f'<div class="info-card">{"".join(_filas)}</div>', unsafe_allow_html=True)
+        for dim, _checks in _grupos.items():
+            with st.expander(f"{dim} · {len(_checks)}"):
+                # El <div> envolvente no es decorativo: .gov-check:last-child es quien quita el
+                # filete inferior, y solo acierta si las filas son hermanas y cierran el bloque.
+                st.markdown(f'<div>{"".join(_checks)}</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(f'<div class="section-title">{S("gov_ops_title")}</div>',
@@ -4485,18 +4593,26 @@ elif page == "bloch":
     """, unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════
-    # ENTRELAZAMIENTO DE DOS QUBITS
+    # ENTRELAZAMIENTO DE TRES QUBITS
     # ═══════════════════════════════════════════════════════════════════
     # POR QUÉ AQUÍ Y NO AL FINAL DE CIRCUITO CUÁNTICO. La nota de arriba (bl_note) cierra la
     # página diciendo que el entrelazamiento "solo es representable en el espacio conjunto":
-    # esta sección es esa frase hecha figura. El argumento entero —que un estado de Bell NO
-    # cabe en dos esferas de Bloch— solo se entiende habiendo visto antes la esfera de un
-    # qubit, y esa esfera está justo encima; en Circuito Cuántico la sección habría llegado
-    # sin ese precedente, entre las especificaciones del ZZFeatureMap y las cifras de
-    # entrenamiento, que es una página de fichas y no de didáctica.
+    # esta sección es esa frase hecha figura. El argumento entero —que un estado entrelazado
+    # NO cabe en una esfera de Bloch por qubit— solo se entiende habiendo visto antes la
+    # esfera de un qubit, y esa esfera está justo encima; en Circuito Cuántico la sección
+    # habría llegado sin ese precedente, entre las especificaciones del ZZFeatureMap y las
+    # cifras de entrenamiento, que es una página de fichas y no de didáctica.
+    #
+    # POR QUÉ TRES Y NO DOS, que es donde estaba la sección antes. Con dos qubits el recorrido
+    # termina en el estado de Bell y las tres cifras locales caen a su extremo; con tres, el
+    # GHZ da EXACTAMENTE esas mismas tres cifras —el titular no se mueve—, pero aparece una
+    # cuarta que dos qubits no pueden enseñar: la concurrencia del par q₀q₁, que sube a 1 en el
+    # paso 2 y vuelve a 0 en el 3. Ver ent_local(): el tercer CNOT crea entrelazamiento global
+    # DESHACIENDO el del par, y eso es lo que hay que saber para leer la matriz de información
+    # mutua por parejas del ZZFeatureMap de ocho qubits que viene justo debajo.
     #
     # El paso ES el estado. Lo único que persiste entre reruns es el entero `ent_paso`; el
-    # vector se recalcula desde |00⟩ en cada pasada (ver ent_statevector). Los botones van con
+    # vector se recalcula desde |000⟩ en cada pasada (ver ent_statevector). Los botones van con
     # on_click y no con `if st.button(...)`: el callback corre ANTES de que el script se
     # reejecute, así que el circuito, la Q-sphere y las métricas se pintan ya con el paso
     # nuevo. Con la forma `if` haría falta un st.rerun() explícito para no ir un paso por
@@ -4529,16 +4645,18 @@ elif page == "bloch":
 
     # Botonera: cada puerta se habilita SOLO en su turno. Un circuito no admite aplicar el
     # CNOT antes que la Hadamard —saldría un estado producto sin entrelazar y la sección
-    # perdería el hilo—, así que la secuencia la impone el propio control en vez de un aviso
-    # a posteriori. El tercer botón siempre está vivo: se puede rehacer el recorrido entero.
-    b1, b2, b3 = st.columns([1.25, 1.55, 1])
-    with b1:
-        st.button(S("bl_ent_btn_h"), key="ent_h", width="stretch",
-                  disabled=paso != 0, on_click=_ent_paso, args=(1,))
-    with b2:
-        st.button(S("bl_ent_btn_cnot"), key="ent_cnot", width="stretch",
-                  disabled=paso != 1, on_click=_ent_paso, args=(2,))
-    with b3:
+    # perdería el hilo—, y el segundo CNOT antes del primero rompería la cadena que construye
+    # el GHZ, así que la secuencia la impone el propio control en vez de un aviso a posteriori.
+    # El de reiniciar siempre está vivo: se puede rehacer el recorrido entero.
+    b1, b2, b3, b4 = st.columns([1.15, 1.5, 1.5, 1])
+    for _col, _clave, _rotulo, _destino in (
+            (b1, "ent_h", "bl_ent_btn_h", 1),
+            (b2, "ent_cnot1", "bl_ent_btn_cnot1", 2),
+            (b3, "ent_cnot2", "bl_ent_btn_cnot2", 3)):
+        with _col:
+            st.button(S(_rotulo), key=_clave, width="stretch",
+                      disabled=paso != _destino - 1, on_click=_ent_paso, args=(_destino,))
+    with b4:
         st.button(S("bl_ent_btn_reset"), key="ent_reset", width="stretch",
                   disabled=paso == 0, on_click=_ent_paso, args=(0,))
 
@@ -4557,14 +4675,17 @@ elif page == "bloch":
         st.markdown(f'<div class="fig-card" style="padding:18px 14px;">'
                     f'{ent_circuito_svg(paso, st.session_state.ent_counts is not None)}</div>',
                     unsafe_allow_html=True)
-        # Las tres cifras de ent_local(), que son el argumento cuantitativo de la sección.
+        # Las cuatro cifras de ent_local(), que son el argumento cuantitativo de la sección.
         # Mismo patrón .kpi-row que la tarjeta de amplitudes de arriba, a propósito: se leen
         # como su continuación —allí el estado de UN qubit, aquí lo que queda de él dentro
-        # del par—. La longitud del vector va la primera porque es la que se puede contrastar
-        # con la figura de esta misma página: 1 = hay flecha que dibujar, 0 = no la hay.
+        # del trío—. La longitud del vector va la primera porque es la que se puede contrastar
+        # con la figura de esta misma página: 1 = hay flecha que dibujar, 0 = no la hay. La
+        # concurrencia va la última porque es la que solo se entiende con las otras tres ya
+        # leídas: dice que lo que hay entrelazado es el conjunto y no las parejas.
         _kpi_lab = S("bl_ent_kpi")
         _kpi_val = [nf(local["r"], 3), nf(local["pureza"], 3),
-                    f'{nf(local["entropia"], 3)} {S("bl_ent_bits")}']
+                    f'{nf(local["entropia"], 3)} {S("bl_ent_bits")}',
+                    nf(local["concurrencia"], 3)]
         st.markdown(
             '<div class="info-card" style="margin-top:14px;">'
             + "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span>'
@@ -4582,10 +4703,10 @@ elif page == "bloch":
 
     # ── Medición ────────────────────────────────────────────────────────
     # La Q-sphere enseña el estado; esto enseña lo que se MIDE, que es lo único observable y
-    # la prueba empírica del entrelazamiento: 00 y 11 a partes iguales, 01 y 10 nunca. Se
-    # habilita desde el primer paso y no solo en el estado de Bell, porque el contraste es
-    # parte de la lección — tras la Hadamard sola salen 00 y 10, o sea q0 al azar y q1 fijo
-    # en 0; es al añadir el CNOT cuando los dos resultados quedan atados.
+    # la prueba empírica del entrelazamiento: 000 y 111 a partes iguales, y las otras SEIS
+    # combinaciones nunca. Se habilita desde el primer paso y no solo en el GHZ, porque el
+    # contraste es parte de la lección — tras la Hadamard sola salen 000 y 100, o sea q0 al
+    # azar y los otros dos fijos en 0; cada CNOT que se añade ata un qubit más al primero.
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(f'<div class="section-title">{S("bl_ent_meas_title")}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="section-sub">{S("bl_ent_meas_sub")}</div>', unsafe_allow_html=True)
@@ -4609,17 +4730,18 @@ elif page == "bloch":
 
     counts = st.session_state.ent_counts
     if counts is None:
-        # Hueco explícito en vez de una figura vacía: una gráfica con cuatro barras a cero se
+        # Hueco explícito en vez de una figura vacía: una gráfica con ocho barras a cero se
         # lee como un resultado ("no sale nada"), que es lo contrario de "aún no has medido".
         st.markdown(f'<div class="info-card" style="text-align:center; color:{t["text_muted"]}; '
                     f'padding:34px 18px;">{S("bl_ent_meas_empty")}</div>', unsafe_allow_html=True)
     else:
         total = sum(counts)
         fig = go.Figure()
-        # Los cuatro resultados posibles SIEMPRE en el eje, incluidos los que salen a cero:
-        # que |01⟩ y |10⟩ aparezcan etiquetados y vacíos es el dato. Si se filtraran las
-        # barras nulas, la figura enseñaría dos resultados equiprobables y no habría forma
-        # de ver que faltan otros dos.
+        # Los ocho resultados posibles SIEMPRE en el eje, incluidos los que salen a cero: que
+        # las seis combinaciones mixtas aparezcan etiquetadas y vacías es el dato. Si se
+        # filtraran las barras nulas, la figura enseñaría dos resultados equiprobables y no
+        # habría forma de ver que faltan otros seis — y con tres qubits ese vacío pesa más
+        # que con dos: seis de ocho, no dos de cuatro.
         fig.add_trace(go.Bar(
             x=[f"|{b}⟩" for b in ENT_BASE], y=counts,
             marker_color=[C_QUANTUM if c else hex_to_rgba(t["text"], 0.10) for c in counts],

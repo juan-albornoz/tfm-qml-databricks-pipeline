@@ -706,45 +706,57 @@ STR = {
         # entrelazamiento solo se representa en el espacio conjunto, y esta sección es esa
         # frase convertida en figura. De ahí que el subtítulo la enuncie como un límite del
         # mapa que la página acaba de enseñar, y no como un tema nuevo.
-        "bl_ent_title": "Entrelazamiento: dos qubits, un solo estado",
-        "bl_ent_sub": ("El límite de la esfera de arriba. Aplica las dos puertas y mira qué le pasa al "
-                       "estado local de cada qubit."),
+        "bl_ent_title": "Entrelazamiento: tres qubits, un solo estado",
+        "bl_ent_sub": ("El límite de la esfera de arriba. Aplica las tres puertas y mira qué le pasa al "
+                       "estado local de cada qubit — y al del par que se queda por el camino."),
         "bl_ent_intro": ("<b>Dónde deja de servir la esfera de Bloch.</b> Con un qubit basta una esfera y una "
-                         "flecha. Con dos, la tentación es dibujar dos esferas — y para la mayoría de los "
-                         "estados funciona. Pero existe una familia de estados en los que <b>no queda flecha "
-                         "que dibujar</b>: el par tiene un estado perfectamente definido y ninguno de sus dos "
-                         "miembros lo tiene por separado. Eso es el entrelazamiento, y se construye con dos "
-                         "puertas. Aplícalas y sigue las tres cifras de la izquierda."),
+                         "flecha. Con varios, la tentación es dibujar una esfera por qubit — y para la mayoría "
+                         "de los estados funciona. Pero existe una familia de estados en los que <b>no queda "
+                         "flecha que dibujar</b>: el conjunto tiene un estado perfectamente definido y ninguno "
+                         "de sus miembros lo tiene por separado. Eso es el entrelazamiento, y aquí se construye "
+                         "con tres puertas. Aplícalas y sigue las cuatro cifras de la izquierda: las tres "
+                         "primeras se rompen en el segundo paso, y la cuarta enseña en el tercero algo que con "
+                         "dos qubits no se puede ni plantear."),
         "bl_ent_btn_h": "1 · Hadamard en q₀",
-        "bl_ent_btn_cnot": "2 · CNOT (control q₀ → objetivo q₁)",
-        "bl_ent_btn_reset": "Reiniciar a |00⟩",
+        "bl_ent_btn_cnot1": "2 · CNOT (control q₀ → q₁)",
+        "bl_ent_btn_cnot2": "3 · CNOT (control q₁ → q₂)",
+        "bl_ent_btn_reset": "Reiniciar a |000⟩",
         # Una entrada por paso, en el orden en que se recorren. Dos o tres frases: lo justo
         # para decir qué acaba de cambiar en las dos figuras de debajo, sin repetir lo que ya
         # dicen los rótulos.
         "bl_ent_step_note": [
-            ("<b>Punto de partida.</b> Dos qubits, los dos en |0⟩, sin ninguna puerta aplicada. El estado "
-             "conjunto es |00⟩ y todavía no tiene nada de cuántico: equivale exactamente a dos bits "
+            ("<b>Punto de partida.</b> Tres qubits, los tres en |0⟩, sin ninguna puerta aplicada. El estado "
+             "conjunto es |000⟩ y todavía no tiene nada de cuántico: equivale exactamente a tres bits "
              "clásicos puestos a cero. En la Q-sphere hay un único nodo, en el polo norte, que se lleva "
              "toda la probabilidad."),
             ("<b>Superposición, todavía sin entrelazar.</b> La Hadamard deja a q₀ a medio camino entre "
-             "|0⟩ y |1⟩, mientras q₁ sigue firme en |0⟩: el estado conjunto es (|00⟩ + |10⟩)/√2. Los dos "
-             "qubits siguen siendo <b>independientes</b> — cada uno tiene su propio estado puro y dos "
-             "esferas de Bloch bastarían para describirlos. Fíjate en que la longitud del vector local "
+             "|0⟩ y |1⟩, mientras q₁ y q₂ siguen firmes en |0⟩: el estado conjunto es (|000⟩ + |100⟩)/√2. "
+             "Los tres qubits siguen siendo <b>independientes</b> — cada uno tiene su propio estado puro y "
+             "tres esferas de Bloch bastarían para describirlos. Fíjate en que la longitud del vector local "
              "sigue valiendo 1: hay flecha que dibujar."),
-            ("<b>Estado de Bell.</b> El CNOT voltea q₁ solo cuando q₀ vale 1; aplicado sobre una "
-             "superposición, eso ata los dos resultados en uno solo: (|00⟩ + |11⟩)/√2. Los nodos se han "
-             "ido a los polos y el ecuador ha quedado vacío. Y el mapa se rompe aquí: la longitud del "
-             "vector local acaba de caer a <b>0</b> — el qubit 0 ya no está en ningún punto de su esfera, "
-             "porque por separado <b>ya no tiene estado</b>."),
+            ("<b>Un par de Bell, y un testigo.</b> El primer CNOT voltea q₁ solo cuando q₀ vale 1; aplicado "
+             "sobre una superposición, eso ata los dos resultados en uno solo: (|000⟩ + |110⟩)/√2. El mapa se "
+             "rompe aquí — la longitud del vector local de q₀ acaba de caer a <b>0</b>, el qubit ya no está en "
+             "ningún punto de su esfera porque por separado <b>ya no tiene estado</b>—. Y pasa algo más, que "
+             "solo se puede ver habiendo un tercer qubit: q₂ se ha quedado FUERA, mirando desde |0⟩, y lo que "
+             "hay entrelazado es exactamente la pareja q₀q₁. Su concurrencia marca <b>1</b>, el máximo."),
+            ("<b>Estado GHZ.</b> El segundo CNOT engancha a q₂ a la cadena: (|000⟩ + |111⟩)/√2. Los nodos se "
+             "han ido a los polos y los dos anillos de en medio han quedado vacíos. Las tres primeras cifras "
+             "no se mueven —q₀ sigue sin estado propio—, pero la cuarta se desploma: la concurrencia del par "
+             "q₀q₁ vuelve a <b>0</b>. Entrelazar a los tres ha DESHECHO el lazo de la pareja. Los dos siguen "
+             "correlacionados —medir uno predice el otro— pero ya no entrelazados: el entrelazamiento de un "
+             "GHZ es del conjunto entero y <b>no la suma de lazos entre parejas</b>."),
         ],
         "bl_ent_circuit_title": "Circuito",
-        "bl_ent_circuit_alt": "Circuito de dos qubits con las puertas aplicadas hasta ahora",
+        "bl_ent_circuit_alt": "Circuito de tres qubits con las puertas aplicadas hasta ahora",
         "bl_ent_qsphere_title": "Q-sphere del estado conjunto",
-        # Las tres dicen lo mismo desde tres ángulos (ver ent_local en app.py): se dejan las
-        # tres porque cada lector entra por una — la longitud se contrasta con la figura, la
-        # pureza es la magnitud estándar y la entropía es la que cita la literatura.
+        # Las tres primeras dicen lo mismo desde tres ángulos (ver ent_local en app.py): se
+        # dejan las tres porque cada lector entra por una — la longitud se contrasta con la
+        # figura, la pureza es la magnitud estándar y la entropía es la que cita la literatura.
+        # La cuarta mide otra cosa y es la que justifica el tercer qubit: cuánto entrelazamiento
+        # queda DENTRO del par q₀q₁ cuando se ignora q₂. Recorre 0 → 0 → 1 → 0.
         "bl_ent_kpi": ["Longitud del vector local |r| (q₀)", "Pureza Tr(ρ₀²)",
-                       "Entropía de entrelazamiento"],
+                       "Entropía de entrelazamiento", "Concurrencia del par q₀q₁"],
         "bl_ent_bits": "bits",
         "bl_ent_hover_amp": "Amplitud:",
         "bl_ent_hover_prob": "Probabilidad:",
@@ -757,26 +769,32 @@ STR = {
         "bl_ent_meas_empty": "Elige cuántas mediciones y pulsa «Simular mediciones».",
         "bl_ent_meas_yaxis": "Veces obtenido",
         "bl_ent_meas_note": [
-            ("Con los dos qubits en |0⟩ el resultado es <b>00</b> en todos los disparos. No hay nada que "
-             "sortear todavía: es el comportamiento de dos bits clásicos."),
-            ("Salen <b>00</b> y <b>10</b> a partes iguales: q₀ se comporta como una moneda al aire y q₁ "
-             "vale 0 pase lo que pase. Los dos resultados son <b>independientes</b> — saber uno no dice "
-             "nada del otro."),
-            ("<b>Solo salen 00 y 11</b>, cerca del 50 % cada uno. Las dos barras vacías son el dato: "
-             "<b>01 y 10 no aparecen nunca</b>, ni una vez en diez mil disparos. Cada qubit sigue dando "
-             "un resultado al azar, pero los dos dan <b>siempre el mismo</b>: medir uno determina el otro "
-             "al instante. Esa correlación perfecta es el entrelazamiento visto desde el laboratorio."),
+            ("Con los tres qubits en |0⟩ el resultado es <b>000</b> en todos los disparos. No hay nada que "
+             "sortear todavía: es el comportamiento de tres bits clásicos."),
+            ("Salen <b>000</b> y <b>100</b> a partes iguales: q₀ se comporta como una moneda al aire y q₁ y "
+             "q₂ valen 0 pase lo que pase. Los resultados son <b>independientes</b> — saber uno no dice "
+             "nada de los otros."),
+            ("Salen <b>000</b> y <b>110</b>: q₀ y q₁ dan siempre el mismo valor, así que medir uno "
+             "determina el otro, mientras q₂ sigue clavado en 0 y sin enterarse de nada. Dos de los tres "
+             "ya están atados; el tercero todavía mira desde fuera."),
+            ("<b>Solo salen 000 y 111</b>, cerca del 50 % cada uno. Las seis barras vacías son el dato: "
+             "<b>ninguna de las otras seis combinaciones aparece nunca</b>, ni una vez en diez mil "
+             "disparos. Cada qubit sigue dando un resultado al azar, pero los tres dan <b>siempre el "
+             "mismo</b>: medir uno determina los otros dos al instante. Esa correlación perfecta es el "
+             "entrelazamiento visto desde el laboratorio."),
         ],
-        "bl_ent_impl_note": ("<b>Cómo está calculado.</b> Las cuatro amplitudes salen de álgebra lineal "
-                             "<b>exacta</b> en NumPy —las matrices de H⊗I y del CNOT aplicadas a |00⟩—, no de "
-                             "una aproximación, y las mediciones de un muestreo multinomial sobre |ψ|², que es "
-                             "lo que hace un simulador ideal sin ruido. El panel <b>no carga Qiskit</b>: el "
+        "bl_ent_impl_note": ("<b>Cómo está calculado.</b> Las ocho amplitudes salen de álgebra lineal "
+                             "<b>exacta</b> en NumPy —las matrices de H⊗I⊗I y de los dos CNOT aplicadas a "
+                             "|000⟩—, no de una aproximación; la concurrencia del par es la fórmula de "
+                             "Wootters, que para dos qubits da el valor exacto y no una cota; y las mediciones "
+                             "salen de un muestreo multinomial sobre |ψ|², que es lo que hace un simulador "
+                             "ideal sin ruido. El panel <b>no carga Qiskit</b>: el "
                              "entorno que se despliega es Streamlit, NumPy, Plotly y ONNX Runtime, mientras "
                              "que Qiskit vive en el pipeline de Databricks —donde se entrena el QSVM— y sus "
                              "figuras llegan aquí ya renderizadas, como el circuito de 8 qubits de la página "
-                             "Circuito Cuántico. La convención de la base es la de libro de texto, |q₀q₁⟩ con "
-                             "q₀ a la izquierda; Qiskit numera al revés y escribiría «01» donde el paso "
-                             "intermedio de aquí escribe «10»."),
+                             "Circuito Cuántico. La convención de la base es la de libro de texto, |q₀q₁q₂⟩ "
+                             "con q₀ a la izquierda; Qiskit numera al revés y escribiría «001» donde el primer "
+                             "paso de aquí escribe «100»."),
 
         # ── Página 6 · Esfera de Bloch → el ZZFeatureMap real (8 qubits) ──
         # Tercer y último escalón de la página. Aquí se deja el ejemplo de libro y se mide el
@@ -785,7 +803,7 @@ STR = {
         "bl_zz_title": "El ZZFeatureMap real: dónde ocurre el entrelazamiento",
         "bl_zz_sub": ("Las mismas cifras, ahora sobre los 8 qubits del QSVM del TFM. Mueve el deslizador "
                       "del principio de la página y mira qué qubits reaccionan."),
-        "bl_zz_intro": ("<b>De dos qubits a los ocho del modelo.</b> Cada qubit del ZZFeatureMap lleva "
+        "bl_zz_intro": ("<b>De tres qubits a los ocho del modelo.</b> Cada qubit del ZZFeatureMap lleva "
                         "<b>una variable clínica</b>: q₀ es la HbA1c, q₁ la glucosa, y así hasta el IMC. "
                         "Con 256 amplitudes ya no hay figura del estado que se pueda mirar —ni Q-sphere ni "
                         "histograma—, pero sí se pueden medir las <b>mismas dos magnitudes</b> de la "
@@ -1431,36 +1449,48 @@ STR = {
                     "8 qubits—see Quantum Circuit."),
 
         # ── Page 6 · Bloch Sphere → entanglement section ──
-        "bl_ent_title": "Entanglement: two qubits, a single state",
-        "bl_ent_sub": ("Where the sphere above stops working. Apply both gates and watch what happens to "
-                       "each qubit's local state."),
+        "bl_ent_title": "Entanglement: three qubits, a single state",
+        "bl_ent_sub": ("Where the sphere above stops working. Apply the three gates and watch what happens "
+                       "to each qubit's local state—and to the pair left behind."),
         "bl_ent_intro": ("<b>Where the Bloch sphere stops working.</b> One qubit needs one sphere and one "
-                         "arrow. With two, the temptation is to draw two spheres—and for most states that "
-                         "works. But there is a family of states where <b>no arrow is left to draw</b>: the "
-                         "pair has a perfectly defined state and neither of its members has one on its own. "
-                         "That is entanglement, and it takes two gates to build. Apply them and follow the "
-                         "three figures on the left."),
+                         "arrow. With several, the temptation is to draw one sphere per qubit—and for most "
+                         "states that works. But there is a family of states where <b>no arrow is left to "
+                         "draw</b>: the whole has a perfectly defined state and none of its members has one "
+                         "on its own. That is entanglement, and here it takes three gates to build. Apply "
+                         "them and follow the four figures on the left: the first three break at the second "
+                         "step, and at the third the fourth one shows something two qubits cannot even pose."),
         "bl_ent_btn_h": "1 · Hadamard on q₀",
-        "bl_ent_btn_cnot": "2 · CNOT (control q₀ → target q₁)",
-        "bl_ent_btn_reset": "Reset to |00⟩",
+        "bl_ent_btn_cnot1": "2 · CNOT (control q₀ → q₁)",
+        "bl_ent_btn_cnot2": "3 · CNOT (control q₁ → q₂)",
+        "bl_ent_btn_reset": "Reset to |000⟩",
         "bl_ent_step_note": [
-            ("<b>Starting point.</b> Two qubits, both in |0⟩, no gates applied. The joint state is |00⟩ and "
-             "there is nothing quantum about it yet: it is exactly equivalent to two classical bits set to "
-             "zero. The Q-sphere shows a single node at the north pole, holding all the probability."),
+            ("<b>Starting point.</b> Three qubits, all in |0⟩, no gates applied. The joint state is |000⟩ "
+             "and there is nothing quantum about it yet: it is exactly equivalent to three classical bits "
+             "set to zero. The Q-sphere shows a single node at the north pole, holding all the probability."),
             ("<b>Superposition, not yet entangled.</b> The Hadamard leaves q₀ halfway between |0⟩ and |1⟩ "
-             "while q₁ stays firmly in |0⟩: the joint state is (|00⟩ + |10⟩)/√2. The two qubits are still "
-             "<b>independent</b>—each has its own pure state, and two Bloch spheres would describe them "
-             "perfectly well. Note that the local vector length is still 1: there is an arrow to draw."),
-            ("<b>Bell state.</b> CNOT flips q₁ only when q₀ is 1; applied to a superposition, that ties both "
-             "outcomes into one: (|00⟩ + |11⟩)/√2. The nodes have moved to the poles and the equator is "
-             "empty. And this is where the map breaks: the local vector length has just dropped to <b>0</b>—"
-             "qubit 0 is no longer at any point of its sphere, because on its own it <b>no longer has a "
-             "state</b>."),
+             "while q₁ and q₂ stay firmly in |0⟩: the joint state is (|000⟩ + |100⟩)/√2. The three qubits "
+             "are still <b>independent</b>—each has its own pure state, and three Bloch spheres would "
+             "describe them perfectly well. Note that the local vector length is still 1: there is an arrow "
+             "to draw."),
+            ("<b>A Bell pair, and a bystander.</b> The first CNOT flips q₁ only when q₀ is 1; applied to a "
+             "superposition, that ties both outcomes into one: (|000⟩ + |110⟩)/√2. This is where the map "
+             "breaks—the local vector length of q₀ has just dropped to <b>0</b>, the qubit is no longer at "
+             "any point of its sphere because on its own it <b>no longer has a state</b>. And something "
+             "else happens, visible only because there is a third qubit: q₂ has been left OUT, watching from "
+             "|0⟩, and what is entangled is exactly the pair q₀q₁. Its concurrence reads <b>1</b>, the "
+             "maximum."),
+            ("<b>GHZ state.</b> The second CNOT hooks q₂ onto the chain: (|000⟩ + |111⟩)/√2. The nodes have "
+             "moved to the poles and the two middle rings are empty. The first three figures do not "
+             "move—q₀ still has no state of its own—but the fourth collapses: the concurrence of the pair "
+             "q₀q₁ is back to <b>0</b>. Entangling all three has UNDONE the link within the pair. The two "
+             "remain correlated—measuring one predicts the other—but no longer entangled: the entanglement "
+             "of a GHZ belongs to the whole and is <b>not the sum of pairwise links</b>."),
         ],
         "bl_ent_circuit_title": "Circuit",
-        "bl_ent_circuit_alt": "Two-qubit circuit showing the gates applied so far",
+        "bl_ent_circuit_alt": "Three-qubit circuit showing the gates applied so far",
         "bl_ent_qsphere_title": "Q-sphere of the joint state",
-        "bl_ent_kpi": ["Local vector length |r| (q₀)", "Purity Tr(ρ₀²)", "Entanglement entropy"],
+        "bl_ent_kpi": ["Local vector length |r| (q₀)", "Purity Tr(ρ₀²)", "Entanglement entropy",
+                       "Concurrence of the pair q₀q₁"],
         "bl_ent_bits": "bits",
         "bl_ent_hover_amp": "Amplitude:",
         "bl_ent_hover_prob": "Probability:",
@@ -1473,32 +1503,38 @@ STR = {
         "bl_ent_meas_empty": "Choose how many measurements and press “Simulate measurements”.",
         "bl_ent_meas_yaxis": "Times obtained",
         "bl_ent_meas_note": [
-            ("With both qubits in |0⟩ the outcome is <b>00</b> on every shot. There is nothing to sample "
-             "yet: this is how two classical bits behave."),
-            ("<b>00</b> and <b>10</b> come out in equal parts: q₀ behaves like a coin toss and q₁ is 0 no "
-             "matter what. The two outcomes are <b>independent</b>—knowing one tells you nothing about the "
-             "other."),
-            ("<b>Only 00 and 11 appear</b>, close to 50% each. The two empty bars are the finding: <b>01 and "
-             "10 never come out</b>, not once in ten thousand shots. Each qubit still gives a random "
-             "outcome, but both give <b>always the same one</b>: measuring one determines the other "
-             "instantly. That perfect correlation is entanglement seen from the lab."),
+            ("With all three qubits in |0⟩ the outcome is <b>000</b> on every shot. There is nothing to "
+             "sample yet: this is how three classical bits behave."),
+            ("<b>000</b> and <b>100</b> come out in equal parts: q₀ behaves like a coin toss while q₁ and "
+             "q₂ are 0 no matter what. The outcomes are <b>independent</b>—knowing one tells you nothing "
+             "about the others."),
+            ("<b>000</b> and <b>110</b> come out: q₀ and q₁ always give the same value, so measuring one "
+             "determines the other, while q₂ stays pinned at 0 and none the wiser. Two of the three are "
+             "tied together; the third is still watching from outside."),
+            ("<b>Only 000 and 111 appear</b>, close to 50% each. The six empty bars are the finding: <b>none "
+             "of the other six combinations ever comes out</b>, not once in ten thousand shots. Each qubit "
+             "still gives a random outcome, but all three give <b>always the same one</b>: measuring one "
+             "determines the other two instantly. That perfect correlation is entanglement seen from the "
+             "lab."),
         ],
-        "bl_ent_impl_note": ("<b>How this is computed.</b> The four amplitudes come from <b>exact</b> linear "
-                             "algebra in NumPy—the H⊗I and CNOT matrices applied to |00⟩—not from an "
-                             "approximation, and the measurements from multinomial sampling over |ψ|², which "
+        "bl_ent_impl_note": ("<b>How this is computed.</b> The eight amplitudes come from <b>exact</b> linear "
+                             "algebra in NumPy—the H⊗I⊗I matrix and the two CNOTs applied to |000⟩—not from "
+                             "an approximation; the pair's concurrence is Wootters' formula, which for two "
+                             "qubits gives the exact value rather than a bound; and the measurements come "
+                             "from multinomial sampling over |ψ|², which "
                              "is what an ideal noiseless simulator does. This dashboard <b>does not load "
                              "Qiskit</b>: the deployed environment is Streamlit, NumPy, Plotly and ONNX "
                              "Runtime, while Qiskit lives in the Databricks pipeline—where the QSVM is "
                              "trained—and its figures arrive here already rendered, like the 8-qubit circuit "
-                             "on the Quantum Circuit page. The basis convention is the textbook one, |q₀q₁⟩ "
-                             "with q₀ on the left; Qiskit numbers the other way and would write “01” where "
-                             "the intermediate step here writes “10”."),
+                             "on the Quantum Circuit page. The basis convention is the textbook one, |q₀q₁q₂⟩ "
+                             "with q₀ on the left; Qiskit numbers the other way and would write “001” where "
+                             "the first step here writes “100”."),
 
         # ── Page 6 · Bloch Sphere → the real ZZFeatureMap (8 qubits) ──
         "bl_zz_title": "The real ZZFeatureMap: where entanglement actually happens",
         "bl_zz_sub": ("The same figures, now over the 8 qubits of the TFM's QSVM. Move the slider at the "
                       "top of the page and watch which qubits react."),
-        "bl_zz_intro": ("<b>From two qubits to the model's eight.</b> Each qubit of the ZZFeatureMap "
+        "bl_zz_intro": ("<b>From three qubits to the model's eight.</b> Each qubit of the ZZFeatureMap "
                         "carries <b>one clinical variable</b>: q₀ is HbA1c, q₁ glucose, and so on up to "
                         "BMI. With 256 amplitudes there is no picture of the state left to look at—neither "
                         "Q-sphere nor histogram—but the <b>same two quantities</b> from the previous "
@@ -2167,40 +2203,52 @@ STR = {
                     "gemeinsamen Raum der 8 Qubits darstellbar — siehe Quantenschaltkreis."),
 
         # ── Seite 6 · Bloch-Kugel → Abschnitt Verschränkung ──
-        "bl_ent_title": "Verschränkung: zwei Qubits, ein einziger Zustand",
-        "bl_ent_sub": ("Die Grenze der Kugel von oben. Wende die beiden Gatter an und sieh, was mit dem "
-                       "lokalen Zustand jedes Qubits geschieht."),
+        "bl_ent_title": "Verschränkung: drei Qubits, ein einziger Zustand",
+        "bl_ent_sub": ("Die Grenze der Kugel von oben. Wende die drei Gatter an und sieh, was mit dem "
+                       "lokalen Zustand jedes Qubits geschieht — und mit dem des Paares, das übrig bleibt."),
         "bl_ent_intro": ("<b>Wo die Bloch-Kugel aufhört zu taugen.</b> Für ein Qubit genügen eine Kugel "
-                         "und ein Pfeil. Bei zweien liegt die Versuchung nahe, zwei Kugeln zu zeichnen — "
-                         "und für die meisten Zustände geht das auf. Aber es gibt eine Familie von "
-                         "Zuständen, in der <b>kein Pfeil mehr zu zeichnen bleibt</b>: das Paar hat einen "
-                         "vollkommen bestimmten Zustand, und keines seiner beiden Mitglieder hat einen für "
-                         "sich. Das ist die Verschränkung, und sie entsteht aus zwei Gattern. Wende sie an "
-                         "und verfolge die drei Zahlen links."),
+                         "und ein Pfeil. Bei mehreren liegt die Versuchung nahe, eine Kugel je Qubit zu "
+                         "zeichnen — und für die meisten Zustände geht das auf. Aber es gibt eine Familie "
+                         "von Zuständen, in der <b>kein Pfeil mehr zu zeichnen bleibt</b>: das Ganze hat "
+                         "einen vollkommen bestimmten Zustand, und keines seiner Mitglieder hat einen für "
+                         "sich. Das ist die Verschränkung, und hier entsteht sie aus drei Gattern. Wende "
+                         "sie an und verfolge die vier Zahlen links: die ersten drei brechen im zweiten "
+                         "Schritt ein, und im dritten zeigt die vierte etwas, das sich mit zwei Qubits "
+                         "nicht einmal stellen lässt."),
         "bl_ent_btn_h": "1 · Hadamard auf q₀",
-        "bl_ent_btn_cnot": "2 · CNOT (Steuerung q₀ → Ziel q₁)",
-        "bl_ent_btn_reset": "Zurücksetzen auf |00⟩",
+        "bl_ent_btn_cnot1": "2 · CNOT (Steuerung q₀ → q₁)",
+        "bl_ent_btn_cnot2": "3 · CNOT (Steuerung q₁ → q₂)",
+        "bl_ent_btn_reset": "Zurücksetzen auf |000⟩",
         "bl_ent_step_note": [
-            ("<b>Ausgangspunkt.</b> Zwei Qubits, beide in |0⟩, kein Gatter angewandt. Der gemeinsame "
-             "Zustand ist |00⟩ und hat noch nichts Quantenhaftes: er entspricht genau zwei klassischen "
+            ("<b>Ausgangspunkt.</b> Drei Qubits, alle in |0⟩, kein Gatter angewandt. Der gemeinsame "
+             "Zustand ist |000⟩ und hat noch nichts Quantenhaftes: er entspricht genau drei klassischen "
              "Bits auf null. In der Q-Sphere gibt es einen einzigen Knoten am Nordpol, der die gesamte "
              "Wahrscheinlichkeit trägt."),
             ("<b>Superposition, noch nicht verschränkt.</b> Die Hadamard lässt q₀ auf halbem Weg "
-             "zwischen |0⟩ und |1⟩, während q₁ fest in |0⟩ bleibt: der gemeinsame Zustand ist "
-             "(|00⟩ + |10⟩)/√2. Die beiden Qubits sind weiterhin <b>unabhängig</b> — jedes hat seinen "
-             "eigenen reinen Zustand, und zwei Bloch-Kugeln würden sie vollständig beschreiben. Beachte, "
+             "zwischen |0⟩ und |1⟩, während q₁ und q₂ fest in |0⟩ bleiben: der gemeinsame Zustand ist "
+             "(|000⟩ + |100⟩)/√2. Die drei Qubits sind weiterhin <b>unabhängig</b> — jedes hat seinen "
+             "eigenen reinen Zustand, und drei Bloch-Kugeln würden sie vollständig beschreiben. Beachte, "
              "dass die Länge des lokalen Vektors weiterhin 1 beträgt: es gibt einen Pfeil zu zeichnen."),
-            ("<b>Bell-Zustand.</b> Das CNOT kippt q₁ nur dann, wenn q₀ gleich 1 ist; auf eine "
-             "Superposition angewandt, bindet das beide Ergebnisse zu einem: (|00⟩ + |11⟩)/√2. Die "
-             "Knoten sind zu den Polen gewandert und der Äquator ist leer. Und hier zerbricht die Karte: "
-             "die Länge des lokalen Vektors ist gerade auf <b>0</b> gefallen — Qubit 0 liegt an keinem "
-             "Punkt seiner Kugel mehr, weil es für sich genommen <b>keinen Zustand mehr hat</b>."),
+            ("<b>Ein Bell-Paar, und ein Zuschauer.</b> Das erste CNOT kippt q₁ nur dann, wenn q₀ gleich 1 "
+             "ist; auf eine Superposition angewandt, bindet das beide Ergebnisse zu einem: "
+             "(|000⟩ + |110⟩)/√2. Hier zerbricht die Karte — die Länge des lokalen Vektors von q₀ ist "
+             "gerade auf <b>0</b> gefallen, das Qubit liegt an keinem Punkt seiner Kugel mehr, weil es für "
+             "sich genommen <b>keinen Zustand mehr hat</b>. Und es geschieht noch etwas, das nur mit einem "
+             "dritten Qubit sichtbar wird: q₂ ist AUSSEN vor geblieben und schaut aus |0⟩ zu, und "
+             "verschränkt ist genau das Paar q₀q₁. Seine Konkurrenz steht auf <b>1</b>, dem Maximum."),
+            ("<b>GHZ-Zustand.</b> Das zweite CNOT hängt q₂ an die Kette: (|000⟩ + |111⟩)/√2. Die Knoten "
+             "sind zu den Polen gewandert und die beiden mittleren Ringe sind leer. Die ersten drei Zahlen "
+             "rühren sich nicht — q₀ hat weiterhin keinen eigenen Zustand —, aber die vierte bricht ein: "
+             "die Konkurrenz des Paares q₀q₁ steht wieder auf <b>0</b>. Alle drei zu verschränken hat das "
+             "Band des Paares AUFGELÖST. Die beiden bleiben korreliert — misst man eines, sagt das andere "
+             "voraus —, aber nicht mehr verschränkt: die Verschränkung eines GHZ gehört dem Ganzen und ist "
+             "<b>nicht die Summe paarweiser Bänder</b>."),
         ],
         "bl_ent_circuit_title": "Schaltkreis",
-        "bl_ent_circuit_alt": "Zwei-Qubit-Schaltkreis mit den bisher angewandten Gattern",
+        "bl_ent_circuit_alt": "Drei-Qubit-Schaltkreis mit den bisher angewandten Gattern",
         "bl_ent_qsphere_title": "Q-Sphere des gemeinsamen Zustands",
         "bl_ent_kpi": ["Länge des lokalen Vektors |r| (q₀)", "Reinheit Tr(ρ₀²)",
-                       "Verschränkungsentropie"],
+                       "Verschränkungsentropie", "Konkurrenz des Paares q₀q₁"],
         "bl_ent_bits": "Bit",
         "bl_ent_hover_amp": "Amplitude:",
         "bl_ent_hover_prob": "Wahrscheinlichkeit:",
@@ -2213,34 +2261,39 @@ STR = {
         "bl_ent_meas_empty": "Wähle die Anzahl der Messungen und drücke „Messungen simulieren“.",
         "bl_ent_meas_yaxis": "Wie oft erhalten",
         "bl_ent_meas_note": [
-            ("Mit beiden Qubits in |0⟩ lautet das Ergebnis bei jedem Schuss <b>00</b>. Es gibt noch "
-             "nichts auszulosen: so verhalten sich zwei klassische Bits."),
-            ("<b>00</b> und <b>10</b> kommen zu gleichen Teilen heraus: q₀ verhält sich wie ein "
-             "Münzwurf, und q₁ ist 0, was auch geschieht. Die beiden Ergebnisse sind <b>unabhängig</b> "
-             "— das eine zu kennen sagt nichts über das andere."),
-            ("<b>Es kommen nur 00 und 11 heraus</b>, jeweils nahe 50 %. Die beiden leeren Balken sind "
-             "der Befund: <b>01 und 10 kommen nie vor</b>, kein einziges Mal in zehntausend Schüssen. "
-             "Jedes Qubit liefert weiterhin ein zufälliges Ergebnis, aber beide liefern <b>immer "
-             "dasselbe</b>: eines zu messen legt das andere augenblicklich fest. Diese perfekte "
-             "Korrelation ist die Verschränkung, vom Labor aus gesehen."),
+            ("Mit allen drei Qubits in |0⟩ lautet das Ergebnis bei jedem Schuss <b>000</b>. Es gibt noch "
+             "nichts auszulosen: so verhalten sich drei klassische Bits."),
+            ("<b>000</b> und <b>100</b> kommen zu gleichen Teilen heraus: q₀ verhält sich wie ein "
+             "Münzwurf, und q₁ und q₂ sind 0, was auch geschieht. Die Ergebnisse sind <b>unabhängig</b> "
+             "— eines zu kennen sagt nichts über die anderen."),
+            ("Heraus kommen <b>000</b> und <b>110</b>: q₀ und q₁ liefern immer denselben Wert, eines zu "
+             "messen legt also das andere fest, während q₂ auf 0 festgenagelt bleibt und von nichts "
+             "erfährt. Zwei der drei sind schon aneinander gebunden; das dritte schaut noch von außen zu."),
+            ("<b>Es kommen nur 000 und 111 heraus</b>, jeweils nahe 50 %. Die sechs leeren Balken sind "
+             "der Befund: <b>keine der übrigen sechs Kombinationen kommt je vor</b>, kein einziges Mal in "
+             "zehntausend Schüssen. Jedes Qubit liefert weiterhin ein zufälliges Ergebnis, aber alle drei "
+             "liefern <b>immer dasselbe</b>: eines zu messen legt die anderen beiden augenblicklich fest. "
+             "Diese perfekte Korrelation ist die Verschränkung, vom Labor aus gesehen."),
         ],
-        "bl_ent_impl_note": ("<b>Wie das berechnet ist.</b> Die vier Amplituden stammen aus <b>exakter</b> "
-                             "linearer Algebra in NumPy — den auf |00⟩ angewandten Matrizen von H⊗I und "
-                             "CNOT —, nicht aus einer Näherung, und die Messungen aus einer multinomialen "
+        "bl_ent_impl_note": ("<b>Wie das berechnet ist.</b> Die acht Amplituden stammen aus <b>exakter</b> "
+                             "linearer Algebra in NumPy — der Matrix H⊗I⊗I und den beiden CNOT, angewandt "
+                             "auf |000⟩ —, nicht aus einer Näherung; die Konkurrenz des Paares ist die "
+                             "Formel von Wootters, die für zwei Qubits den exakten Wert liefert und keine "
+                             "Schranke; und die Messungen stammen aus einer multinomialen "
                              "Ziehung über |ψ|², also dem, was ein idealer rauschfreier Simulator tut. Das "
                              "Panel <b>lädt kein Qiskit</b>: die ausgelieferte Umgebung besteht aus "
                              "Streamlit, NumPy, Plotly und ONNX Runtime, während Qiskit in der "
                              "Databricks-Pipeline lebt — dort wird die QSVM trainiert — und seine "
                              "Abbildungen hier bereits gerendert ankommen, wie der 8-Qubit-Schaltkreis auf "
                              "der Seite Quantenschaltkreis. Die Basiskonvention ist die des Lehrbuchs, "
-                             "|q₀q₁⟩ mit q₀ links; Qiskit nummeriert umgekehrt und schriebe „01“, wo der "
-                             "Zwischenschritt hier „10“ schreibt."),
+                             "|q₀q₁q₂⟩ mit q₀ links; Qiskit nummeriert umgekehrt und schriebe „001“, wo der "
+                             "erste Schritt hier „100“ schreibt."),
 
         # ── Seite 6 · Bloch-Kugel → die echte ZZFeatureMap (8 Qubits) ──
         "bl_zz_title": "Die echte ZZFeatureMap: wo die Verschränkung stattfindet",
         "bl_zz_sub": ("Dieselben Zahlen, nun über die 8 Qubits der QSVM dieser Masterarbeit. Bewege den "
                       "Schieberegler am Seitenanfang und sieh, welche Qubits reagieren."),
-        "bl_zz_intro": ("<b>Von zwei Qubits zu den acht des Modells.</b> Jedes Qubit der ZZFeatureMap "
+        "bl_zz_intro": ("<b>Von drei Qubits zu den acht des Modells.</b> Jedes Qubit der ZZFeatureMap "
                         "trägt <b>eine klinische Variable</b>: q₀ ist der HbA1c, q₁ die Glukose, und so "
                         "weiter bis zum BMI. Bei 256 Amplituden gibt es kein Bild des Zustands mehr, das "
                         "man anschauen könnte — weder Q-Sphere noch Histogramm —, aber es lassen sich "
@@ -2923,40 +2976,53 @@ STR = {
                     "que dans l'espace conjoint des 8 qubits — voir Circuit quantique."),
 
         # ── Page 6 · Sphère de Bloch → section intrication ──
-        "bl_ent_title": "Intrication : deux qubits, un seul état",
-        "bl_ent_sub": ("La limite de la sphère ci-dessus. Appliquez les deux portes et regardez ce "
-                       "qu'il advient de l'état local de chaque qubit."),
+        "bl_ent_title": "Intrication : trois qubits, un seul état",
+        "bl_ent_sub": ("La limite de la sphère ci-dessus. Appliquez les trois portes et regardez ce "
+                       "qu'il advient de l'état local de chaque qubit — et de celui de la paire laissée "
+                       "en chemin."),
         "bl_ent_intro": ("<b>Là où la sphère de Bloch cesse de servir.</b> Avec un qubit, une sphère "
-                         "et une flèche suffisent. Avec deux, la tentation est d'en dessiner deux — et "
-                         "pour la plupart des états cela fonctionne. Mais il existe une famille d'états "
-                         "où <b>il ne reste aucune flèche à dessiner</b> : la paire possède un état "
-                         "parfaitement défini et aucun de ses deux membres n'en a un séparément. C'est "
-                         "cela, l'intrication, et elle se construit avec deux portes. Appliquez-les et "
-                         "suivez les trois chiffres de gauche."),
+                         "et une flèche suffisent. Avec plusieurs, la tentation est d'en dessiner une par "
+                         "qubit — et pour la plupart des états cela fonctionne. Mais il existe une famille "
+                         "d'états où <b>il ne reste aucune flèche à dessiner</b> : l'ensemble possède un "
+                         "état parfaitement défini et aucun de ses membres n'en a un séparément. C'est "
+                         "cela, l'intrication, et ici elle se construit avec trois portes. Appliquez-les "
+                         "et suivez les quatre chiffres de gauche : les trois premiers se brisent à la "
+                         "deuxième étape, et à la troisième le quatrième montre quelque chose que deux "
+                         "qubits ne permettent même pas de poser."),
         "bl_ent_btn_h": "1 · Hadamard sur q₀",
-        "bl_ent_btn_cnot": "2 · CNOT (contrôle q₀ → cible q₁)",
-        "bl_ent_btn_reset": "Réinitialiser à |00⟩",
+        "bl_ent_btn_cnot1": "2 · CNOT (contrôle q₀ → q₁)",
+        "bl_ent_btn_cnot2": "3 · CNOT (contrôle q₁ → q₂)",
+        "bl_ent_btn_reset": "Réinitialiser à |000⟩",
         "bl_ent_step_note": [
-            ("<b>Point de départ.</b> Deux qubits, tous deux en |0⟩, aucune porte appliquée. L'état "
-             "conjoint est |00⟩ et n'a encore rien de quantique : il équivaut exactement à deux bits "
+            ("<b>Point de départ.</b> Trois qubits, tous en |0⟩, aucune porte appliquée. L'état "
+             "conjoint est |000⟩ et n'a encore rien de quantique : il équivaut exactement à trois bits "
              "classiques mis à zéro. Sur la Q-sphere il n'y a qu'un seul nœud, au pôle nord, qui "
              "emporte toute la probabilité."),
             ("<b>Superposition, pas encore d'intrication.</b> La Hadamard laisse q₀ à mi-chemin entre "
-             "|0⟩ et |1⟩, tandis que q₁ reste fermement en |0⟩ : l'état conjoint est "
-             "(|00⟩ + |10⟩)/√2. Les deux qubits restent <b>indépendants</b> — chacun a son propre "
-             "état pur et deux sphères de Bloch suffiraient à les décrire. Notez que la longueur du "
+             "|0⟩ et |1⟩, tandis que q₁ et q₂ restent fermement en |0⟩ : l'état conjoint est "
+             "(|000⟩ + |100⟩)/√2. Les trois qubits restent <b>indépendants</b> — chacun a son propre "
+             "état pur et trois sphères de Bloch suffiraient à les décrire. Notez que la longueur du "
              "vecteur local vaut toujours 1 : il y a une flèche à dessiner."),
-            ("<b>État de Bell.</b> Le CNOT retourne q₁ seulement lorsque q₀ vaut 1 ; appliqué à une "
-             "superposition, cela lie les deux résultats en un seul : (|00⟩ + |11⟩)/√2. Les nœuds "
-             "sont partis aux pôles et l'équateur est vide. Et c'est ici que la carte se rompt : la "
-             "longueur du vecteur local vient de tomber à <b>0</b> — le qubit 0 n'est plus en aucun "
-             "point de sa sphère, car séparément il <b>n'a plus d'état</b>."),
+            ("<b>Une paire de Bell, et un témoin.</b> Le premier CNOT retourne q₁ seulement lorsque q₀ "
+             "vaut 1 ; appliqué à une superposition, cela lie les deux résultats en un seul : "
+             "(|000⟩ + |110⟩)/√2. C'est ici que la carte se rompt — la longueur du vecteur local de q₀ "
+             "vient de tomber à <b>0</b>, le qubit n'est plus en aucun point de sa sphère car séparément "
+             "il <b>n'a plus d'état</b>. Et il se passe autre chose, visible seulement parce qu'il y a un "
+             "troisième qubit : q₂ est resté DEHORS, à regarder depuis |0⟩, et ce qui est intriqué, c'est "
+             "exactement la paire q₀q₁. Sa concurrence affiche <b>1</b>, le maximum."),
+            ("<b>État GHZ.</b> Le second CNOT accroche q₂ à la chaîne : (|000⟩ + |111⟩)/√2. Les nœuds "
+             "sont partis aux pôles et les deux anneaux du milieu sont vides. Les trois premiers "
+             "chiffres ne bougent pas — q₀ reste sans état propre — mais le quatrième s'effondre : la "
+             "concurrence de la paire q₀q₁ retombe à <b>0</b>. Intriquer les trois a DÉFAIT le lien de "
+             "la paire. Les deux restent corrélés — mesurer l'un prédit l'autre — mais ne sont plus "
+             "intriqués : l'intrication d'un GHZ appartient à l'ensemble et n'est <b>pas la somme de "
+             "liens deux à deux</b>."),
         ],
         "bl_ent_circuit_title": "Circuit",
-        "bl_ent_circuit_alt": "Circuit à deux qubits avec les portes appliquées jusqu'ici",
+        "bl_ent_circuit_alt": "Circuit à trois qubits avec les portes appliquées jusqu'ici",
         "bl_ent_qsphere_title": "Q-sphere de l'état conjoint",
         "bl_ent_kpi": ["Longueur du vecteur local |r| (q₀)", "Pureté Tr(ρ₀²)",
-                       "Entropie d'intrication"],
+                       "Entropie d'intrication", "Concurrence de la paire q₀q₁"],
         "bl_ent_bits": "bits",
         "bl_ent_hover_amp": "Amplitude :",
         "bl_ent_hover_prob": "Probabilité :",
@@ -2969,34 +3035,39 @@ STR = {
         "bl_ent_meas_empty": "Choisissez combien de mesures et appuyez sur « Simuler les mesures ».",
         "bl_ent_meas_yaxis": "Nombre d'occurrences",
         "bl_ent_meas_note": [
-            ("Avec les deux qubits en |0⟩, le résultat est <b>00</b> à chaque tir. Il n'y a encore "
-             "rien à tirer au sort : c'est le comportement de deux bits classiques."),
-            ("<b>00</b> et <b>10</b> sortent à parts égales : q₀ se comporte comme un tirage à pile "
-             "ou face et q₁ vaut 0 quoi qu'il arrive. Les deux résultats sont <b>indépendants</b> — "
-             "connaître l'un ne dit rien de l'autre."),
-            ("<b>Seuls 00 et 11 sortent</b>, à près de 50 % chacun. Les deux barres vides sont le "
-             "fait marquant : <b>01 et 10 n'apparaissent jamais</b>, pas une fois sur dix mille "
-             "tirs. Chaque qubit donne toujours un résultat au hasard, mais les deux donnent "
-             "<b>toujours le même</b> : mesurer l'un détermine l'autre instantanément. Cette "
-             "corrélation parfaite, c'est l'intrication vue depuis le laboratoire."),
+            ("Avec les trois qubits en |0⟩, le résultat est <b>000</b> à chaque tir. Il n'y a encore "
+             "rien à tirer au sort : c'est le comportement de trois bits classiques."),
+            ("<b>000</b> et <b>100</b> sortent à parts égales : q₀ se comporte comme un tirage à pile "
+             "ou face, et q₁ et q₂ valent 0 quoi qu'il arrive. Les résultats sont <b>indépendants</b> — "
+             "connaître l'un ne dit rien des autres."),
+            ("Sortent <b>000</b> et <b>110</b> : q₀ et q₁ donnent toujours la même valeur, mesurer l'un "
+             "détermine donc l'autre, tandis que q₂ reste cloué à 0 sans rien en savoir. Deux des trois "
+             "sont déjà liés ; le troisième regarde encore de l'extérieur."),
+            ("<b>Seuls 000 et 111 sortent</b>, à près de 50 % chacun. Les six barres vides sont le "
+             "fait marquant : <b>aucune des six autres combinaisons n'apparaît jamais</b>, pas une fois "
+             "sur dix mille tirs. Chaque qubit donne toujours un résultat au hasard, mais les trois "
+             "donnent <b>toujours le même</b> : mesurer l'un détermine les deux autres instantanément. "
+             "Cette corrélation parfaite, c'est l'intrication vue depuis le laboratoire."),
         ],
-        "bl_ent_impl_note": ("<b>Comment c'est calculé.</b> Les quatre amplitudes proviennent d'une "
-                             "algèbre linéaire <b>exacte</b> sous NumPy — les matrices de H⊗I et du "
-                             "CNOT appliquées à |00⟩ —, et non d'une approximation ; et les mesures "
+        "bl_ent_impl_note": ("<b>Comment c'est calculé.</b> Les huit amplitudes proviennent d'une "
+                             "algèbre linéaire <b>exacte</b> sous NumPy — la matrice H⊗I⊗I et les deux "
+                             "CNOT appliqués à |000⟩ —, et non d'une approximation ; la concurrence de "
+                             "la paire est la formule de Wootters, qui pour deux qubits donne la valeur "
+                             "exacte et non une borne ; et les mesures viennent "
                              "d'un tirage multinomial sur |ψ|², ce que fait un simulateur idéal sans "
                              "bruit. Ce panneau <b>ne charge pas Qiskit</b> : l'environnement déployé "
                              "est Streamlit, NumPy, Plotly et ONNX Runtime, tandis que Qiskit vit dans "
                              "le pipeline Databricks — là où le QSVM est entraîné — et ses figures "
                              "arrivent ici déjà rendues, comme le circuit à 8 qubits de la page Circuit "
-                             "quantique. La convention de base est celle des manuels, |q₀q₁⟩ avec q₀ à "
-                             "gauche ; Qiskit numérote à l'envers et écrirait « 01 » là où l'étape "
-                             "intermédiaire écrit ici « 10 »."),
+                             "quantique. La convention de base est celle des manuels, |q₀q₁q₂⟩ avec q₀ à "
+                             "gauche ; Qiskit numérote à l'envers et écrirait « 001 » là où la première "
+                             "étape écrit ici « 100 »."),
 
         # ── Page 6 · Sphère de Bloch → la vraie ZZFeatureMap (8 qubits) ──
         "bl_zz_title": "La vraie ZZFeatureMap : où se produit l'intrication",
         "bl_zz_sub": ("Les mêmes chiffres, maintenant sur les 8 qubits du QSVM du mémoire. Déplacez "
                       "le curseur en haut de la page et regardez quels qubits réagissent."),
-        "bl_zz_intro": ("<b>De deux qubits aux huit du modèle.</b> Chaque qubit de la ZZFeatureMap "
+        "bl_zz_intro": ("<b>De trois qubits aux huit du modèle.</b> Chaque qubit de la ZZFeatureMap "
                         "porte <b>une variable clinique</b> : q₀ est l'HbA1c, q₁ la glycémie, et "
                         "ainsi de suite jusqu'à l'IMC. Avec 256 amplitudes, il n'y a plus de figure "
                         "de l'état à regarder — ni Q-sphere ni histogramme —, mais on peut toujours "
@@ -3671,40 +3742,52 @@ STR = {
                     "solo nello spazio congiunto degli 8 qubit — vedi Circuito quantistico."),
 
         # ── Pagina 6 · Sfera di Bloch → sezione entanglement ──
-        "bl_ent_title": "Entanglement: due qubit, un solo stato",
-        "bl_ent_sub": ("Il limite della sfera qui sopra. Applica le due porte e guarda che cosa "
-                       "succede allo stato locale di ciascun qubit."),
+        "bl_ent_title": "Entanglement: tre qubit, un solo stato",
+        "bl_ent_sub": ("Il limite della sfera qui sopra. Applica le tre porte e guarda che cosa "
+                       "succede allo stato locale di ciascun qubit — e a quello della coppia che resta "
+                       "per strada."),
         "bl_ent_intro": ("<b>Dove la sfera di Bloch smette di servire.</b> Con un qubit bastano una "
-                         "sfera e una freccia. Con due, la tentazione è disegnare due sfere — e per la "
-                         "maggior parte degli stati funziona. Ma esiste una famiglia di stati in cui "
-                         "<b>non resta nessuna freccia da disegnare</b>: la coppia ha uno stato "
-                         "perfettamente definito e nessuno dei suoi due membri ce l'ha separatamente. "
-                         "Questo è l'entanglement, e si costruisce con due porte. Applicale e segui le "
-                         "tre cifre a sinistra."),
+                         "sfera e una freccia. Con più di uno, la tentazione è disegnare una sfera per "
+                         "qubit — e per la maggior parte degli stati funziona. Ma esiste una famiglia di "
+                         "stati in cui <b>non resta nessuna freccia da disegnare</b>: l'insieme ha uno "
+                         "stato perfettamente definito e nessuno dei suoi membri ce l'ha separatamente. "
+                         "Questo è l'entanglement, e qui si costruisce con tre porte. Applicale e segui "
+                         "le quattro cifre a sinistra: le prime tre si rompono al secondo passo, e al "
+                         "terzo la quarta mostra qualcosa che con due qubit non si può nemmeno porre."),
         "bl_ent_btn_h": "1 · Hadamard su q₀",
-        "bl_ent_btn_cnot": "2 · CNOT (controllo q₀ → bersaglio q₁)",
-        "bl_ent_btn_reset": "Reimposta a |00⟩",
+        "bl_ent_btn_cnot1": "2 · CNOT (controllo q₀ → q₁)",
+        "bl_ent_btn_cnot2": "3 · CNOT (controllo q₁ → q₂)",
+        "bl_ent_btn_reset": "Reimposta a |000⟩",
         "bl_ent_step_note": [
-            ("<b>Punto di partenza.</b> Due qubit, entrambi in |0⟩, nessuna porta applicata. Lo stato "
-             "congiunto è |00⟩ e non ha ancora nulla di quantistico: equivale esattamente a due bit "
+            ("<b>Punto di partenza.</b> Tre qubit, tutti in |0⟩, nessuna porta applicata. Lo stato "
+             "congiunto è |000⟩ e non ha ancora nulla di quantistico: equivale esattamente a tre bit "
              "classici messi a zero. Nella Q-sphere c'è un unico nodo, al polo nord, che si prende "
              "tutta la probabilità."),
             ("<b>Sovrapposizione, ancora senza entanglement.</b> La Hadamard lascia q₀ a metà strada "
-             "fra |0⟩ e |1⟩, mentre q₁ resta saldo in |0⟩: lo stato congiunto è (|00⟩ + |10⟩)/√2. I "
-             "due qubit restano <b>indipendenti</b> — ciascuno ha il proprio stato puro e due sfere "
-             "di Bloch basterebbero a descriverli. Nota che la lunghezza del vettore locale vale "
-             "ancora 1: c'è una freccia da disegnare."),
-            ("<b>Stato di Bell.</b> Il CNOT ribalta q₁ solo quando q₀ vale 1; applicato a una "
-             "sovrapposizione, questo lega i due esiti in uno solo: (|00⟩ + |11⟩)/√2. I nodi sono "
-             "andati ai poli e l'equatore è rimasto vuoto. Ed è qui che la mappa si rompe: la "
-             "lunghezza del vettore locale è appena caduta a <b>0</b> — il qubit 0 non è più in "
-             "nessun punto della sua sfera, perché separatamente <b>non ha più stato</b>."),
+             "fra |0⟩ e |1⟩, mentre q₁ e q₂ restano saldi in |0⟩: lo stato congiunto è "
+             "(|000⟩ + |100⟩)/√2. I tre qubit restano <b>indipendenti</b> — ciascuno ha il proprio "
+             "stato puro e tre sfere di Bloch basterebbero a descriverli. Nota che la lunghezza del "
+             "vettore locale vale ancora 1: c'è una freccia da disegnare."),
+            ("<b>Una coppia di Bell, e un testimone.</b> Il primo CNOT ribalta q₁ solo quando q₀ vale "
+             "1; applicato a una sovrapposizione, questo lega i due esiti in uno solo: "
+             "(|000⟩ + |110⟩)/√2. È qui che la mappa si rompe — la lunghezza del vettore locale di q₀ è "
+             "appena caduta a <b>0</b>, il qubit non è più in nessun punto della sua sfera perché "
+             "separatamente <b>non ha più stato</b>. E succede anche altro, visibile solo perché c'è un "
+             "terzo qubit: q₂ è rimasto FUORI, a guardare da |0⟩, e ciò che è in entanglement è "
+             "esattamente la coppia q₀q₁. La sua concorrenza segna <b>1</b>, il massimo."),
+            ("<b>Stato GHZ.</b> Il secondo CNOT aggancia q₂ alla catena: (|000⟩ + |111⟩)/√2. I nodi "
+             "sono andati ai poli e i due anelli di mezzo sono rimasti vuoti. Le prime tre cifre non si "
+             "muovono — q₀ resta senza stato proprio — ma la quarta crolla: la concorrenza della coppia "
+             "q₀q₁ torna a <b>0</b>. Mettere in entanglement tutti e tre ha DISFATTO il legame della "
+             "coppia. I due restano correlati — misurarne uno predice l'altro — ma non più in "
+             "entanglement: l'entanglement di un GHZ è dell'insieme e <b>non è la somma di legami a "
+             "due a due</b>."),
         ],
         "bl_ent_circuit_title": "Circuito",
-        "bl_ent_circuit_alt": "Circuito a due qubit con le porte applicate finora",
+        "bl_ent_circuit_alt": "Circuito a tre qubit con le porte applicate finora",
         "bl_ent_qsphere_title": "Q-sphere dello stato congiunto",
         "bl_ent_kpi": ["Lunghezza del vettore locale |r| (q₀)", "Purezza Tr(ρ₀²)",
-                       "Entropia di entanglement"],
+                       "Entropia di entanglement", "Concorrenza della coppia q₀q₁"],
         "bl_ent_bits": "bit",
         "bl_ent_hover_amp": "Ampiezza:",
         "bl_ent_hover_prob": "Probabilità:",
@@ -3717,34 +3800,39 @@ STR = {
         "bl_ent_meas_empty": "Scegli quante misure e premi «Simula le misure».",
         "bl_ent_meas_yaxis": "Volte ottenuto",
         "bl_ent_meas_note": [
-            ("Con entrambi i qubit in |0⟩ il risultato è <b>00</b> a ogni lancio. Non c'è ancora "
-             "nulla da sorteggiare: è il comportamento di due bit classici."),
-            ("Escono <b>00</b> e <b>10</b> in parti uguali: q₀ si comporta come una monetina e q₁ "
-             "vale 0 qualunque cosa accada. I due esiti sono <b>indipendenti</b> — conoscerne uno "
-             "non dice nulla dell'altro."),
-            ("<b>Escono solo 00 e 11</b>, vicino al 50 % ciascuno. Le due barre vuote sono il dato: "
-             "<b>01 e 10 non compaiono mai</b>, nemmeno una volta su diecimila lanci. Ogni qubit "
-             "continua a dare un esito casuale, ma i due danno <b>sempre lo stesso</b>: misurarne "
-             "uno determina l'altro all'istante. Quella correlazione perfetta è l'entanglement "
-             "visto dal laboratorio."),
+            ("Con tutti e tre i qubit in |0⟩ il risultato è <b>000</b> a ogni lancio. Non c'è ancora "
+             "nulla da sorteggiare: è il comportamento di tre bit classici."),
+            ("Escono <b>000</b> e <b>100</b> in parti uguali: q₀ si comporta come una monetina, e q₁ e "
+             "q₂ valgono 0 qualunque cosa accada. Gli esiti sono <b>indipendenti</b> — conoscerne uno "
+             "non dice nulla degli altri."),
+            ("Escono <b>000</b> e <b>110</b>: q₀ e q₁ danno sempre lo stesso valore, quindi misurarne "
+             "uno determina l'altro, mentre q₂ resta inchiodato a 0 senza accorgersi di nulla. Due dei "
+             "tre sono già legati; il terzo guarda ancora da fuori."),
+            ("<b>Escono solo 000 e 111</b>, vicino al 50 % ciascuno. Le sei barre vuote sono il dato: "
+             "<b>nessuna delle altre sei combinazioni compare mai</b>, nemmeno una volta su diecimila "
+             "lanci. Ogni qubit continua a dare un esito casuale, ma i tre danno <b>sempre lo "
+             "stesso</b>: misurarne uno determina gli altri due all'istante. Quella correlazione "
+             "perfetta è l'entanglement visto dal laboratorio."),
         ],
-        "bl_ent_impl_note": ("<b>Come è calcolato.</b> Le quattro ampiezze vengono da algebra lineare "
-                             "<b>esatta</b> in NumPy — le matrici di H⊗I e del CNOT applicate a |00⟩ —, "
-                             "non da un'approssimazione, e le misure da un campionamento multinomiale "
+        "bl_ent_impl_note": ("<b>Come è calcolato.</b> Le otto ampiezze vengono da algebra lineare "
+                             "<b>esatta</b> in NumPy — la matrice H⊗I⊗I e i due CNOT applicati a |000⟩ —, "
+                             "non da un'approssimazione; la concorrenza della coppia è la formula di "
+                             "Wootters, che per due qubit dà il valore esatto e non un limite; e le "
+                             "misure vengono da un campionamento multinomiale "
                              "su |ψ|², che è ciò che fa un simulatore ideale senza rumore. Il pannello "
                              "<b>non carica Qiskit</b>: l'ambiente distribuito è Streamlit, NumPy, "
                              "Plotly e ONNX Runtime, mentre Qiskit vive nella pipeline di Databricks "
                              "— dove si addestra la QSVM — e le sue figure arrivano qui già "
                              "renderizzate, come il circuito a 8 qubit della pagina Circuito "
-                             "quantistico. La convenzione della base è quella dei manuali, |q₀q₁⟩ con "
-                             "q₀ a sinistra; Qiskit numera al contrario e scriverebbe «01» dove il "
-                             "passo intermedio qui scrive «10»."),
+                             "quantistico. La convenzione della base è quella dei manuali, |q₀q₁q₂⟩ con "
+                             "q₀ a sinistra; Qiskit numera al contrario e scriverebbe «001» dove il "
+                             "primo passo qui scrive «100»."),
 
         # ── Pagina 6 · Sfera di Bloch → la vera ZZFeatureMap (8 qubit) ──
         "bl_zz_title": "La vera ZZFeatureMap: dove avviene l'entanglement",
         "bl_zz_sub": ("Le stesse cifre, ora sugli 8 qubit della QSVM della tesi. Muovi il cursore "
                       "all'inizio della pagina e guarda quali qubit reagiscono."),
-        "bl_zz_intro": ("<b>Da due qubit agli otto del modello.</b> Ogni qubit della ZZFeatureMap "
+        "bl_zz_intro": ("<b>Da tre qubit agli otto del modello.</b> Ogni qubit della ZZFeatureMap "
                         "porta <b>una variabile clinica</b>: q₀ è l'HbA1c, q₁ la glicemia, e così "
                         "via fino all'IMC. Con 256 ampiezze non c'è più una figura dello stato da "
                         "guardare — né Q-sphere né istogramma —, ma si possono comunque misurare le "
