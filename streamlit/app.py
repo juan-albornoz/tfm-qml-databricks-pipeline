@@ -563,10 +563,21 @@ RAMP = (["#724D00", "#9A6A00", "#C48800", "#EBAA2D", "#FFCF83"] if _is_dark
 
 # ── Acento de marca (cromo de interfaz: navegación, foco, sliders, reglas) ──
 # En oscuro es el #F5A623 del autor sin tocar (8,1:1 sobre la superficie). En claro
-# ese mismo ámbar da 2,03:1 y no puede llevar texto: el acento baja a L 0,55 del mismo
-# tono (4,96:1 sobre blanco, apto para texto pequeño según WCAG) y el ámbar puro queda
-# reservado a rellenos y tintes, donde no se le pide legibilidad.
-C_PRIMARY = P_AMBAR if _is_dark else "#9A6504"
+# ese mismo ámbar da 2,03:1 y no puede llevar texto: el acento baja del mismo tono, y
+# el ámbar puro queda reservado a rellenos y tintes, donde no se le pide legibilidad.
+#
+# CUÁNTO baja se corrigió midiendo, y el motivo importa porque se repite por toda la
+# paleta: el paso anterior era L 0,55 (#9A6504) y venía anotado como "4,96:1", cifra
+# CIERTA pero medida solo contra SURFACE, que es blanco puro. El acento no vive solo en
+# las tarjetas: cae también sobre el lienzo (#F4F3F0) en los antetítulos y las cifras
+# del deslizador, y sobre la barra lateral (#E9E9E9) en los enlaces del buscador. Ahí
+# bajaba a 4,47:1 y 4,08:1 — por debajo del 4,5:1 de WCAG para texto pequeño.
+# L 0,51 es el paso MÁS CLARO que pasa en los tres con margen (5,84 sobre tarjeta,
+# 5,26 sobre lienzo, 4,81 sobre barra lateral), así que se conserva todo el color que
+# se puede conservar. Sigue por encima de C_DARK, que es el escalón siguiente.
+# Al medir un acento nuevo, medirlo contra el fondo MÁS OSCURO de los tres, no contra
+# el blanco.
+C_PRIMARY = P_AMBAR if _is_dark else "#8B5B04"
 C_DARK    = P_ORO if _is_dark else "#6B4600"
 C_QUANTUM = SERIES["qsvm"]          # acento del componente cuántico (Bloch, ZZFeatureMap)
 # Pasos intermedios de la rampa. Se toman del extremo VISIBLE de cada una — la clara
@@ -622,7 +633,9 @@ def T(tema=None):
 
     NOTA: ninguno de los tres cálidos se usa como color de texto sobre blanco: dan
     2,03:1, 1,61:1 y 1,33:1. Viven en bordes, rellenos y realces; cuando el acento
-    tiene que llevar texto en claro, usa el paso oscurecido C_PRIMARY (4,96:1).
+    tiene que llevar texto en claro, usa el paso oscurecido C_PRIMARY (5,84:1 sobre
+    esta superficie, y nunca por debajo de 4,81:1 en los otros dos fondos claros de
+    la app — ver allí, que es donde está la advertencia sobre medir contra el blanco).
     """
     if (tema or st.session_state.theme) == "dark":
         return dict(bg="#12151B", surface=P_CARBON, surface_alt="#262A33",
@@ -762,6 +775,22 @@ FIG_CARD_SHADOW = (f"0 0 0 1px {C_MID2}33, {SHADOW}" if _is_dark else SHADOW)
 FIG_CARD_SHADOW_HOVER = (f"0 0 0 1px {C_PRIMARY}66, {SHADOW_HOVER}" if _is_dark else SHADOW_HOVER)
 # Padding-"passe-partout" algo mayor en oscuro: la lámina blanca respira dentro del marco.
 FIG_CARD_PAD = "14px" if _is_dark else "10px"
+
+# ── Mandos de la secuencia de puertas (Esfera de Bloch) ──
+# Las claves REALES de los cinco botones, en un solo sitio, y de aquí salen los seis grupos de
+# selectores que los visten. Antes se escribían a mano, uno por uno y seis veces, y ahí se coló
+# `.st-key-ent_cnot`: las claves son ent_cnot1 y ent_cnot2 (ver el bucle que los crea), así que
+# ese selector no casaba con NADA y los dos botones de CNOT salían con el tema base de Streamlit
+# —transparentes y con texto rgba(49,51,63,0.4)— en los dos temas. En oscuro eso es 1,46:1: dos
+# fantasmas al lado de tres hermanos bien vestidos. El fallo no daba error, que es justo lo que
+# lo hizo durar; generándolos se acaba la clase de error. Mismo recurso y mismo motivo que
+# _sel_lang() con las banderas.
+_ENT_BTN = ("ent_h", "ent_cnot1", "ent_cnot2", "ent_reset", "ent_medir")
+_ENT_PASO = ("ent_h", "ent_cnot1", "ent_cnot2")   # los que marcan "te toca": H y los dos CNOT
+
+def _sel_ent(sufijo="button", claves=None):
+    """Lista de selectores `.st-key-<clave> <sufijo>` para los mandos de la secuencia."""
+    return ", ".join(f".st-key-{k} {sufijo}" for k in (claves or _ENT_BTN))
 
 st.markdown(f"""
 <style>
@@ -1179,8 +1208,16 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
 .sidebar-footer .footer-name {{ font-size:12.5px; font-weight:500; color:{t['text']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+/* text_secondary y no text_muted, que es lo que llevaba: los contrastes que garantiza la paleta
+   —"los dos escalones de tinta apagada mantienen 8,3:1 y 5,0:1 en claro"— están medidos contra
+   SURFACE, que es blanco puro. Este rótulo no vive ahí sino sobre sidebar_bg, que en claro es el
+   gris #E9E9E9, y sobre ese fondo el escalón más apagado se queda en 4,15:1: por debajo del
+   4,5:1 de WCAG para texto pequeño. Un escalón arriba resuelve, y con margen en los dos temas
+   (6,9:1 en claro y 8,4:1 en oscuro). La jerarquía del pie no se pierde, que es lo que ese
+   escalón defendía: el nombre sigue por encima —tinta plena, 12,5px y peso 500— y esta línea
+   sigue por debajo, más pequeña, en mono y con la caja abierta por el espaciado. */
 .sidebar-footer .footer-uni {{ font-family:{FONT_MONO}; font-size:12px; font-weight:400; letter-spacing:0.06em;
-    color:{t['text_muted']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
+    color:{t['text_secondary']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
 /* El option_menu vive en un iframe con fondo propio: igualarlo al de la sidebar (sin caja/sombra
    propia — ya tiene el mismo fondo, así que se funde visualmente con el resto de la sidebar) */
 section[data-testid="stSidebar"] iframe {{ background-color:{t['sidebar_bg']} !important; }}
@@ -1486,8 +1523,9 @@ a.search-src .search-web-ext {{ font-size:10.5px; opacity:0.75; margin-left:2px;
    fallo que tenía el expander: caja casi blanca en tema oscuro. Se visten como una .info-card
    pequeña, que es el lenguaje de superficie de toda la app.
    Se listan por clave y no con un selector global de botón a propósito: un `button {{...}}` a
-   secas alcanzaría también a los de la sidebar, que ya tienen su propia forma. */
-.st-key-ent_h button, .st-key-ent_cnot button, .st-key-ent_reset button, .st-key-ent_medir button {{
+   secas alcanzaría también a los de la sidebar, que ya tienen su propia forma. Las claves salen
+   de _sel_ent() y no escritas a mano — ver allí el porqué. */
+{_sel_ent()} {{
     background-color:{t['surface']} !important;
     border:1px solid {t['border']} !important;
     color:{t['text']} !important;
@@ -1497,10 +1535,8 @@ a.search-src .search-web-ext {{ font-size:10.5px; opacity:0.75; margin-left:2px;
     box-shadow:{SHADOW} !important;
     transition: border-color 0.15s ease, color 0.15s ease, transform 0.14s ease, box-shadow 0.16s ease;
 }}
-.st-key-ent_h button p, .st-key-ent_cnot button p,
-.st-key-ent_reset button p, .st-key-ent_medir button p {{ color:inherit !important; }}
-.st-key-ent_h button:hover:enabled, .st-key-ent_cnot button:hover:enabled,
-.st-key-ent_reset button:hover:enabled, .st-key-ent_medir button:hover:enabled {{
+{_sel_ent("button p")} {{ color:inherit !important; }}
+{_sel_ent("button:hover:enabled")} {{
     border-color:{C_PRIMARY} !important; color:{C_PRIMARY} !important;
     transform:translateY(-2px); box-shadow:{SHADOW_HOVER} !important;
 }}
@@ -1508,15 +1544,20 @@ a.search-src .search-web-ext {{ font-size:10.5px; opacity:0.75; margin-left:2px;
    apagados y sin sombra. El estado deshabilitado de Streamlit solo baja la opacidad, y a la
    mitad de opacidad los tres se parecían demasiado como para ver de un vistazo cuál es el
    siguiente paso — que es toda la interacción de esta sección. */
-.st-key-ent_h button:enabled, .st-key-ent_cnot button:enabled {{
-    border-color:{C_QUANTUM} !important; color:{C_QUANTUM} !important;
+/* C_DARK y no C_QUANTUM, que es lo que había: el acento cuántico en claro es #C07C08, y ese
+   tono está declarado ARRIBA como relleno de barra —"en claro se baja a L 0,64 (…) como relleno
+   de barra sería invisible"—, no como tinta. De rótulo daba 3,43:1 sobre la superficie blanca
+   del botón, por debajo del 4,5:1 de WCAG para texto. C_DARK es el paso oscurecido del MISMO
+   oro y sube a 8,4:1. En tema oscuro los dos son literalmente el mismo valor (P_ORO), así que
+   esto no cambia ni un píxel allí: solo repara el claro. */
+{_sel_ent("button:enabled", _ENT_PASO)} {{
+    border-color:{C_DARK} !important; color:{C_DARK} !important;
 }}
-.st-key-ent_h button:disabled, .st-key-ent_cnot button:disabled, .st-key-ent_reset button:disabled {{
+{_sel_ent("button:disabled", _ENT_PASO + ("ent_reset",))} {{
     background-color:{t['surface_alt']} !important; border-color:{t['border']} !important;
     color:{t['text_muted']} !important; box-shadow:none !important; opacity:1 !important;
 }}
-.st-key-ent_h button:disabled p, .st-key-ent_cnot button:disabled p,
-.st-key-ent_reset button:disabled p {{ color:{t['text_muted']} !important; }}
+{_sel_ent("button:disabled p", _ENT_PASO + ("ent_reset",))} {{ color:{t['text_muted']} !important; }}
 /* Reserva SIEMPRE el hueco de la barra de scroll vertical. Sin esto, cuando la barra aparece/desaparece
    al re-renderizar (Firefox la reserva de verdad), el ancho del contenido salta ~15 px y la esfera de
    Bloch —limitada por el ancho de su columna— se redimensionaba al cambiar de variable o mover el slider.
@@ -1943,24 +1984,42 @@ div[role="slider"]::after {{
 }}
 div[role="slider"]:hover::before {{ border-color:{C_PRIMARY}; }}
 div[role="slider"]:active {{ cursor:grabbing !important; }}
-/* El valor sobre el pulgar sube para no chocar con los ticks */
+/* El valor sobre el pulgar sube para no chocar con los ticks.
+   Y se le pone COLOR, que es lo único del deslizador que se había quedado sin vestir: el carril,
+   el aro del pulgar y la muesca ya van en C_PRIMARY (ver arriba), pero la cifra la seguía
+   pintando el `primaryColor` de config.toml. Ese ajuste es de SERVIDOR, o sea el mismo #C07C08
+   en los dos temas: en oscuro aguanta (5,3:1), pero en claro caía a 3,09:1 sobre el lienzo, y es
+   justo el número que estás leyendo mientras arrastras el mando. C_PRIMARY es el acento que SÍ
+   puede llevar texto —es literalmente su definición, "cromo de interfaz: navegación, foco,
+   sliders"— y de paso ata la cifra al resto del control.
+   La regla alcanza también al <p>: Streamlit envuelve el valor en markdown, y el color efectivo
+   lo lleva ese párrafo. */
 div[data-testid="stSliderThumbValue"] {{ top:-40px; z-index:4; }}
+div[data-testid="stSliderThumbValue"],
+div[data-testid="stSliderThumbValue"] p {{ color:{C_PRIMARY} !important; }}
+/* Y los EXTREMOS del carril (mínimo y máximo), por lo mismo pero con otro origen: estos ni
+   siquiera llegaban al primaryColor, se quedaban en el rgba(49,51,63,0.6) del tema BASE de
+   Streamlit — que config.toml deja en claro, el mismo fallo del expander y de los mandos de
+   Bloch. Fallaban en los DOS temas: 1,46:1 en oscuro y 3,55:1 en claro, una vez resuelto ese
+   0,6 de alfa contra el fondo. text_muted es el escalón que les toca —son el marco de la
+   escala, no el dato— y va opaco: 5,3:1 en oscuro y 4,5:1 en claro.
+   OJO SI ESTO PARECE CÓDIGO MUERTO: la tira nace en opacity:0 y Streamlit solo la revela al
+   pasar el cursor o al enfocar el deslizador (`opacity: isHovered ? 1 : var(--slider-focused,
+   0)` en su hoja). Una captura estática NO la enseña; para verla hay que poner esa custom
+   property a 1, o tener el foco puesto — que es justo cuando se está usando el control. */
+div[data-testid="stSliderTickBar"],
+div[data-testid="stSliderTickBar"] p {{ color:{t['text_muted']} !important; }}
 #MainMenu, footer, header {{ visibility:hidden; }}
 /* ...pero el botón nativo para ABRIR la sidebar vive DENTRO de ese <header>: al ocultarlo, en móvil
    (donde la sidebar arranca colapsada) el usuario se quedaba sin forma de abrir el menú y no podía
    navegar. Lo devolvemos a la vida y lo vestimos con la paleta. */
-/* Ojo: el elemento con este testid ES el <button>, no lo contiene. */
-button[data-testid="stExpandSidebarButton"] {{
-    visibility:visible !important;
-    background-color:{t['surface']} !important;
-    border:1px solid {t['border']} !important;
-    border-radius:10px !important;
-    color:{t['text']} !important;
-    box-shadow: 0 2px 6px rgba(20,30,40,0.10), 0 1px 3px rgba(20,30,40,0.08) !important;
-}}
-button[data-testid="stExpandSidebarButton"]:hover {{
-    background-color:{t['surface_alt']} !important; border-color:{C_PRIMARY} !important;
-}}
+/* Ojo: el elemento con este testid ES el <button>, no lo contiene.
+   Aquí SOLO se le devuelve la visibilidad. El aspecto —disco invertido y flecha propia— se lo da
+   el bloque de más arriba, el mismo que viste al botón de cerrar, para que los dos sentidos de la
+   misma acción se vean igual. Antes se le pintaba aquí una pastilla rectangular de superficie, y
+   como esta regla va DESPUÉS en la hoja, ganaba: en el teléfono el mando de abrir salía con otra
+   forma y otro color que todos los demás. */
+button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
 
 /* ═══════════════ TABLET (≤ 1024 px) ═══════════════
    Entre el ancho de escritorio y el punto de quiebre móvil (768 px) hay una franja —tablets en
@@ -3905,6 +3964,18 @@ def portada_resumen():
     :has() apuntaría al que no es.
     """
     td = T("dark")                                  # paleta oscura, sea cual sea el tema activo
+    # La flecha del selector de idioma es el ÚNICO elemento de la tira de cabecera que tiene que
+    # leerse contra las dos capas de esta página: la fotografía (siempre oscura) mientras estás
+    # arriba, y la hoja (del tema activo) en cuanto bajas. En oscuro no hay conflicto, porque las
+    # dos capas son oscuras y el gris de siempre vale para ambas. En claro son opuestas y NINGÚN
+    # gris sirve: el del tema da 2,2:1 sobre la foto y el de la paleta oscura, 2,0:1 sobre el
+    # papel. El acento oscurecido es el único color que pasa el 3:1 de WCAG para controles en las
+    # dos —3,2:1 sobre la foto y 5,3:1 sobre el papel—, que es justo para lo que existe (ver la
+    # nota de C_PRIMARY). Ese 3,2 es el margen MÁS JUSTO que deja el acento en toda la app, y va
+    # en la dirección contraria al resto: si algún día vuelve a oscurecerse, este es el sitio que
+    # hay que volver a medir. Se pierde el cambio de color al desplegar, pero no la señal: la flecha
+    # sigue girando 180°, que es lo que de verdad distingue abierto de cerrado.
+    caret = td["text_secondary"] if _is_dark else C_PRIMARY
     fondo = _b64_image(str(ASSETS_DIR / "hero-quantum.webp"))
     logo = _b64_image(str(ASSETS_DIR / "qml_logov2-sidebar.png"))
     st.markdown(f"""<style>
@@ -3917,6 +3988,24 @@ def portada_resumen():
    necesita la lámina para llegar de canto a canto sin calcular nada. */
 div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
     padding:0 !important; max-width:none !important;
+}}
+
+/* ── Y A SANGRE TAMBIÉN POR ARRIBA ──────────────────────────────────────────────────────────
+   Quitar el padding no bastaba: la lámina seguía empezando 64 px por debajo del canto, y en esa
+   franja se veía el fondo de .stApp —con su halo ámbar— cortado a cuchillo contra la fotografía,
+   justo a la altura del reloj y las banderas. Esos 64 px no son padding de nadie: son HUECO DE
+   REJILLA. El bloque vertical raíz es un flex con gap de 1rem y por delante de la lámina van
+   cuatro hijos que no pintan nada —la hoja de estilos general y los tres componentes de
+   cabecera: banderas, atributo lang y reloj—; sus cajas miden cero, pero siguen siendo ítems del
+   flex y cada una cobra su hueco. Cuatro por dieciséis.
+   Se anula el hueco del bloque RAÍZ en vez de disolver los cuatro uno a uno: Streamlit 1.55
+   envuelve cada st.container en un stLayoutWrapper propio —sin clase st-key- de la que agarrarse—
+   que habría que perseguir aparte. Y no se pierde nada, porque en esta página el bloque raíz no
+   separa: sus dos únicos hijos con cuerpo son la lámina y la hoja que la tapa, y esas dos se
+   relacionan por z-index, no por espaciado. Va aquí dentro y no en la hoja principal a propósito:
+   en las otras seis páginas esos mismos 64 px son el aire que hay sobre el titular. */
+div[data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"] {{
+    gap:0 !important;
 }}
 
 /* ── LA LÁMINA ──────────────────────────────────────────────────────────────────────────────
@@ -4053,10 +4142,34 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     border-radius:{_OV_RADIO}px {_OV_RADIO}px 0 0;
     background:linear-gradient(90deg, {P_AMBAR}, {P_AMBAR}00 55%);
 }}
-/* El script vive en un iframe de 0x0; sin esto ocuparía un hueco de rejilla al final de la
-   página. Mismo tratamiento que el reloj de cabecera y el atributo de idioma. */
+/* El script vive en un iframe que no pinta nada; sin esto ocuparía un hueco al final de la
+   página. Mismo tratamiento —Y COMPLETO— que el reloj de cabecera y el atributo de idioma:
+   display:contents en los envoltorios Y position:fixed en el iframe. Faltaba lo segundo, y no
+   era un detalle: el `height=0` que se le pasa a components.html es FALSY, así que el frontal
+   lo descarta y planta la altura por defecto de 150 px. El iframe seguía por tanto en el flujo
+   midiendo 150, y al pie de la página quedaba una banda muerta de ese alto por debajo del
+   canto de la hoja, con la lámina asomando detrás. */
 .st-key-ov_js, .st-key-ov_js div[data-testid="stIFrame"],
 .st-key-ov_js div[data-testid="stElementContainer"] {{ display:contents !important; }}
+.st-key-ov_js iframe {{
+    position:fixed !important; width:0 !important; height:0 !important;
+    border:0 !important; opacity:0 !important; pointer-events:none !important;
+}}
+
+/* ── LA TIRA DE CABECERA, AHORA SOBRE LA FOTOGRAFÍA ─────────────────────────────────────────
+   Consecuencia directa de que la lámina llegue al canto: el reloj y la flecha del selector son
+   fijos y hasta ahora caían sobre aquella franja de fondo de .stApp, del color del tema. Ya no:
+   caen sobre la fotografía, que es oscura SIEMPRE, también en tema claro. Y en claro el gris del
+   tema (#4A4E57) da 2,2:1 contra ella — por debajo del 4,5:1 que pide WCAG para texto y del 3:1
+   para controles.
+   El RELOJ se pasa entero a la paleta oscura, y puede hacerlo sin condiciones porque nunca llega
+   a verse sobre la hoja: se apaga con el scroll en 140 px (ver el bloque RELOJ) y la hoja no
+   corona hasta los 900. En tema oscuro estas dos líneas no cambian nada —td es t— y se emiten
+   igual para no partir la regla en dos ramas. La FLECHA sí necesita valer para las dos capas;
+   su color se decide arriba, en Python, donde está razonado. */
+#tfm-reloj {{ color:{td['text_secondary']}; }}
+#tfm-reloj .r-sep {{ color:{td['text_muted']}; }}
+.st-key-lang_{LANG} button::before {{ border-top-color:{caret}; }}
 
 /* ── ENTRADA DE CADA BLOQUE ─────────────────────────────────────────────────────────────────
    El punto de partida (invisible y 26 px más abajo) lo pone el SCRIPT añadiendo .ov-anim, no
