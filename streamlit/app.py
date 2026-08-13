@@ -601,8 +601,12 @@ FONT_MONO  = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 PLOTLY_FONT = "IBM Plex Sans"
 PLOTLY_MONO = "IBM Plex Mono"
 
-def T():
+def T(tema=None):
     """Superficies y tintas, derivadas de la paleta base.
+
+    Con `tema` se puede pedir una paleta que NO es la activa. Lo usa el hero de Resumen,
+    que va siempre en oscuro —su fondo es una lámina oscura— aunque la app esté en claro;
+    así ese bloque toma sus colores de aquí en vez de llevar una copia de los hexadecimales.
 
     Las dos superficies clave son literalmente los dos neutros del autor, cada una en
     el tema donde le toca ser el fondo de tarjeta: #1C1F26 en oscuro y —por el otro
@@ -620,7 +624,7 @@ def T():
     2,03:1, 1,61:1 y 1,33:1. Viven en bordes, rellenos y realces; cuando el acento
     tiene que llevar texto en claro, usa el paso oscurecido C_PRIMARY (4,96:1).
     """
-    if st.session_state.theme == "dark":
+    if (tema or st.session_state.theme) == "dark":
         return dict(bg="#12151B", surface=P_CARBON, surface_alt="#262A33",
                      text=P_GRIS, text_secondary="#A9ADB6", text_muted="#868B95",
                      border="#2C313B", border_strong="#3D434F",
@@ -3709,133 +3713,517 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# PORTADA DE RESUMEN — LÁMINA A PANTALLA COMPLETA (solo en esta página)
+# ═══════════════════════════════════════════════════════════════════════
+# Al abrir Resumen no se ve la página: se ve una lámina que ocupa la ventana ENTERA a la derecha
+# de la barra lateral. La página está debajo, y va apareciendo porque el scroll la sube por
+# encima de la lámina, que se queda quieta. El recurso es `position:sticky` puro sobre el primer
+# bloque más una hoja opaca —.st-key-ov_sheet— con todo lo demás; el JavaScript solo añade el
+# matiz (parallax, desvanecido, barra de avance y entrada de cada bloque) y la pieza se sostiene
+# sin él: sin script se ve la lámina, se hace scroll y la página aparece igual.
+#
+# ESTO YA NO VIVE EN UN IFRAME, y es el cambio de fondo respecto a la primera versión, que era un
+# componente de 720 px con su propio scroll interno. Un iframe no se sale de su caja ni se entera
+# del scroll de la página, así que a pantalla completa no llegaba por mucho que se le ajustara.
+# Al traerlo al documento principal el scroll pasa a ser el de section[data-testid="stMain"] —el
+# único contenedor con scroll de Streamlit, el mismo del que ya tira el reloj de cabecera— y lo
+# que hay que resolver a cambio es que Streamlit reconstruye sus nodos en cada rerun: de eso se
+# ocupa el MutationObserver del script.
+#
+# EL SANGRADO NO SE CALCULA. En vez de despejar "100vw menos la barra lateral menos la barra de
+# scroll" —tres medidas, y la primera además cambia al colapsar el menú—, el bloque principal se
+# queda sin padding y sin tope de ancho SOLO en esta página, con lo que su caja pasa a ser
+# exactamente el área de contenido y la lámina llega de canto a canto con un simple 100%. El aire
+# y el tope de 1500 px se los devuelve la hoja por dentro, con los mismos valores que Streamlit da
+# por defecto (5rem a los lados en modo wide, 10rem abajo), así que el texto conserva al píxel la
+# medida que tiene en las otras seis páginas.
+#
+# Y va SIEMPRE EN OSCURO, también con la app en claro: la imagen es una lámina fotográfica de
+# fondo carbón y aclararla la desarmaría. Se lee como una portada dentro de la aplicación, no como
+# una tarjeta más — de ahí que tome la paleta con T("dark") y no la del tema activo.
+#
+# NO se usa GSAP ni ninguna librería: lo que hace el script son cuatro interpolaciones lineales
+# sobre un único evento de scroll, ya amortiguado con requestAnimationFrame, más un
+# IntersectionObserver para la entrada de los bloques.
+_OV_RADIO = 30                      # radio del canto superior de la hoja (px)
+_OV_SOMBRA = "0 -30px 70px -26px rgba(0,0,0,0.62)"
+# Padding lateral del bloque principal en modo wide, que esta página le quita y la hoja devuelve.
+# No es un número inventado: es sizes.wideSidePadding del tema de Streamlit, el que se aplica a
+# partir de 864 px de ventana. Los dos escalones de abajo replican las media queries de la hoja
+# principal (1.25rem en tablet, 1rem en móvil), para que la medida del texto no cambie en ninguna.
+_OV_PAD_X = "5rem"
+
+_OV_JS = """
+<script>
+(function () {
+  var W = window.parent, doc = W.document;
+  // Quien hace scroll es section[data-testid="stMain"], no la ventana: en W.scrollY no pasa
+  // NUNCA nada. Es el mismo contenedor del que cuelga el fundido del reloj de cabecera.
+  var sc = doc.querySelector('section[data-testid="stMain"]');
+  if (!sc) { return; }
+  // Un solo juego de escuchas por ventana: si este iframe se vuelve a montar (cambio de idioma,
+  // de tema, ida y vuelta a la página) el anterior se desmonta antes, en vez de acumularse.
+  if (W.__ovPortada) { W.__ovPortada.parar(); }
+  var quieto = W.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Las referencias se REBUSCAN en cuanto dejan de estar en el documento: Streamlit reconstruye
+  // sus nodos en cada rerun y las que se guardaran al arrancar quedarían apuntando a huérfanos.
+  var cache = {};
+  function el(sel) {
+    if (!cache[sel] || !cache[sel].isConnected) { cache[sel] = doc.querySelector(sel); }
+    return cache[sel];
+  }
+
+  var pedido = false;
+  function pinta() {
+    pedido = false;
+    var lamina = el('.ov-hero');
+    if (!lamina) { return; }
+    // El avance se mide contra el alto de la lámina y no contra el de la página: lo que se está
+    // contando es cuánto queda de portada, que es exactamente una pantalla.
+    var p = Math.min(1, Math.max(0, sc.scrollTop / (lamina.clientHeight || 1)));
+    var barra = el('.ov-bar');
+    if (barra) { barra.style.transform = 'scaleX(' + p.toFixed(4) + ')'; }
+    // La pista de scroll se va enseguida: en cuanto el gesto ha empezado ya no informa de nada.
+    var pista = el('.ov-hint');
+    if (pista) { pista.style.opacity = String(Math.max(0, 1 - p * 7)); }
+    if (quieto) { return; }
+    // El fondo se mueve a dos tercios de la velocidad del contenido y crece un pelo: es lo que da
+    // la profundidad, la sensación de que la lámina está DETRÁS y no pegada al texto.
+    var img = el('.ov-hero-img');
+    if (img) {
+      img.style.transform = 'translate3d(0,' + (p * 70).toFixed(2) + 'px,0) scale(' + (1 + p * 0.08).toFixed(4) + ')';
+    }
+    // El rótulo se apaga a casi el doble de ritmo que el scroll: desaparece antes de que la hoja
+    // llegue a taparlo, y así no se le ve pasar por debajo del canto.
+    var dentro = el('.ov-hero-in');
+    if (dentro) {
+      dentro.style.transform = 'translate3d(0,' + (-p * 80).toFixed(2) + 'px,0)';
+      dentro.style.opacity = String(Math.max(0, 1 - p * 1.9));
+    }
+  }
+  function alScroll() { if (!pedido) { pedido = true; W.requestAnimationFrame(pinta); } }
+
+  // ── Entrada de cada bloque ────────────────────────────────────────────────────────────────
+  var io = new W.IntersectionObserver(function (entradas) {
+    entradas.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('ov-seen'); io.unobserve(e.target); }
+    });
+  }, { root: sc, rootMargin: '0px 0px -8% 0px', threshold: 0.01 });
+
+  // El estado escondido lo pone ESTE script, no la hoja de estilos, y es deliberado: si no
+  // llegara a correr —iframe bloqueado, error de JS, navegador viejo— la página se ve entera en
+  // vez de quedarse en blanco para siempre. La hoja solo describe el viaje, no el punto de salida.
+  function registra() {
+    var hoja = doc.querySelector('.st-key-ov_sheet');
+    if (!hoja) { return; }
+    var hijos = hoja.children;
+    for (var i = 0; i < hijos.length; i++) {
+      var b = hijos[i];
+      if (b.dataset.ovAnim) { continue; }
+      b.dataset.ovAnim = '1';
+      b.classList.add('ov-anim');
+      // Lo que ya está en pantalla (o ya ha pasado de largo, con top negativo) se marca visto en
+      // esta MISMA tarea: las dos clases entran en el mismo recálculo de estilo, así que la
+      // opacidad nunca llega a valer 0 y no hay parpadeo al volver de un rerun.
+      if (b.getBoundingClientRect().top < W.innerHeight * 0.92) { b.classList.add('ov-seen'); }
+      else { io.observe(b); }
+    }
+  }
+
+  // Streamlit reconstruye los bloques en cada rerun y los nuevos nacen sin registrar, así que no
+  // basta con recorrerlos una vez. Se amortigua con rAF porque un solo rerun dispara decenas de
+  // mutaciones, y solo se observan altas y bajas de nodos (childList): las clases que añade
+  // registra() son cambios de atributo y no realimentan el observador.
+  var toca = false;
+  var mo = new W.MutationObserver(function () {
+    if (toca) { return; }
+    toca = true;
+    W.requestAnimationFrame(function () { toca = false; registra(); pinta(); });
+  });
+  mo.observe(sc, { childList: true, subtree: true });
+
+  sc.addEventListener('scroll', alScroll, { passive: true });
+  W.addEventListener('resize', alScroll);
+  W.__ovPortada = { parar: function () {
+    sc.removeEventListener('scroll', alScroll);
+    W.removeEventListener('resize', alScroll);
+    io.disconnect();
+    mo.disconnect();
+  } };
+  // Al salir de Resumen, Streamlit desmonta este iframe y con él muere el realm donde viven
+  // estas funciones; los observadores, que son del documento padre, se quedarían enganchados a
+  // callbacks muertos. Se sueltan a mano en el desmontaje.
+  window.addEventListener('pagehide', function () { if (W.__ovPortada) { W.__ovPortada.parar(); W.__ovPortada = null; } });
+
+  registra();
+  pinta();
+})();
+</script>
+"""
+
+
+def portada_resumen():
+    """Lámina a pantalla completa, detrás de la página. Solo la usa Resumen.
+
+    Emite en UNA sola llamada la hoja de estilos de la portada y su marcado, y no es capricho:
+    el <style> tiene que viajar dentro del mismo stElementContainer que la lámina, porque ese
+    contenedor —el único hijo directo del bloque vertical— es justo el nodo que el CSS convierte
+    en el bloque pegajoso de 100vh. Separarlos en dos st.markdown crearía dos contenedores y el
+    :has() apuntaría al que no es.
+    """
+    td = T("dark")                                  # paleta oscura, sea cual sea el tema activo
+    fondo = _b64_image(str(ASSETS_DIR / "hero-quantum.webp"))
+    logo = _b64_image(str(ASSETS_DIR / "qml_logov2-sidebar.png"))
+    st.markdown(f"""<style>
+/* ── EL BLOQUE PRINCIPAL, A SANGRE ──────────────────────────────────────────────────────────
+   Solo en esta página. Estas dos declaraciones deshacen el padding y el tope de ancho de la hoja
+   principal —y de sus dos media queries, que también los declaran con !important— y ganan por
+   ORDEN DE APARICIÓN, no por especificidad: esta hoja se inyecta desde el cuerpo de la página y
+   aquella se escribe entera al principio del script. Al quedarse sin padding, la caja del
+   contenido pasa a ser exactamente el área a la derecha de la barra lateral, que es lo que
+   necesita la lámina para llegar de canto a canto sin calcular nada. */
+div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
+    padding:0 !important; max-width:none !important;
+}}
+
+/* ── LA LÁMINA ──────────────────────────────────────────────────────────────────────────────
+   El bloque pegajoso es el stElementContainer de este mismo markdown y no un div nuestro: es el
+   único nodo que es hijo directo del bloque vertical, y por tanto el único que puede quedarse
+   pegado al techo mientras el resto de la página le pasa por encima. Se localiza con :has() —el
+   mismo recurso que ya usan la barra lateral y el conmutador de idioma— en su forma laxa, sin
+   combinadores de hijo, para que siga valiendo si Streamlit cambia el andamiaje interno del
+   markdown. 100dvh además de 100vh: en el móvil, vh mide la ventana SIN contar la barra del
+   navegador y la lámina se pasaba de alto justo en la primera pantalla. */
+div[data-testid="stElementContainer"]:has(.ov-hero) {{
+    position:sticky; top:0; z-index:0;
+    height:100vh; height:100dvh;
+}}
+/* La lámina se coloca en ABSOLUTO dentro de esa caja: así no depende de que los dos o tres divs
+   que Streamlit mete por medio hereden el alto, que es justo lo que cambia entre versiones. */
+.ov-hero {{
+    position:absolute; inset:0; overflow:hidden;
+    display:flex; align-items:center;
+    background:{td['sidebar_bg']}; color:{td['text']};
+    font-family:{FONT_SANS};
+}}
+/* El fondo desborda su caja (inset negativo) para que el parallax no descubra un borde vacío al
+   desplazarlo. La imagen es apaisada de 2.44:1 y una ventana no llega a 1.8:1, así que `cover`
+   recorta por los lados: se ancla al 78% porque ahí está la esfera, y el aire que sobra a la
+   izquierda es justo donde va el logotipo. */
+.ov-hero-img {{
+    position:absolute; inset:-10% -5%;
+    background:url('data:image/webp;base64,{fondo}') no-repeat 78% center / cover;
+    will-change:transform;
+}}
+/* Dos velos: uno horizontal que oscurece la mitad izquierda —el texto necesita fondo, no suerte—
+   y otro vertical que asienta la imagen por arriba y por abajo. Ninguno introduce color propio:
+   los dos son el MISMO carbón del fondo de la lámina con alfa, así que oscurecen sin desplazar
+   el matiz de la fotografía. */
+.ov-hero-veil {{
+    position:absolute; inset:0;
+    background:
+      linear-gradient(90deg, {td['sidebar_bg']} 0%, {hex_to_rgba(td['sidebar_bg'], 0.86)} 28%,
+                      {hex_to_rgba(td['sidebar_bg'], 0.28)} 56%, {hex_to_rgba(td['sidebar_bg'], 0)} 80%),
+      linear-gradient(180deg, {hex_to_rgba(td['sidebar_bg'], 0.55)} 0%, {hex_to_rgba(td['sidebar_bg'], 0)} 24%,
+                      {hex_to_rgba(td['sidebar_bg'], 0)} 58%, {hex_to_rgba(td['sidebar_bg'], 0.78)} 100%);
+}}
+/* El rótulo se ALINEA CON EL TEXTO de la página, no con el borde de la pantalla: el max() elige
+   el mayor entre un margen suelto y el canto izquierdo de la columna de 1500 px (la mitad del
+   sobrante más el padding que devuelve la hoja). Así, en monitores anchos el logotipo cae a
+   plomo sobre el titular que aparece justo debajo al hacer scroll, y en pantallas estrechas
+   —donde no hay sobrante— se queda con su margen mínimo. El centrado vertical lo da el flex del
+   contenedor y NO un translateY, porque el transform se lo queda el parallax. */
+.ov-hero-in {{
+    position:relative; z-index:2; flex:0 1 auto;
+    /* 660 px y no los 460 de cuando aquí iba un antetítulo de cuatro palabras: el título del
+       TFM necesita una medida de lectura decente. El 56% es el tope real —a partir de ahí el
+       texto se metería en la mitad derecha de la fotografía, donde está la esfera y donde el
+       velo ya casi no oscurece—, y por debajo de 1180 px de área manda ese porcentaje. */
+    max-width:min(56%, 660px);
+    margin-left:max(clamp(24px, 5vw, 64px), calc(50% - 750px + {_OV_PAD_X}));
+    will-change:transform, opacity;
+}}
+.ov-hero-logo {{
+    height:clamp(60px, 8vh, 96px); width:auto; display:block; margin-bottom:26px;
+    filter:drop-shadow(0 6px 18px rgba(0,0,0,0.55));
+}}
+/* El TÍTULO DEL TFM, y no el antetítulo corto de la página: son dos textos distintos a
+   propósito. Sobre la lámina va el título largo —i18n["ov_hero_title"]—, y el "Framework
+   DataOps + QML" se queda donde estaba, coronando el titular "Resumen" que aparece al bajar.
+   Por eso esto NO reutiliza .page-eyebrow ni su calco de aquí: aquel es mono, en versalitas y
+   a 0.16em de espaciado, y con 150 caracteres saldrían ocho líneas de mayúsculas ilegibles.
+   Serif, caja normal e interlineado corto, que es como se lee un título.
+   La huincha ámbar se conserva —es la firma visual de la marca— pero alineada con la PRIMERA
+   LÍNEA: flex-start más un margen óptico de 0.62em, porque centrada en un bloque de tres o
+   cuatro líneas quedaría flotando en mitad del texto. La sombra no es decorativa: el título
+   cae sobre fotografía y el velo no garantiza el mismo fondo en todos los anchos. */
+.ov-hero-titulo {{
+    font-family:{FONT_SERIF}; font-size:clamp(18px, 1.7vw, 25px); font-weight:400;
+    line-height:1.3; letter-spacing:-0.01em; color:{td['text']};
+    text-shadow:0 2px 16px rgba(0,0,0,0.55);
+    display:flex; align-items:flex-start; gap:14px;
+}}
+.ov-hero-titulo::before {{
+    content:""; width:22px; height:2px; border-radius:1px; background:{P_AMBAR};
+    flex-shrink:0; margin-top:0.62em;
+}}
+.ov-hero-rule {{
+    height:1px; margin-top:22px; max-width:280px;
+    background:linear-gradient(90deg, {td['border_strong']}, transparent);
+}}
+/* Pista de desplazamiento: un hilo que cae y un ángulo. Sin palabras — no hay que traducirlo, y
+   en una lámina así el gesto se entiende antes leyendo el dibujo que una frase. */
+.ov-hint {{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%); z-index:3;
+    display:flex; flex-direction:column; align-items:center; gap:9px;
+    transition:opacity 0.25s ease; pointer-events:none;
+}}
+.ov-hint-line {{ width:1px; height:38px; background:linear-gradient(180deg, transparent, {td['text_muted']}); }}
+.ov-hint svg {{ display:block; animation:ovBaja 1.9s cubic-bezier(0.4,0,0.2,1) infinite; }}
+@keyframes ovBaja {{ 0%,100% {{ transform:translateY(0); opacity:0.55; }} 50% {{ transform:translateY(5px); opacity:1; }} }}
+/* Avance de la portada, pegado al canto superior de la pantalla: la única señal de cuánto queda
+   de lámina, ya que la barra de scroll de la página no dice nada de esto. Desaparece sola en
+   cuanto la hoja la cubre, porque va dentro de la lámina. */
+.ov-bar {{
+    position:absolute; top:0; left:0; right:0; height:2px; z-index:4;
+    transform-origin:left center; transform:scaleX(0);
+    background:linear-gradient(90deg, {P_AMBAR}, {P_ORO});
+    pointer-events:none;
+}}
+
+/* ── LA HOJA QUE TAPA ───────────────────────────────────────────────────────────────────────
+   Es el contenedor con TODO el resto de la página. Tiene que ser opaca —es lo único que separa
+   las dos capas— y va un peldaño por encima de la lámina (z-index 1 contra 0). El fondo repite
+   el de .stApp, halos incluidos, para que por debajo del pliegue Resumen se vea exactamente
+   igual que las otras seis páginas.
+   Se estila el .st-key- A PELO y no un envoltorio, porque en esta versión de Streamlit no hay
+   tal envoltorio: un st.container(key=...) es UN solo div (StyledFlexContainerBlock, con
+   data-testid="stVerticalBlock" y la clase de la key encima), hijo directo del bloque vertical
+   de la página. Las reglas de la hoja principal que apuntan a stVerticalBlockBorderWrapper son
+   de una versión anterior y hoy no casan con nada — comprobado en el bundle de 1.55.
+   Y de ahí el padding lateral con max(): al ser un único div, el fondo tiene que ir a sangre
+   (ancho completo) y la medida del texto la fija el propio padding. El segundo término centra
+   una caja de contenido de 1340 px —los 1500 del tope de la app menos sus dos 5rem— y el
+   primero es el suelo cuando la pantalla no da para tanto; ambos coinciden en 5rem justo a los
+   1500 px, así que no hay salto. 670 = 1500/2 − 80. */
+.st-key-ov_sheet {{
+    position:relative; z-index:1;
+    background-color:{t['bg']}; background-image:{HALOS};
+    border-top:1px solid {t['border']};
+    border-radius:{_OV_RADIO}px {_OV_RADIO}px 0 0;
+    box-shadow:{_OV_SOMBRA};
+    padding:3rem max({_OV_PAD_X}, calc(50% - 670px)) 10rem;
+}}
+/* Filete de luz sobre el canto: marca el borde que avanza sobre la imagen. */
+.st-key-ov_sheet::before {{
+    content:""; position:absolute; top:0; left:0; right:0; height:2px;
+    border-radius:{_OV_RADIO}px {_OV_RADIO}px 0 0;
+    background:linear-gradient(90deg, {P_AMBAR}, {P_AMBAR}00 55%);
+}}
+/* El script vive en un iframe de 0x0; sin esto ocuparía un hueco de rejilla al final de la
+   página. Mismo tratamiento que el reloj de cabecera y el atributo de idioma. */
+.st-key-ov_js, .st-key-ov_js div[data-testid="stIFrame"],
+.st-key-ov_js div[data-testid="stElementContainer"] {{ display:contents !important; }}
+
+/* ── ENTRADA DE CADA BLOQUE ─────────────────────────────────────────────────────────────────
+   El punto de partida (invisible y 26 px más abajo) lo pone el SCRIPT añadiendo .ov-anim, no
+   esta hoja: si el script no llegara a correr, la página se ve entera en vez de quedarse en
+   blanco. Aquí solo se describe el viaje. */
+.ov-anim {{
+    opacity:0; transform:translateY(26px);
+    transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
+}}
+.ov-anim.ov-seen {{ opacity:1; transform:none; }}
+/* Quien pide menos movimiento conserva el revelado —que es scroll, no animación— y pierde el
+   parallax, el fundido de los bloques y el latido de la pista, que son movimiento añadido. */
+@media (prefers-reduced-motion: reduce) {{
+    .ov-anim {{ opacity:1 !important; transform:none !important; transition:none !important; }}
+    .ov-hint svg {{ animation:none; }}
+}}
+@media (max-width: 1024px) {{
+    .st-key-ov_sheet {{ padding:3rem 1.25rem 10rem; }}
+    .ov-hero-in {{ max-width:min(70%, 560px); margin-left:clamp(20px, 4vw, 40px); }}
+    .ov-hero-titulo {{ font-size:clamp(17px, 2.3vw, 21px); }}
+}}
+@media (max-width: 768px) {{
+    .st-key-ov_sheet {{ padding:2.5rem 1rem 6rem; }}
+    /* En el teléfono el texto ocupa casi todo el ancho y la fotografía queda de fondo entero:
+       no hay mitad izquierda que respetar porque no cabe la esfera al lado. */
+    .ov-hero-in {{ max-width:84%; }}
+    .ov-hero-logo {{ height:clamp(46px, 7vh, 64px); margin-bottom:18px; }}
+    .ov-hero-titulo {{ font-size:clamp(15px, 3.9vw, 19px); gap:10px; }}
+    .ov-hero-titulo::before {{ width:16px; }}
+}}
+</style>
+<div class="ov-hero">
+  <div class="ov-hero-img"></div>
+  <div class="ov-hero-veil"></div>
+  <div class="ov-hero-in">
+    <img class="ov-hero-logo" src="data:image/png;base64,{logo}" alt="QML DataOps">
+    <div class="ov-hero-titulo">{S("ov_hero_title")}</div>
+    <div class="ov-hero-rule"></div>
+  </div>
+  <div class="ov-hint" aria-hidden="true">
+    <span class="ov-hint-line"></span>
+    <svg width="15" height="9" viewBox="0 0 15 9" fill="none">
+      <path d="M1 1 L7.5 7.5 L14 1" stroke="{td['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="ov-bar" aria-hidden="true"></div>
+</div>""", unsafe_allow_html=True)
+
+
+def portada_js():
+    """Parallax, avance y entrada de los bloques. Va al FINAL de la página, cuando la hoja ya
+    existe en el documento; aun así el script no depende de ese orden, porque el observador de
+    mutaciones recoge lo que llegue después."""
+    with st.container(key="ov_js"):
+        components.html(_OV_JS, height=0, width=0)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # PAGINA 1 — OVERVIEW
 # ═══════════════════════════════════════════════════════════════════════
 if page == "overview":
-    header(S("ov_eyebrow"), S("ov_title"), S("ov_subtitle"))
+    # La portada va ANTES del titular y a sangre: al abrir la página es lo único que se ve, y
+    # todo lo demás —empezando por header()— llega subiendo por encima al hacer scroll. Por eso
+    # el resto del cuerpo vive dentro de ov_sheet, que es la hoja opaca que la tapa; el porqué
+    # de cada pieza está en el bloque de portada_resumen().
+    portada_resumen()
 
-    # El párrafo llega de i18n.py como prosa con <b>, sin un solo atributo de estilo: el
-    # tamaño, el color y el realce los pone .lead-card p / .lead-card p b en la hoja de
-    # estilos. Antes cada <b> traía su color incrustado y el texto era irrevisable.
-    st.markdown(f'<div class="info-card lead-card" style="margin-bottom:20px;">'
-                f'<p>{S("ov_lead")}</p></div>', unsafe_allow_html=True)
+    with st.container(key="ov_sheet"):
+        header(S("ov_eyebrow"), S("ov_title"), S("ov_subtitle"))
 
-    st.markdown(f'<div class="section-title">{S("ov_stats_title")}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="section-sub">{S("ov_stats_sub")}</div>', unsafe_allow_html=True)
-    cols = st.columns(4)
-    # Las dos primeras cifras pasan por mil() en vez de ir escritas: estaban puestas a mano
-    # con el punto de millar español ("29.400"), que en inglés se lee como 29 coma 4.
-    stats = [(mil(29400), S("ov_stat_bronze")), (mil(7831), S("ov_stat_silver")),
-             ("89", S("ov_stat_features")), ("86% / 14%", S("ov_stat_balance"))]
-    for col, (num, lab) in zip(cols, stats):
-        with col:
-            st.markdown(f'<div class="info-card stat-card"><div class="stat-num">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
+        # El párrafo llega de i18n.py como prosa con <b>, sin un solo atributo de estilo: el
+        # tamaño, el color y el realce los pone .lead-card p / .lead-card p b en la hoja de
+        # estilos. Antes cada <b> traía su color incrustado y el texto era irrevisable.
+        st.markdown(f'<div class="info-card lead-card" style="margin-bottom:20px;">'
+                    f'<p>{S("ov_lead")}</p></div>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2 = st.columns([1, 1])
+        # Las cuatro cifras vuelven a ser tarjetas normales de la página. En la versión anterior eran
+        # la capa que subía y tapaba el hero y vivían DENTRO del componente; ahora quien tapa la
+        # lámina es la página ENTERA, así que el bloque recupera su sitio y su forma —.info-card
+        # .stat-card, la misma de las demás filas de cifras de la aplicación— y la aparición se la da
+        # gratis el revelado por scroll, que vale para todos los bloques de la hoja.
+        st.markdown(f'<div class="section-title">{S("ov_stats_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("ov_stats_sub")}</div>', unsafe_allow_html=True)
+        cols = st.columns(4)
+        # Las dos primeras cifras pasan por mil() en vez de ir escritas: estaban puestas a mano
+        # con el punto de millar español ("29.400"), que en inglés se lee como 29 coma 4.
+        stats = [(mil(29400), S("ov_stat_bronze")), (mil(7831), S("ov_stat_silver")),
+                 ("89", S("ov_stat_features")), ("86% / 14%", S("ov_stat_balance"))]
+        for col, (num, lab) in zip(cols, stats):
+            with col:
+                st.markdown(f'<div class="info-card stat-card"><div class="stat-num">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
 
-    with col1:
-        st.markdown(f'<div class="section-title">{S("ov_medallion_title")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="section-sub">{S("ov_medallion_sub")}</div>', unsafe_allow_html=True)
-        # Bronze → Silver → Gold es una PROGRESIÓN de refinamiento, no tres identidades:
-        # le corresponde la rampa secuencial, no colores categóricos. Se toman sus tres
-        # pasos altos, así el orden de las capas se lee en el propio color sin leyenda —
-        # y con esta paleta la coincidencia es literal, la capa "Gold" acaba en el oro.
-        #
-        # El color va SOLO en el filete y en la muestra sólida. El nombre y el numeral van
-        # en tinta: los tonos cálidos de la paleta dan entre 1,3:1 y 2,0:1 sobre blanco y
-        # como texto serían ilegibles. El numeral refuerza el orden sin depender del color.
-        #
-        # Las descripciones son deliberadamente de UNA línea: el detalle de cada control
-        # (expectativas, filtros, linaje) vive en la página Gobernanza y no debe contarse
-        # dos veces. Aquí solo se nombra qué hace cada capa; el enlace de abajo lleva al resto.
-        #
-        # El numeral y el color NO viajan con la traducción: son estructura (orden de las capas
-        # y paso de la rampa), no texto. i18n solo aporta el par nombre/descripción y aquí se
-        # empareja por posición con lo que es igual en los dos idiomas.
-        layers = [(f"{i + 1:02d}", nombre, desc, RAMP[i + 2])
-                  for i, (nombre, desc) in enumerate(S("ov_layers"))]
-        for num, name, desc, color in layers:
-            st.markdown(f"""
-            <div class="medallion-item" style="border-left-color:{color};">
-                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;margin-top:3px;">
-                    <div style="font-family:{FONT_MONO};font-size:13px;font-weight:600;
-                                color:{t['text_muted']};letter-spacing:0.05em;">{num}</div>
-                    <div style="width:9px;height:9px;border-radius:2px;background:{color};"></div>
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.markdown(f'<div class="section-title">{S("ov_medallion_title")}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-sub">{S("ov_medallion_sub")}</div>', unsafe_allow_html=True)
+            # Bronze → Silver → Gold es una PROGRESIÓN de refinamiento, no tres identidades:
+            # le corresponde la rampa secuencial, no colores categóricos. Se toman sus tres
+            # pasos altos, así el orden de las capas se lee en el propio color sin leyenda —
+            # y con esta paleta la coincidencia es literal, la capa "Gold" acaba en el oro.
+            #
+            # El color va SOLO en el filete y en la muestra sólida. El nombre y el numeral van
+            # en tinta: los tonos cálidos de la paleta dan entre 1,3:1 y 2,0:1 sobre blanco y
+            # como texto serían ilegibles. El numeral refuerza el orden sin depender del color.
+            #
+            # Las descripciones son deliberadamente de UNA línea: el detalle de cada control
+            # (expectativas, filtros, linaje) vive en la página Gobernanza y no debe contarse
+            # dos veces. Aquí solo se nombra qué hace cada capa; el enlace de abajo lleva al resto.
+            #
+            # El numeral y el color NO viajan con la traducción: son estructura (orden de las capas
+            # y paso de la rampa), no texto. i18n solo aporta el par nombre/descripción y aquí se
+            # empareja por posición con lo que es igual en los dos idiomas.
+            layers = [(f"{i + 1:02d}", nombre, desc, RAMP[i + 2])
+                      for i, (nombre, desc) in enumerate(S("ov_layers"))]
+            for num, name, desc, color in layers:
+                st.markdown(f"""
+                <div class="medallion-item" style="border-left-color:{color};">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;margin-top:3px;">
+                        <div style="font-family:{FONT_MONO};font-size:13px;font-weight:600;
+                                    color:{t['text_muted']};letter-spacing:0.05em;">{num}</div>
+                        <div style="width:9px;height:9px;border-radius:2px;background:{color};"></div>
+                    </div>
+                    <div>
+                        <div class="medallion-name" style="color:{t['text']};">{name}</div>
+                        <div style="font-size:13px;color:{t['text_secondary']};line-height:1.6;text-align:justify;">{desc}</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="medallion-name" style="color:{t['text']};">{name}</div>
-                    <div style="font-size:13px;color:{t['text_secondary']};line-height:1.6;text-align:justify;">{desc}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        # Salto a Gobernanza reutilizando el mismo mecanismo que el toggle de la sidebar:
-        # option_menu vive en un iframe y no lee session_state.page por su cuenta, así que
-        # hay que empujarle el índice con manual_select (menu_force_index se consume al leerse).
-        if st.button(S("ov_goto_gov"), key="ir_gobernanza"):
-            st.session_state.page = "governance"
-            st.session_state.menu_force_index = i18n.PAGE_KEYS.index("governance")
-            st.rerun()
+                """, unsafe_allow_html=True)
+            # Salto a Gobernanza reutilizando el mismo mecanismo que el toggle de la sidebar:
+            # option_menu vive en un iframe y no lee session_state.page por su cuenta, así que
+            # hay que empujarle el índice con manual_select (menu_force_index se consume al leerse).
+            if st.button(S("ov_goto_gov"), key="ir_gobernanza"):
+                st.session_state.page = "governance"
+                st.session_state.menu_force_index = i18n.PAGE_KEYS.index("governance")
+                st.rerun()
 
-    with col2:
-        st.markdown(f'<div class="section-title">{S("ov_target_title")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="section-sub">{S("ov_target_sub")}</div>', unsafe_allow_html=True)
-        pie_labels, pie_values = [S("ov_pie_no"), S("ov_pie_yes")], [86, 14]
-        fig = go.Figure()
-        # Sombra sutil y uniforme (misma silueta del donut, desplazada solo un poco hacia abajo)
-        # para dar una sensación de elevación/profundidad discreta, sin separar los segmentos
-        # ni desplazarlos en diagonal (lo que se veía forzado/poco natural).
-        fig.add_trace(go.Pie(
-            labels=pie_labels, values=pie_values, hole=0.62,
-            marker=dict(colors=[hex_to_rgba(t["text"], 0.14), hex_to_rgba(t["text"], 0.14)]),
-            textinfo="none", hoverinfo="skip", sort=False, showlegend=False,
-            domain=dict(x=[0.0, 1.0], y=[0.0, 0.965]),
-        ))
-        # Clase minoritaria en color de marca, mayoritaria en un neutro teñido: el ojo va
-        # directo al 14 % (que es el dato relevante) sin que dos tonos saturados compitan.
-        fig.add_trace(go.Pie(
-            labels=pie_labels, values=pie_values, hole=0.68,
-            marker=dict(colors=[hex_to_rgba(t["text_secondary"], 0.22), C_PRIMARY],
-                        line=dict(color=t["surface"], width=2)),
-            textinfo="label+percent", textposition="outside",
-            textfont=dict(size=12, family=PLOTLY_FONT, color=t["text"]),
-            insidetextorientation="horizontal", sort=False, automargin=True,
-            hoverinfo="skip",
-            domain=dict(x=[0.0, 1.0], y=[0.035, 1.0]),
-        ))
-        # El agujero del donut deja de estar vacío: aloja la cifra protagonista. Es el
-        # recurso de “número héroe” — la lectura principal no obliga a interpretar el arco.
-        fig.add_annotation(text=S("ov_donut_center"), x=0.5, y=0.545, xref="paper", yref="paper", showarrow=False,
-                           font=dict(family=PLOTLY_MONO, size=34, color=t["text"]))
-        fig.add_annotation(text=S("ov_donut_caption"), x=0.5, y=0.40, xref="paper", yref="paper", showarrow=False,
-                           font=dict(family=PLOTLY_MONO, size=12.5, color=t["text_muted"]))
-        plotly_layout(fig, height=300, showlegend=False, margin=dict(l=30, r=30, t=45, b=45))
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        with col2:
+            st.markdown(f'<div class="section-title">{S("ov_target_title")}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-sub">{S("ov_target_sub")}</div>', unsafe_allow_html=True)
+            pie_labels, pie_values = [S("ov_pie_no"), S("ov_pie_yes")], [86, 14]
+            fig = go.Figure()
+            # Sombra sutil y uniforme (misma silueta del donut, desplazada solo un poco hacia abajo)
+            # para dar una sensación de elevación/profundidad discreta, sin separar los segmentos
+            # ni desplazarlos en diagonal (lo que se veía forzado/poco natural).
+            fig.add_trace(go.Pie(
+                labels=pie_labels, values=pie_values, hole=0.62,
+                marker=dict(colors=[hex_to_rgba(t["text"], 0.14), hex_to_rgba(t["text"], 0.14)]),
+                textinfo="none", hoverinfo="skip", sort=False, showlegend=False,
+                domain=dict(x=[0.0, 1.0], y=[0.0, 0.965]),
+            ))
+            # Clase minoritaria en color de marca, mayoritaria en un neutro teñido: el ojo va
+            # directo al 14 % (que es el dato relevante) sin que dos tonos saturados compitan.
+            fig.add_trace(go.Pie(
+                labels=pie_labels, values=pie_values, hole=0.68,
+                marker=dict(colors=[hex_to_rgba(t["text_secondary"], 0.22), C_PRIMARY],
+                            line=dict(color=t["surface"], width=2)),
+                textinfo="label+percent", textposition="outside",
+                textfont=dict(size=12, family=PLOTLY_FONT, color=t["text"]),
+                insidetextorientation="horizontal", sort=False, automargin=True,
+                hoverinfo="skip",
+                domain=dict(x=[0.0, 1.0], y=[0.035, 1.0]),
+            ))
+            # El agujero del donut deja de estar vacío: aloja la cifra protagonista. Es el
+            # recurso de “número héroe” — la lectura principal no obliga a interpretar el arco.
+            fig.add_annotation(text=S("ov_donut_center"), x=0.5, y=0.545, xref="paper", yref="paper", showarrow=False,
+                               font=dict(family=PLOTLY_MONO, size=34, color=t["text"]))
+            fig.add_annotation(text=S("ov_donut_caption"), x=0.5, y=0.40, xref="paper", yref="paper", showarrow=False,
+                               font=dict(family=PLOTLY_MONO, size=12.5, color=t["text_muted"]))
+            plotly_layout(fig, height=300, showlegend=False, margin=dict(l=30, r=30, t=45, b=45))
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-    st.markdown(f'<div class="section-title" style="margin-top:6px;">{S("ov_compare_title")}</div>', unsafe_allow_html=True)
-    # Mismos tonos que en Resultados: el color sigue al modelo en toda la aplicación. El color
-    # se empareja por posición con el par nombre/descripción traducido, en el orden fijo de
-    # MODEL_ORDER: el nombre del modelo es el mismo en los dos idiomas, solo cambia la glosa.
-    labels3 = [(nombre, desc, SERIES[clave])
-               for (nombre, desc), clave in zip(S("ov_compare"), MODEL_ORDER)]
-    # HTML sin saltos ni indentación: Streamlit trataría las líneas con 4+ espacios como bloque de código.
-    _compare_cards = "".join(
-        f'<div class="info-card" style="border-top:2px solid {color};">'
-        f'<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">'
-        f'<span style="width:8px;height:8px;border-radius:2px;background:{color};flex-shrink:0;"></span>'
-        f'<span style="font-size:13.5px;font-weight:600;color:{t["text"]};letter-spacing:0.01em;">{name}</span></div>'
-        f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.6;text-align:justify;">{desc}</div></div>'
-        for name, desc, color in labels3
-    )
-    st.markdown(f'<div class="compare-grid">{_compare_cards}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title" style="margin-top:6px;">{S("ov_compare_title")}</div>', unsafe_allow_html=True)
+        # Mismos tonos que en Resultados: el color sigue al modelo en toda la aplicación. El color
+        # se empareja por posición con el par nombre/descripción traducido, en el orden fijo de
+        # MODEL_ORDER: el nombre del modelo es el mismo en los dos idiomas, solo cambia la glosa.
+        labels3 = [(nombre, desc, SERIES[clave])
+                   for (nombre, desc), clave in zip(S("ov_compare"), MODEL_ORDER)]
+        # HTML sin saltos ni indentación: Streamlit trataría las líneas con 4+ espacios como bloque de código.
+        _compare_cards = "".join(
+            f'<div class="info-card" style="border-top:2px solid {color};">'
+            f'<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">'
+            f'<span style="width:8px;height:8px;border-radius:2px;background:{color};flex-shrink:0;"></span>'
+            f'<span style="font-size:13.5px;font-weight:600;color:{t["text"]};letter-spacing:0.01em;">{name}</span></div>'
+            f'<div style="font-size:13px;color:{t["text_secondary"]};line-height:1.6;text-align:justify;">{desc}</div></div>'
+            for name, desc, color in labels3
+        )
+        st.markdown(f'<div class="compare-grid">{_compare_cards}</div>', unsafe_allow_html=True)
 
-    # Cierre de la página: sobre qué está construido. Va al final y no al principio porque es
-    # una credencial, no una explicación — se mira después de saber qué es esto, y el enlace a
-    # Gobernanza de más arriba ya lleva a quien quiera el inventario razonado.
-    st.markdown(f'<div class="section-title" style="margin-top:26px;">{S("ov_tech_title")}</div>',
-                unsafe_allow_html=True)
-    st.markdown(f'<div class="section-sub">{S("ov_tech_sub")}</div>', unsafe_allow_html=True)
-    tech_strip()
+        # Cierre de la página: sobre qué está construido. Va al final y no al principio porque es
+        # una credencial, no una explicación — se mira después de saber qué es esto, y el enlace a
+        # Gobernanza de más arriba ya lleva a quien quiera el inventario razonado.
+        st.markdown(f'<div class="section-title" style="margin-top:26px;">{S("ov_tech_title")}</div>',
+                    unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("ov_tech_sub")}</div>', unsafe_allow_html=True)
+        tech_strip()
+
+    portada_js()
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 2 — GOBERNANZA
