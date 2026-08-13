@@ -1920,6 +1920,49 @@ a.nav-link:focus-visible, input:focus-visible, [role="combobox"]:focus-visible {
 /* Etiquetas de los widgets (slider, selectbox): Streamlit las pinta con SU tema base (claro), que no
    sigue nuestro tema custom — en modo oscuro quedaban casi ilegibles. Las atamos a nuestros tokens. */
 [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label {{ color:{t['text_secondary']} !important; }}
+/* ─── Desplegables (selectbox) ────────────────────────────────────────────────
+   Mismo fallo que las etiquetas de aquí arriba, pero en el CONTROL entero y sin arreglar hasta
+   ahora: de todo el `data-baseweb="select"` la hoja solo tocaba el foco de teclado, así que la
+   caja se quedaba con la paleta base de Streamlit —#F0F2F6 de fondo y #31333F de texto— en
+   medio de una interfaz oscura. Se veía en las dos páginas que llevan uno: la Esfera de Bloch
+   («Variable clínica») y el Predictor («Variable a recorrer»).
+   No lo delató el auditor de contraste porque tinta oscura sobre caja clara SÍ pasa WCAG: es
+   un fallo de tema, no de legibilidad, y por eso conviene mirarlo también con los ojos.
+   Se viste con el mismo lenguaje que los botones: superficie de tarjeta, borde de la paleta y
+   radio de 10px. El :hover tira del acento, igual que el resto de controles.
+   Los colores se fuerzan también en los DESCENDIENTES y no solo en la caja: BaseWeb reparte
+   `color` por varios divs anidados, y sin esto el valor elegido se queda en el gris del tema
+   base aunque la caja ya sea oscura. */
+div[data-baseweb="select"] > div {{
+    background-color:{t['surface']} !important;
+    border:1px solid {t['border']} !important;
+    border-radius:10px !important;
+}}
+div[data-baseweb="select"] > div:hover {{ border-color:{C_PRIMARY} !important; }}
+div[data-baseweb="select"], div[data-baseweb="select"] div,
+div[data-baseweb="select"] input, div[data-baseweb="select"] span {{
+    color:{t['text']} !important;
+}}
+div[data-baseweb="select"] svg {{ fill:{t['text_secondary']} !important; }}
+/* El PANEL desplegado vive fuera del control, colgado del <body>, así que hay que vestirlo
+   aparte. El :has(ul) no es adorno: `popover` es el mismo envoltorio que usan los tooltips de
+   la app, y sin esa condición se llevarían por delante su forma y su color. */
+div[data-baseweb="popover"]:has(ul),
+div[data-baseweb="popover"]:has(ul) > div,
+div[data-baseweb="popover"]:has(ul) ul {{
+    background-color:{t['surface']} !important;
+    border-radius:10px !important;
+}}
+div[data-baseweb="popover"]:has(ul) ul {{
+    border:1px solid {t['border']} !important; box-shadow:{SHADOW} !important;
+}}
+div[data-baseweb="popover"]:has(ul) li, div[data-baseweb="popover"]:has(ul) ul div {{
+    color:{t['text']} !important;
+}}
+div[data-baseweb="popover"]:has(ul) li:hover,
+div[data-baseweb="popover"]:has(ul) [role="option"]:hover {{
+    background-color:{t['surface_alt']} !important;
+}}
 /* ─── Sliders: estilo «regla» (ticks + carril hundido + pulgar con muesca) ───
    Sin ámbito: aplica a TODOS los sliders de la app (Predictor en Vivo y Esfera de Bloch), así son
    consistentes por construcción y no hay que duplicar selectores por página.
