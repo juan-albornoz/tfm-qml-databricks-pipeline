@@ -1856,6 +1856,34 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color:{C_PRIMARY} !important
     transition: left 0.28s cubic-bezier(0.4,0,0.2,1), width 0.28s cubic-bezier(0.4,0,0.2,1) !important;
 }}
 [data-baseweb="tab-border"] {{ background-color:{t['border']} !important; }}
+/* ── Flechas de desplazamiento de la tira de pestañas ──
+   Solo aparecen cuando los rótulos no caben, y por eso este fallo se escondía tan bien: en
+   escritorio y en español las tres pestañas de Gobernanza entran de sobra. En el teléfono
+   —o en un idioma largo, o con la ventana estrecha— Streamlit añade estos botones con un
+   degradado de desvanecido BLANCO INCRUSTADO, `linear-gradient(to right, transparent, #FFF)`,
+   heredado de su tema base. Sobre el carbón del tema oscuro eso es una banda blanca de 20px
+   pegada al canto de la tira, con la flecha en tinta oscura encima.
+   El degradado se rehace contra el fondo REAL de la página (t['bg'], que es sobre lo que se
+   apoya la tira) y la flecha toma el color de texto secundario, el mismo que los rótulos
+   inactivos. Cada botón desvanece hacia SU lado, de ahí las dos direcciones.
+   No lo cazó el detector de widgets sin vestir porque busca `background-color` y aquí el
+   blanco viaja en un `background-image`.
+   El extremo transparente va con el sufijo `00` sobre el propio color y NO con `transparent`:
+   la palabra clave equivale a negro con alfa 0, y al interpolar contra el carbón el degradado
+   se ensucia por el medio. Tampoco vale hex_to_rgba() aquí — se define más abajo que esta hoja,
+   que se evalúa al importar el módulo. Mismo recurso que el filete ámbar de la portada. */
+button[data-testid="stTabsScrollRight"] {{
+    background-image:linear-gradient(to right, {t['bg']}00, {t['bg']} 40%) !important;
+}}
+button[data-testid="stTabsScrollLeft"] {{
+    background-image:linear-gradient(to left, {t['bg']}00, {t['bg']} 40%) !important;
+}}
+button[data-testid="stTabsScrollRight"], button[data-testid="stTabsScrollLeft"] {{
+    color:{t['text_secondary']} !important;
+}}
+button[data-testid="stTabsScrollRight"] svg, button[data-testid="stTabsScrollLeft"] svg {{
+    fill:{t['text_secondary']} !important;
+}}
 /* ═══════════════ EXPANDER (Gobernanza · Registro de decisiones) ═══════════════
    Único widget nativo que quedaba sin vestir, y en tema oscuro se rompía: config.toml no fija
    `base`, así que Streamlit pinta el expander con su tema CLARO (barra casi blanca), mientras
