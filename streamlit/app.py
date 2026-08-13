@@ -729,8 +729,13 @@ def _flecha_mask(*trazos: str) -> str:
 #   expandir  → el espejo exacto: tope a la izquierda y punta a la derecha
 # La dirección se elige aquí, en Python, y no con una clase extra en el HTML: `narrow` ya está
 # en ámbito —lo usa también SIDEBAR_WIDTH— y el CSS se regenera entero en cada rerun.
-FLECHA_TOGGLE = (_flecha_mask("M3 5v14", "M21 12H7", "m15 18 6-6-6-6") if narrow
-                 else _flecha_mask("m9 6-6 6 6 6", "M3 12h14", "M21 19V5"))
+# Los dos sentidos, cada uno con su nombre, porque no todos los mandos eligen igual: el toggle
+# propio de escritorio alterna según `narrow`, pero los dos botones NATIVOS —el de cerrar el panel,
+# que en el teléfono es la única forma de cerrarlo, y el de volver a abrirlo— tienen cada uno un
+# sentido FIJO, que no depende del ancho de la barra.
+FLECHA_EXPANDIR = _flecha_mask("M3 5v14", "M21 12H7", "m15 18 6-6-6-6")
+FLECHA_COLAPSAR = _flecha_mask("m9 6-6 6 6 6", "M3 12h14", "M21 19V5")
+FLECHA_TOGGLE = FLECHA_EXPANDIR if narrow else FLECHA_COLAPSAR
 # El disco del toggle va en el tema CONTRARIO al de la app: claro sobre la barra oscura y oscuro
 # sobre la barra clara. Es el único control que se sale a propósito de la escala de superficies de
 # T(): con sidebar_bg de fondo se mimetizaba con la barra sobre cuyo borde se apoya, y es el gesto
@@ -819,24 +824,51 @@ section[data-testid="stSidebar"] div[style*="cursor: col-resize"] {{ pointer-eve
 [data-testid="stSidebarHeader"], [data-testid="stLogoSpacer"] {{
     height:0 !important; min-height:0 !important; padding:0 !important; margin:0 !important;
 }}
-/* El botón nativo para volver a expandir (cuando la sidebar está totalmente oculta) se
-   mantiene visible y estilizado, por si el usuario la colapsa del todo por otra vía.
-   Va en el mismo disco invertido que nuestro toggle (TOGGLE_DISCO): es la misma acción, así que
-   no puede tener dos aspectos según por dónde se llegue a ella. */
-[data-testid="collapsedControl"] button {{
+/* LOS DOS BOTONES NATIVOS de la barra lateral: el de cerrarla (que en el teléfono es la única
+   forma de cerrar el panel, porque allí nuestro toggle se esconde) y el de volver a abrirla
+   cuando queda oculta del todo. Llevan el MISMO disco invertido y la MISMA flecha que el toggle
+   propio de escritorio: es la misma acción, así que no puede tener dos aspectos según por dónde
+   se llegue a ella.
+   Esto apuntaba antes a [data-testid="collapsedControl"], que es de una versión anterior de
+   Streamlit y en la 1.55 NO EXISTE —comprobado en el bundle—, así que era hoja muerta: en
+   escritorio no se notaba porque manda nuestro toggle, pero en el teléfono, que es donde se usan
+   los nativos, salía la flecha de Streamlit con su forma y su color.
+   OJO a la asimetría de los dos testids, que es real y no un descuido: stExpandSidebarButton ES
+   el <button>, mientras que stSidebarCollapseButton es el <div> que lo contiene. */
+[data-testid="stSidebarCollapseButton"] button,
+button[data-testid="stExpandSidebarButton"] {{
     background-color:{TOGGLE_DISCO} !important;
     color:{TOGGLE_FLECHA} !important;
     border:1px solid {TOGGLE_DISCO} !important;
     border-radius:50% !important;
     box-shadow: 0 2px 6px rgba(20,30,40,0.10), 0 1px 3px rgba(20,30,40,0.08) !important;
-    width:34px !important; height:34px !important;
+    width:34px !important; height:34px !important; min-height:34px !important; padding:0 !important;
+    display:flex !important; align-items:center !important; justify-content:center !important;
     transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }}
-/* El icono nativo es un <svg> con fill propio, no hereda el color del botón como sí hace nuestra
-   máscara por currentColor. Sin esto, la flecha se queda en su tono de origen sobre el disco
-   invertido y desaparece justo en el tema en que el disco pasa a ser de su mismo tono. */
-[data-testid="collapsedControl"] button svg {{ fill:{TOGGLE_FLECHA} !important; }}
-[data-testid="collapsedControl"] button:hover {{
+/* El icono nativo NO es un <svg>: es una ligadura de Material dentro de un <span>, con su propio
+   dibujo (una flecha doble) y su propio color. Se retira entero y la flecha la pone el ::before
+   con la misma máscara del toggle propio; al pintarse con currentColor entra sola en la
+   transición de color del botón y en el C_PRIMARY del :hover. */
+[data-testid="stSidebarCollapseButton"] button span[data-testid="stIconMaterial"],
+button[data-testid="stExpandSidebarButton"] span[data-testid="stIconMaterial"] {{
+    display:none !important;
+}}
+[data-testid="stSidebarCollapseButton"] button::before,
+button[data-testid="stExpandSidebarButton"]::before {{
+    content:""; display:block; width:17px; height:17px; background-color:currentColor;
+}}
+/* Cada uno con su sentido fijo: cerrar apunta a la izquierda, abrir a la derecha. */
+[data-testid="stSidebarCollapseButton"] button::before {{
+    -webkit-mask:{FLECHA_COLAPSAR} center / contain no-repeat;
+    mask:{FLECHA_COLAPSAR} center / contain no-repeat;
+}}
+button[data-testid="stExpandSidebarButton"]::before {{
+    -webkit-mask:{FLECHA_EXPANDIR} center / contain no-repeat;
+    mask:{FLECHA_EXPANDIR} center / contain no-repeat;
+}}
+[data-testid="stSidebarCollapseButton"] button:hover,
+button[data-testid="stExpandSidebarButton"]:hover {{
     background-color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
 }}
 /* Botones de la sidebar centrados en su columna */
