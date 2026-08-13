@@ -4073,6 +4073,18 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     .ov-anim {{ opacity:1 !important; transform:none !important; transition:none !important; }}
     .ov-hint svg {{ animation:none; }}
 }}
+/* PANTALLA BAJA, que en un teléfono es simplemente girarlo: la lámina mide 100dvh, y con la
+   ventana en 390 px de alto el logotipo, el título de cuatro líneas y la pista no caben. El
+   bloque va centrado con flex dentro de un contenedor con overflow:hidden, así que lo que no
+   cabe no empuja: se recorta por arriba y por abajo a la vez. Se mide por ALTO y no por ancho
+   porque es el alto lo que falla —una tableta en vertical tiene el mismo ancho y no sufre—, y
+   la pista se retira porque en esa franja cae justo encima del texto. */
+@media (max-height: 520px) {{
+    .ov-hero-logo {{ height:38px; margin-bottom:12px; }}
+    .ov-hero-titulo {{ font-size:clamp(14px, 2.7vh, 18px); }}
+    .ov-hero-rule {{ margin-top:14px; }}
+    .ov-hint {{ display:none; }}
+}}
 @media (max-width: 1024px) {{
     .st-key-ov_sheet {{ padding:3rem 1.25rem 10rem; }}
     .ov-hero-in {{ max-width:min(70%, 560px); margin-left:clamp(20px, 4vw, 40px); }}
@@ -4086,6 +4098,19 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     .ov-hero-logo {{ height:clamp(46px, 7vh, 64px); margin-bottom:18px; }}
     .ov-hero-titulo {{ font-size:clamp(15px, 3.9vw, 19px); gap:10px; }}
     .ov-hero-titulo::before {{ width:16px; }}
+    /* Y por eso el velo cambia de forma, no solo de medida: el de escritorio es HORIZONTAL
+       —oscurece la mitad izquierda y se va a transparente al 80%, donde no hay texto— y aquí el
+       texto llega justo hasta ese 84%, es decir, hasta la zona sin velo. Sobre una fotografía
+       cualquiera eso es una tirada de dados con la legibilidad. En vertical el velo pasa a cubrir
+       todo el ancho, con el degradado en el otro eje: la imagen sigue leyéndose y el título tiene
+       fondo garantizado esté donde esté el recorte. */
+    .ov-hero-veil {{
+        background:
+          linear-gradient(90deg, {hex_to_rgba(td['sidebar_bg'], 0.90)} 0%,
+                          {hex_to_rgba(td['sidebar_bg'], 0.62)} 100%),
+          linear-gradient(180deg, {hex_to_rgba(td['sidebar_bg'], 0.38)} 0%,
+                          {hex_to_rgba(td['sidebar_bg'], 0)} 42%, {hex_to_rgba(td['sidebar_bg'], 0.70)} 100%);
+    }}
 }}
 </style>
 <div class="ov-hero">
