@@ -1,6 +1,23 @@
-streamlit>=1.55
-streamlit-option-menu>=0.3.13
-numpy>=1.24.0
-Pillow>=11.0.0
-plotly>=5.18.0
-onnxruntime>=1.17.0
+# Versiones EXACTAS, no minimos. El motivo no es purismo: la hoja de estilos de app.py
+# esta acoplada al DOM de Streamlit —21 reglas cuelgan de atributos data-baseweb, y otras
+# tantas de testids concretos— y ese DOM cambia entre versiones sin previo aviso.
+#
+# Con "streamlit>=1.55" la nube instalaba la ultima version publicada, no la 1.55.0 contra
+# la que esta escrito y probado el CSS. Esa version retiro BaseWeb por completo (0 elementos
+# con data-baseweb en el DOM desplegado, comprobado por CDP el 2026-08-13), y con el se fueron
+# la pastilla del buscador —que salia blanca y rectangular en tema oscuro—, el diseno de
+# regla de los deslizadores y las pestanas. Las cifras de los sliders llegaban ademas a
+# solaparse con sus etiquetas, porque el top:-40px que las coloca se calculo sobre el DOM viejo.
+#
+# Fijando las versiones, local y nube son el MISMO entorno: lo que se verifica en el portatil
+# es lo que se ve desplegado. Para un TFM vale ademas por reproducibilidad — quien clone el
+# repo dentro de un ano levanta la app que se defendio, no la que Streamlit tenga entonces.
+#
+# Probado sobre Python 3.13.12. Al subir cualquiera de estas, revisar la app entera en los dos
+# temas antes de dar el cambio por bueno; el CSS no avisa cuando un selector deja de casar.
+streamlit==1.55.0
+streamlit-option-menu==0.4.0
+numpy==2.4.4
+Pillow==12.1.1
+plotly==6.5.0
+onnxruntime==1.27.0
