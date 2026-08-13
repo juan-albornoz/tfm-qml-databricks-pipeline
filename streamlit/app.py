@@ -248,12 +248,34 @@ st.set_page_config(page_title="QML DataOps", page_icon="◆", layout="wide", ini
 # que poner base="dark" ahí teñiría de oscuro los widgets nativos también en tema claro y dejaría
 # la opción clara a medias. El precio de hacerlo en session_state es un parpadeo claro en la
 # primera pintura, antes de que entre el <style> de abajo.
+#
+# El tema TAMBIÉN sobrevive a la recarga, por la vía de ?theme= y por el mismo motivo que el
+# idioma: F5 abre una sesión nueva y devolvía a oscuro a quien hubiera elegido claro. Lo que
+# NO se hace es preguntarle al navegador por prefers-color-scheme — igual que con el idioma,
+# la única forma de cambiar el tema es su interruptor, y adivinarlo en la primera visita
+# contradiría el "abre en oscuro" que se acaba de razonar. Se valida contra los dos valores
+# posibles: un ?theme=xx desconocido dejaría a T() eligiendo la rama clara sin querer.
 if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
+    _theme_url = st.query_params.get("theme")
+    st.session_state.theme = _theme_url if _theme_url in ("dark", "light") else "dark"
 if "sidebar_narrow" not in st.session_state:
     st.session_state.sidebar_narrow = False
+# El idioma SOBREVIVE A LA RECARGA, y por eso no puede vivir solo en session_state: F5 abre
+# una sesión nueva de Streamlit y el estado nace vacío, así que la app volvía al español
+# aunque la bandera elegida fuera la italiana. La memoria es la query string —?lang=it—, que
+# el navegador conserva al recargar y que viaja además dentro del enlace que se comparte.
+#
+# Se VALIDA contra i18n.LANGS antes de aceptarla. El parámetro lo escribe el usuario en la
+# barra de direcciones con la misma facilidad que la app, y un ?lang=xx sin catálogo tumbaría
+# S() con un KeyError en la primera clave que pidiera; lo que no se reconoce cae al idioma
+# por defecto en vez de propagarse.
+#
+# NO se negocia el idioma con el navegador (ni Accept-Language ni navigator.language): la
+# única forma de cambiarlo es la bandera, y adivinarlo en la primera visita rompería justo
+# eso —abriría en italiano a quien tenga Firefox en italiano sin haber elegido nada—.
 if "lang" not in st.session_state:
-    st.session_state.lang = i18n.DEFAULT_LANG
+    _lang_url = st.query_params.get("lang")
+    st.session_state.lang = _lang_url if _lang_url in i18n.LANGS else i18n.DEFAULT_LANG
 # El desplegable de banderas se abre y se cierra con un CLIC, y su estado vive aquí y no en
 # la hoja de estilos: ver el bloque de _ABIERTO más abajo. La clave es NUESTRA y no el id de
 # un widget, así que sobrevive al st.rerun() del selector — el mismo motivo que _POS_TAB.
@@ -263,6 +285,31 @@ if "lang_open" not in st.session_state:
 _is_dark = st.session_state.theme == "dark"
 LANG = st.session_state.lang
 MENU_ABIERTO = st.session_state.lang_open
+
+# La URL se pone al día con el idioma activo, y se hace AQUÍ y no en el callback de la
+# bandera: al elegir idioma el botón termina en st.rerun(), y lo que se escriba justo antes
+# de reiniciar el script depende de que el mensaje llegue al navegador antes del corte. En
+# cambio esta línea corre al principio de la pasada siguiente, cuando el idioma nuevo ya está
+# en session_state y no hay nada que pueda interrumpir. Un único sitio, además, en vez de uno
+# por cada camino que cambie el idioma.
+#
+# La condición evita estampar ?lang=es en la primera visita de quien no ha tocado nada: hasta
+# que se elige bandera la URL se queda limpia. Una vez que el parámetro existe se mantiene
+# siempre —volver al español lo deja en ?lang=es y no lo borra—, porque una URL sin parámetro
+# significa "lo que diga el idioma por defecto" y eso desharía la elección en la recarga.
+if LANG != i18n.DEFAULT_LANG or "lang" in st.query_params:
+    if st.query_params.get("lang") != LANG:
+        st.query_params["lang"] = LANG
+
+# Lo mismo para el tema, y aquí el razonamiento del "aquí y no en el callback" es literal: el
+# interruptor del pie de la sidebar termina en st.rerun(), y esta línea corre al principio de
+# la pasada siguiente, con el tema nuevo ya en session_state. La condición deja la URL limpia
+# mientras nadie toque el interruptor; en cuanto se toca, el parámetro se queda —volver a
+# oscuro lo deja en ?theme=dark y no lo borra— porque una URL sin parámetro significa "el tema
+# de partida" y eso desharía la elección en la recarga.
+if st.session_state.theme != "dark" or "theme" in st.query_params:
+    if st.query_params.get("theme") != st.session_state.theme:
+        st.query_params["theme"] = st.session_state.theme
 
 def S(key):
     """Texto de la clave en el idioma activo, con caída al español si falta.
@@ -281,6 +328,15 @@ def S(key):
 # del que viene todo esto.
 _POS_TAB = "{}__pos_tab"
 
+# Páginas que estrenan un grupo de tabs. La lista NO decide qué se dibuja —eso sigue en el
+# cuerpo de cada página—: solo la usa el saneo de ?tab= tras el enrutado, para que el
+# parámetro no se quede colgando en la URL de una página que no tiene pestañas. Si alguna
+# otra página estrena tabs, hay que añadirla aquí.
+_PAGINAS_CON_TABS = ("governance", "shap")
+
+# Clave (nuestra, no de widget) que marca que ?tab= ya se ha consumido en esta sesión.
+_TAB_URL_LEIDA = "__tab_url_leida"
+
 def _recuerda_tab(catalogo, key):
     """Apunta la posición del tab que se acaba de abrir. Callback de tabs_i18n().
 
@@ -295,7 +351,7 @@ def _recuerda_tab(catalogo, key):
         st.session_state[_POS_TAB.format(key)] = rotulos.index(abierto)
 
 def tabs_i18n(catalogo, key):
-    """st.tabs que NO se rebobina al cambiar de idioma.
+    """st.tabs que NO se rebobina al cambiar de idioma NI al recargar la página.
 
     El rótulo de un tab es su nombre para Streamlit, y al cambiar de idioma cambian los
     tres a la vez, así que el widget se da por nuevo y vuelve al primero: quien estaba
@@ -321,9 +377,35 @@ def tabs_i18n(catalogo, key):
     sale barato porque el contenido de esta página ya viene de funciones cacheadas.
     """
     rotulos = S(catalogo)
-    pos = st.session_state.get(_POS_TAB.format(key), 0)
+    _clave_pos = _POS_TAB.format(key)
+    # RECARGA (F5): session_state nace vacío, así que la posición se rescata de ?tab=, que es
+    # lo único que sobrevive a una sesión nueva — mismo mecanismo que ?lang y ?page.
+    #
+    # Se consume UNA SOLA VEZ por sesión, en el primer grupo de tabs que se dibuje. El
+    # parámetro no dice a qué grupo pertenece —es un número suelto—, y sin ese cerrojo la
+    # posición se contagiaría de una página a otra: quien estuviera en el tab 1 de Gobernanza
+    # y saltara a Análisis SHAP abriría ahí el segundo tab en vez del primero, porque ese
+    # grupo también estrena su clave en ese momento. A partir de la primera lectura manda
+    # session_state, que sí guarda una posición por grupo.
+    if not st.session_state.get(_TAB_URL_LEIDA):
+        st.session_state[_TAB_URL_LEIDA] = True
+        _tab_url = st.query_params.get("tab")
+        # isdigit() y no int() a secas: el parámetro lo escribe cualquiera en la barra de
+        # direcciones, y "?tab=-1" o "?tab=hola" no pueden tumbar la página (el primero
+        # además pasaría el rango por la puerta de atrás indexando desde el final).
+        if (_clave_pos not in st.session_state and _tab_url is not None
+                and _tab_url.isdigit() and int(_tab_url) < len(rotulos)):
+            st.session_state[_clave_pos] = int(_tab_url)
+    pos = st.session_state.get(_clave_pos, 0)
     if not isinstance(pos, int) or not 0 <= pos < len(rotulos):
         pos = 0
+    # La URL se pone al día con el tab abierto. Va aquí, en la pasada SIGUIENTE al clic (el
+    # on_change ya ha guardado la posición y ha relanzado el script), por el mismo motivo que
+    # ?lang: escribir justo antes de un rerun depende de que el mensaje llegue a tiempo.
+    # Y como con ?lang y ?page, hasta que no se toca una pestaña la URL se queda limpia.
+    if pos != 0 or "tab" in st.query_params:
+        if st.query_params.get("tab") != str(pos):
+            st.query_params["tab"] = str(pos)
     # Red de seguridad: si el estado del widget sobreviviera con un rótulo del OTRO
     # idioma, st.tabs recibiría un valor que no está entre sus opciones. Se descarta y
     # manda `default`, que es la vía documentada para fijar el tab inicial.
@@ -2547,9 +2629,19 @@ with st.sidebar:
     # existe en el momento de pintarlo. Si la identidad fuera el texto visible, cambiar de
     # idioma dejaría a session_state.page apuntando a una página que ya no existe con ese
     # nombre y la app volvería al Resumen en cada cambio de bandera.
+    #
+    # Y como la identidad es una CLAVE ESTABLE, la página puede viajar en la query string
+    # igual que el idioma: ?page=shap sobrevive a F5 —que abre sesión nueva y estado vacío,
+    # ver el bloque de ?lang más arriba— y funciona además como enlace directo a una página
+    # concreta, en cualquier idioma. Se valida contra i18n.PAGE_KEYS por el mismo motivo que
+    # allí: el parámetro lo puede escribir cualquiera en la barra de direcciones, y un
+    # ?page=xx desconocido reventaría el .index() del menú; lo que no se reconoce cae a la
+    # primera página en vez de propagarse.
     _MENU_OPTIONS = S("nav")
     if "page" not in st.session_state:
-        st.session_state.page = i18n.PAGE_KEYS[0]
+        _page_url = st.query_params.get("page")
+        st.session_state.page = (_page_url if _page_url in i18n.PAGE_KEYS
+                                 else i18n.PAGE_KEYS[0])
 
     # Sin tooltip, pero con nombre accesible. El globito con "Expandir"/"Colapsar" repetía en
     # palabras lo que la flecha ya dice —apunta siempre al lado al que se moverá la barra—,
@@ -2721,6 +2813,25 @@ with st.sidebar:
     # comparten orden— y a partir de este punto en toda la app "page" es la clave, nunca el texto.
     page = i18n.PAGE_KEYS[_MENU_OPTIONS.index(_seleccion)]
     st.session_state.page = page
+    # La URL se pone al día con la página activa, y se hace AQUÍ —justo después de resolver la
+    # selección— y no en cada sitio que navega (el menú, el buscador, los enlaces internos):
+    # todos esos caminos terminan pasando por esta línea, así que un único punto de escritura
+    # basta. Escribir una query param NO relanza el script, solo actualiza la barra de
+    # direcciones, de modo que esto no se pelea con el rerun del propio clic.
+    #
+    # La condición replica la de ?lang: hasta que no se navega, la URL se queda limpia; una vez
+    # que el parámetro existe se mantiene siempre —volver a Resumen lo deja en ?page=overview y
+    # no lo borra—, porque una URL sin parámetro significa "la primera página" y eso desharía la
+    # navegación en la recarga.
+    if page != i18n.PAGE_KEYS[0] or "page" in st.query_params:
+        if st.query_params.get("page") != page:
+            st.query_params["page"] = page
+    # ?tab= pertenece a la página que se está viendo (ver tabs_i18n), así que en una sin
+    # pestañas no significa nada y se borra en vez de quedarse colgando en la barra de
+    # direcciones. Va ANTES del cuerpo de las páginas, o sea antes de que tabs_i18n lo lea:
+    # justamente en las que sí tienen tabs no se toca.
+    if page not in _PAGINAS_CON_TABS and "tab" in st.query_params:
+        del st.query_params["tab"]
     # Índice de la página, que viaja DENTRO del nombre de los keyframes de la entrada
     # escalonada (ver el bloque más abajo): al cambiar de página cambia el nombre y las
     # animaciones reinician; dentro de la misma página el nombre no cambia y no se repiten.
@@ -4246,7 +4357,10 @@ elif page == "results":
 elif page == "shap":
     header(S("sh_eyebrow"), S("sh_title"), S("sh_subtitle"))
 
-    tab1, tab2 = st.tabs(S("sh_tabs"))
+    # Vía tabs_i18n por lo mismo que los de Gobernanza: con st.tabs pelado, los dos rótulos
+    # cambian con la bandera y el widget se daba por nuevo, así que cambiar de idioma —o
+    # recargar— devolvía siempre al primer tab.
+    tab1, tab2 = tabs_i18n("sh_tabs", key="sh_tabs")
 
     def shap_chart(data, color, sample_note):
         # El eje lleva el CÓDIGO NHANES (que no se traduce) y el hover, su glosa: por eso la
