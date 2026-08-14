@@ -4055,6 +4055,19 @@ def portada_resumen():
                    else f"0 1px 12px {hex_to_rgba(lamina, 0.88)}")
     sombra_logo = ("0 6px 18px rgba(0,0,0,0.55)" if _is_dark
                    else "0 4px 12px rgba(11,26,38,0.14)")
+    # EL HALO DE LA PISTA, prestado de la cápsula-interruptor del pie de la barra lateral: mismo
+    # color (C_MID2, el paso medio-alto de la rampa cálida, que ya está resuelto para los dos
+    # temas) y mismas tres capas —cerco, brillo y difusión—. Aquellas son box-shadow porque la
+    # cápsula es una caja; una flecha dibujada a trazo no tiene caja que sombrear, así que aquí
+    # van como drop-shadow, que sigue la silueta del trazo en vez de su rectángulo. La conversión
+    # pierde el `spread` (drop-shadow no lo tiene) y se compensa en el radio de desenfoque.
+    # Los DOS extremos del latido son los dos estados de la cápsula: el bajo es su reposo y el
+    # alto, su :hover. Así el gesto no es un efecto nuevo, es el mismo que ya hay en la app
+    # puesto a respirar — y si algún día se retoca el halo de allí, este es el sitio a igualar.
+    halo_bajo = (f"drop-shadow(0 0 1px {C_MID2}55) drop-shadow(0 0 5px {C_MID2}99)"
+                 f" drop-shadow(0 0 11px {C_MID2}55)")
+    halo_alto = (f"drop-shadow(0 0 2px {C_MID2}88) drop-shadow(0 0 7px {C_MID2}CC)"
+                 f" drop-shadow(0 0 15px {C_MID2}77)")
     # ── EL NEGATIVO: la misma imagen, revelada al revés ─────────────────────────────────────
     # En claro no se carga otro archivo, se invierte el que ya hay. Se puede porque hero-quantum
     # no es una fotografía sino un DIBUJO —retícula clara sobre un degradado plano de un solo
@@ -4220,9 +4233,24 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     display:flex; flex-direction:column; align-items:center; gap:9px;
     transition:opacity 0.25s ease; pointer-events:none;
 }}
-.ov-hint-line {{ width:1px; height:38px; background:linear-gradient(180deg, transparent, {t['text_muted']}); }}
-.ov-hint svg {{ display:block; animation:ovBaja 1.9s cubic-bezier(0.4,0,0.2,1) infinite; }}
-@keyframes ovBaja {{ 0%,100% {{ transform:translateY(0); opacity:0.55; }} 50% {{ transform:translateY(5px); opacity:1; }} }}
+.ov-hint-line {{ width:1.5px; height:38px; background:linear-gradient(180deg, transparent, {t['text_secondary']}); }}
+/* El halo va en el <svg> y NO en .ov-hint, que es quien recibe el desvanecido del scroll: si los
+   dos filtros vivieran en el mismo elemento, apagar la pista al bajar apagaría también el latido
+   a mitad de ciclo. Y el filtro se declara AQUÍ además de en los fotogramas —repetido a
+   propósito— porque es el estado de reposo: con `prefers-reduced-motion` la animación se anula
+   y sin esta línea la flecha se quedaría sin halo, que es lo que se ha venido a añadir. Quien
+   pide menos movimiento pierde el latido, no la señal. */
+.ov-hint svg {{
+    display:block; filter:{halo_bajo};
+    animation:ovBaja 1.9s cubic-bezier(0.4,0,0.2,1) infinite;
+}}
+/* El latido: la flecha cae cinco píxeles y a la vez el halo sube de su reposo a su punto alto.
+   El suelo de opacidad es 0.72 y no el 0.55 de antes — con el trazo ya más grueso, bajar tanto
+   la hacía titilar en vez de respirar. */
+@keyframes ovBaja {{
+    0%,100% {{ transform:translateY(0); opacity:0.72; filter:{halo_bajo}; }}
+    50%     {{ transform:translateY(5px); opacity:1; filter:{halo_alto}; }}
+}}
 /* Avance de la portada, pegado al canto superior de la pantalla: la única señal de cuánto queda
    de lámina, ya que la barra de scroll de la página no dice nada de esto. Desaparece sola en
    cuanto la hoja la cubre, porque va dentro de la lámina. */
@@ -4355,8 +4383,8 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
   </div>
   <div class="ov-hint" aria-hidden="true">
     <span class="ov-hint-line"></span>
-    <svg width="15" height="9" viewBox="0 0 15 9" fill="none">
-      <path d="M1 1 L7.5 7.5 L14 1" stroke="{t['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <svg width="22" height="13" viewBox="0 0 22 13" fill="none">
+      <path d="M2 2 L11 11 L20 2" stroke="{t['text']}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   </div>
   <div class="ov-bar" aria-hidden="true"></div>
