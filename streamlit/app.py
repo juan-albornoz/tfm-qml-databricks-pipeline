@@ -615,9 +615,10 @@ PLOTLY_MONO = "IBM Plex Mono"
 def T(tema=None):
     """Superficies y tintas, derivadas de la paleta base.
 
-    Con `tema` se puede pedir una paleta que NO es la activa. Lo usa el hero de Resumen,
-    que va siempre en oscuro —su fondo es una lámina oscura— aunque la app esté en claro;
-    así ese bloque toma sus colores de aquí en vez de llevar una copia de los hexadecimales.
+    Con `tema` se puede pedir una paleta que NO es la activa. Hoy no lo usa nadie: lo usaba la
+    portada de Resumen, que iba siempre en oscuro, y dejó de hacerlo al revelarse en negativo
+    con la app en claro (ver .ov-hero-img). El parámetro se conserva porque es la forma de pedir
+    una paleta cruzada sin copiar hexadecimales a mano, que es justo lo que hay que evitar.
 
     Las dos superficies clave son literalmente los dos neutros del autor, cada una en
     el tema donde le toca ser el fondo de tarjeta: #1C1F26 en oscuro y —por el otro
@@ -3900,9 +3901,14 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
 # por defecto (5rem a los lados en modo wide, 10rem abajo), así que el texto conserva al píxel la
 # medida que tiene en las otras seis páginas.
 #
-# Y va SIEMPRE EN OSCURO, también con la app en claro: la imagen es una lámina fotográfica de
-# fondo carbón y aclararla la desarmaría. Se lee como una portada dentro de la aplicación, no como
-# una tarjeta más — de ahí que tome la paleta con T("dark") y no la del tema activo.
+# Y EN CLARO NO SE OSCURECE: SE REVELA EN NEGATIVO. Iba antes siempre en oscuro —con la paleta
+# pedida a T("dark")— porque aclarar una fotografía la desarma. Pero esta no es una fotografía:
+# es una RETÍCULA CLARA SOBRE UN DEGRADADO PLANO, y eso es justo lo que se puede invertir sin
+# perder nada. El tema claro no necesita, por tanto, un segundo archivo: sale del mismo. La lámina
+# pasa entonces a tomar la paleta ACTIVA en los dos temas —en oscuro es el telón de carbón de
+# siempre, sin tocar una coma; en claro es papel con la retícula en tinta— y con ella se va el
+# problema que arrastraba: la tira de cabecera ya no cruza dos capas opuestas (ver su nota, o
+# mejor, su ausencia). El cómo está en .ov-hero-img.
 #
 # NO se usa GSAP ni ninguna librería: lo que hace el script son cuatro interpolaciones lineales
 # sobre un único evento de scroll, ya amortiguado con requestAnimationFrame, más un
@@ -4034,19 +4040,49 @@ def portada_resumen():
     en el bloque pegajoso de 100vh. Separarlos en dos st.markdown crearía dos contenedores y el
     :has() apuntaría al que no es.
     """
-    td = T("dark")                                  # paleta oscura, sea cual sea el tema activo
-    # La flecha del selector de idioma es el ÚNICO elemento de la tira de cabecera que tiene que
-    # leerse contra las dos capas de esta página: la fotografía (siempre oscura) mientras estás
-    # arriba, y la hoja (del tema activo) en cuanto bajas. En oscuro no hay conflicto, porque las
-    # dos capas son oscuras y el gris de siempre vale para ambas. En claro son opuestas y NINGÚN
-    # gris sirve: el del tema da 2,2:1 sobre la foto y el de la paleta oscura, 2,0:1 sobre el
-    # papel. El acento oscurecido es el único color que pasa el 3:1 de WCAG para controles en las
-    # dos —3,2:1 sobre la foto y 5,3:1 sobre el papel—, que es justo para lo que existe (ver la
-    # nota de C_PRIMARY). Ese 3,2 es el margen MÁS JUSTO que deja el acento en toda la app, y va
-    # en la dirección contraria al resto: si algún día vuelve a oscurecerse, este es el sitio que
-    # hay que volver a medir. Se pierde el cambio de color al desplegar, pero no la señal: la flecha
-    # sigue girando 180°, que es lo que de verdad distingue abierto de cerrado.
-    caret = td["text_secondary"] if _is_dark else C_PRIMARY
+    # EL COLOR DE LA LÁMINA, que es el único punto donde los dos temas se separan. En oscuro es el
+    # carbón de la barra lateral, un paso por debajo del lienzo: el telón se despega de la hoja que
+    # lo tapa. En claro es EXACTAMENTE el lienzo, ni un paso de diferencia, y eso no es pereza sino
+    # el requisito de .ov-hero-img: para que el negativo se funda con la página, lámina y hoja
+    # tienen que ser el MISMO papel. De aquí salen también los cuatro velos, que no introducen
+    # color propio — son este mismo fondo con alfa.
+    lamina = t["sidebar_bg"] if _is_dark else t["bg"]
+    # La lámina en claro es papel, así que el título va en tinta y el halo que lo despega de la
+    # retícula tiene que ser CLARO: la sombra negra de siempre, alrededor de un texto oscuro,
+    # solo lo emborrona. Misma inversión para el logotipo, que pasa de proyectar sombra sobre
+    # carbón a apoyarse sobre papel — y ahí un negro al 55% se lee como suciedad, no como relieve.
+    sombra_tit  = ("0 2px 16px rgba(0,0,0,0.55)" if _is_dark
+                   else f"0 1px 12px {hex_to_rgba(lamina, 0.88)}")
+    sombra_logo = ("0 6px 18px rgba(0,0,0,0.55)" if _is_dark
+                   else "0 4px 12px rgba(11,26,38,0.14)")
+    # ── EL NEGATIVO: la misma imagen, revelada al revés ─────────────────────────────────────
+    # En claro no se carga otro archivo, se invierte el que ya hay. Se puede porque hero-quantum
+    # no es una fotografía sino un DIBUJO —retícula clara sobre un degradado plano de un solo
+    # tono—, y ahí invertir la luminosidad no deforma nada: lo que era fondo oscuro con líneas
+    # claras pasa a ser fondo claro con líneas oscuras. Cuatro pasos, en este orden:
+    #
+    #   invert(1)          el negativo. Por sí solo también gira el TONO: el cian de la esfera
+    #                      sale por su complementario, un naranja apagado que no es el ámbar de
+    #                      la marca y que la ensucia sin llegar a citarla.
+    #   hue-rotate(180deg) devuelve el tono a su sitio. Es el complemento exacto del giro que
+    #                      acaba de dar la inversión, así que la retícula vuelve a ser azul —la
+    #                      misma familia de color que en oscuro— solo que ahora en tinta.
+    #   contrast(0.88)     el negativo nace más duro que el original y las líneas competían con
+    #                      el titular, que cae encima. Es un fondo: tiene que quedarse detrás.
+    #   brightness(1.06)   sube el blanco del negativo hasta rebasar el papel, que es lo que
+    #                      permite el paso siguiente.
+    #
+    # Y el que hace el trabajo de verdad: mix-blend-mode:multiply. Multiplicar es quedarse con
+    # LO MÁS OSCURO de cada punto, así que el casi-blanco del fondo invertido deja pasar el
+    # lienzo entero y solo sobreviven las líneas. Es decir: la lámina NO TIENE FONDO PROPIO en
+    # claro — el fondo es la página. De ahí que el canto de la hoja se lea como un pliegue del
+    # papel y no como el corte entre dos superficies distintas, y de ahí también que `lamina`
+    # tenga que valer t['bg'] exactamente (ver allí). El grupo de mezcla lo acota .ov-hero.
+    #
+    # En OSCURO no se emite nada: la imagen va tal cual, como ha ido siempre.
+    negativo = "" if _is_dark else (
+        "filter:invert(1) hue-rotate(180deg) contrast(0.88) brightness(1.06);"
+        " mix-blend-mode:multiply;")
     fondo = _b64_image(str(ASSETS_DIR / "hero-quantum.webp"))
     logo = _b64_image(str(ASSETS_DIR / "qml_logov2-sidebar.png"))
     st.markdown(f"""<style>
@@ -4096,8 +4132,15 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 .ov-hero {{
     position:absolute; inset:0; overflow:hidden;
     display:flex; align-items:center;
-    background:{td['sidebar_bg']}; color:{td['text']};
+    background:{lamina}; color:{t['text']};
     font-family:{FONT_SANS};
+    /* El grupo de mezcla del negativo. Sin esto, el multiply de .ov-hero-img no se detendría en
+       el fondo de la lámina: buscaría hacia atrás el primer contexto de apilamiento y acabaría
+       mezclándose con el lienzo de .stApp Y CON SUS HALOS ámbar, que es un fondo distinto y
+       además no uniforme. Aquí el contexto lo crearía de todos modos el bloque pegajoso —tiene
+       position:sticky con z-index—, pero eso es un efecto colateral de OTRA regla escrita para
+       otra cosa; declararlo aquí deja el grupo donde de verdad tiene que estar. */
+    isolation:isolate;
 }}
 /* El fondo desborda su caja (inset negativo) para que el parallax no descubra un borde vacío al
    desplazarlo. La imagen es apaisada de 2.44:1 y una ventana no llega a 1.8:1, así que `cover`
@@ -4107,18 +4150,22 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     position:absolute; inset:-10% -5%;
     background:url('data:image/webp;base64,{fondo}') no-repeat 78% center / cover;
     will-change:transform;
+    {negativo}
 }}
-/* Dos velos: uno horizontal que oscurece la mitad izquierda —el texto necesita fondo, no suerte—
+/* Dos velos: uno horizontal que despeja la mitad izquierda —el texto necesita fondo, no suerte—
    y otro vertical que asienta la imagen por arriba y por abajo. Ninguno introduce color propio:
-   los dos son el MISMO carbón del fondo de la lámina con alfa, así que oscurecen sin desplazar
-   el matiz de la fotografía. */
+   los dos son el MISMO fondo de la lámina con alfa, así que apagan la imagen sin desplazarle el
+   matiz. Por eso el mismo par de degradados sirve para los dos temas sin tocar un solo número:
+   en oscuro `lamina` es carbón y los velos OSCURECEN; en claro es papel y ACLARAN. La operación
+   es la misma —acercar la imagen al fondo—, y el reparto de alfas, que es lo que está medido
+   contra la caja de texto, no depende de hacia qué lado se acerque. */
 .ov-hero-veil {{
     position:absolute; inset:0;
     background:
-      linear-gradient(90deg, {td['sidebar_bg']} 0%, {hex_to_rgba(td['sidebar_bg'], 0.86)} 28%,
-                      {hex_to_rgba(td['sidebar_bg'], 0.28)} 56%, {hex_to_rgba(td['sidebar_bg'], 0)} 80%),
-      linear-gradient(180deg, {hex_to_rgba(td['sidebar_bg'], 0.55)} 0%, {hex_to_rgba(td['sidebar_bg'], 0)} 24%,
-                      {hex_to_rgba(td['sidebar_bg'], 0)} 58%, {hex_to_rgba(td['sidebar_bg'], 0.78)} 100%);
+      linear-gradient(90deg, {lamina} 0%, {hex_to_rgba(lamina, 0.86)} 28%,
+                      {hex_to_rgba(lamina, 0.28)} 56%, {hex_to_rgba(lamina, 0)} 80%),
+      linear-gradient(180deg, {hex_to_rgba(lamina, 0.55)} 0%, {hex_to_rgba(lamina, 0)} 24%,
+                      {hex_to_rgba(lamina, 0)} 58%, {hex_to_rgba(lamina, 0.78)} 100%);
 }}
 /* El rótulo se ALINEA CON EL TEXTO de la página, no con el borde de la pantalla: el max() elige
    el mayor entre un margen suelto y el canto izquierdo de la columna de 1500 px (la mitad del
@@ -4138,7 +4185,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 }}
 .ov-hero-logo {{
     height:clamp(60px, 8vh, 96px); width:auto; display:block; margin-bottom:26px;
-    filter:drop-shadow(0 6px 18px rgba(0,0,0,0.55));
+    filter:drop-shadow({sombra_logo});
 }}
 /* El TÍTULO DEL TFM, y no el antetítulo corto de la página: son dos textos distintos a
    propósito. Sobre la lámina va el título largo —i18n["ov_hero_title"]—, y el "Framework
@@ -4149,11 +4196,13 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
    La huincha ámbar se conserva —es la firma visual de la marca— pero alineada con la PRIMERA
    LÍNEA: flex-start más un margen óptico de 0.62em, porque centrada en un bloque de tres o
    cuatro líneas quedaría flotando en mitad del texto. La sombra no es decorativa: el título
-   cae sobre fotografía y el velo no garantiza el mismo fondo en todos los anchos. */
+   cae sobre la imagen y el velo no garantiza el mismo fondo en todos los anchos — y por eso
+   cambia de signo con el tema (ver `sombra_tit`), porque lo que tiene que hacer es despegar el
+   texto de la retícula, no oscurecer. */
 .ov-hero-titulo {{
     font-family:{FONT_SERIF}; font-size:clamp(18px, 1.7vw, 25px); font-weight:400;
-    line-height:1.3; letter-spacing:-0.01em; color:{td['text']};
-    text-shadow:0 2px 16px rgba(0,0,0,0.55);
+    line-height:1.3; letter-spacing:-0.01em; color:{t['text']};
+    text-shadow:{sombra_tit};
     display:flex; align-items:flex-start; gap:14px;
 }}
 .ov-hero-titulo::before {{
@@ -4162,7 +4211,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 }}
 .ov-hero-rule {{
     height:1px; margin-top:22px; max-width:280px;
-    background:linear-gradient(90deg, {td['border_strong']}, transparent);
+    background:linear-gradient(90deg, {t['border_strong']}, transparent);
 }}
 /* Pista de desplazamiento: un hilo que cae y un ángulo. Sin palabras — no hay que traducirlo, y
    en una lámina así el gesto se entiende antes leyendo el dibujo que una frase. */
@@ -4171,7 +4220,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     display:flex; flex-direction:column; align-items:center; gap:9px;
     transition:opacity 0.25s ease; pointer-events:none;
 }}
-.ov-hint-line {{ width:1px; height:38px; background:linear-gradient(180deg, transparent, {td['text_muted']}); }}
+.ov-hint-line {{ width:1px; height:38px; background:linear-gradient(180deg, transparent, {t['text_muted']}); }}
 .ov-hint svg {{ display:block; animation:ovBaja 1.9s cubic-bezier(0.4,0,0.2,1) infinite; }}
 @keyframes ovBaja {{ 0%,100% {{ transform:translateY(0); opacity:0.55; }} 50% {{ transform:translateY(5px); opacity:1; }} }}
 /* Avance de la portada, pegado al canto superior de la pantalla: la única señal de cuánto queda
@@ -4227,20 +4276,19 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     border:0 !important; opacity:0 !important; pointer-events:none !important;
 }}
 
-/* ── LA TIRA DE CABECERA, AHORA SOBRE LA FOTOGRAFÍA ─────────────────────────────────────────
-   Consecuencia directa de que la lámina llegue al canto: el reloj y la flecha del selector son
-   fijos y hasta ahora caían sobre aquella franja de fondo de .stApp, del color del tema. Ya no:
-   caen sobre la fotografía, que es oscura SIEMPRE, también en tema claro. Y en claro el gris del
-   tema (#4A4E57) da 2,2:1 contra ella — por debajo del 4,5:1 que pide WCAG para texto y del 3:1
-   para controles.
-   El RELOJ se pasa entero a la paleta oscura, y puede hacerlo sin condiciones porque nunca llega
-   a verse sobre la hoja: se apaga con el scroll en 140 px (ver el bloque RELOJ) y la hoja no
-   corona hasta los 900. En tema oscuro estas dos líneas no cambian nada —td es t— y se emiten
-   igual para no partir la regla en dos ramas. La FLECHA sí necesita valer para las dos capas;
-   su color se decide arriba, en Python, donde está razonado. */
-#tfm-reloj {{ color:{td['text_secondary']}; }}
-#tfm-reloj .r-sep {{ color:{td['text_muted']}; }}
-.st-key-lang_{LANG} button::before {{ border-top-color:{caret}; }}
+/* ── LA TIRA DE CABECERA NO LLEVA NADA, Y ESO ES EL CAMBIO ──────────────────────────────────
+   Aquí vivían tres reglas —color del reloj, de su separador y de la flecha del selector— y las
+   tres han desaparecido de golpe al pasar la lámina a la paleta activa. Conviene saber por qué
+   estaban, porque si algún día la lámina vuelve a ir siempre en oscuro hay que reponerlas:
+   el reloj y la flecha son POSITION:FIXED y caen sobre la lámina, no sobre la hoja. Mientras la
+   lámina era oscura con la app en claro, esa franja era la única de toda la aplicación donde el
+   cromo de interfaz se leía contra un fondo del tema CONTRARIO: el gris del tema daba 2,2:1
+   sobre la fotografía y el de la paleta oscura, 2,0:1 sobre el papel al bajar. Ninguno pasaba, y
+   la flecha —que cruza las dos capas— tuvo que irse al acento oscurecido por un 3,2:1 que era el
+   margen más ajustado de toda la app.
+   Ahora las dos capas son del mismo tema, así que los colores por defecto del reloj y de la
+   flecha (ver sus bloques) valen tal cual y estas tres reglas serían calcos exactos de lo que ya
+   hay. Se van: una excepción sin excepción que documentar es solo ruido. */
 
 /* ── ENTRADA DE CADA BLOQUE ─────────────────────────────────────────────────────────────────
    El punto de partida (invisible y 26 px más abajo) lo pone el SCRIPT añadiendo .ov-anim, no
@@ -4290,10 +4338,10 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
        fondo garantizado esté donde esté el recorte. */
     .ov-hero-veil {{
         background:
-          linear-gradient(90deg, {hex_to_rgba(td['sidebar_bg'], 0.90)} 0%,
-                          {hex_to_rgba(td['sidebar_bg'], 0.62)} 100%),
-          linear-gradient(180deg, {hex_to_rgba(td['sidebar_bg'], 0.38)} 0%,
-                          {hex_to_rgba(td['sidebar_bg'], 0)} 42%, {hex_to_rgba(td['sidebar_bg'], 0.70)} 100%);
+          linear-gradient(90deg, {hex_to_rgba(lamina, 0.90)} 0%,
+                          {hex_to_rgba(lamina, 0.62)} 100%),
+          linear-gradient(180deg, {hex_to_rgba(lamina, 0.38)} 0%,
+                          {hex_to_rgba(lamina, 0)} 42%, {hex_to_rgba(lamina, 0.70)} 100%);
     }}
 }}
 </style>
@@ -4308,7 +4356,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
   <div class="ov-hint" aria-hidden="true">
     <span class="ov-hint-line"></span>
     <svg width="15" height="9" viewBox="0 0 15 9" fill="none">
-      <path d="M1 1 L7.5 7.5 L14 1" stroke="{td['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M1 1 L7.5 7.5 L14 1" stroke="{t['text_secondary']}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   </div>
   <div class="ov-bar" aria-hidden="true"></div>
