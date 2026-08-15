@@ -2145,6 +2145,36 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
        columnas hasta los 768 px: con la sidebar todavía fija en 270 px, cuatro tarjetas de ~135 px.
        Las filas que ya declaran repeat(2, ...) en línea no cambian; las de 3 por defecto bajan a 2. */
     .compare-grid {{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }}
+    /* Lo mismo, pero para las filas de st.columns —que .compare-grid no alcanza porque no son una
+       rejilla nuestra sino el flex de Streamlit—. Con la barra fija en 270px, al contenido le
+       quedan 550px en una tableta vertical y 754 en horizontal; repartidos entre TRES columnas
+       salen 159 y 227px, y en ese ancho hay piezas que sencillamente no caben: la matriz de
+       confusión pide 64px de etiquetas más dos celdas que no bajan de ~72 (sus cifras son de 22px),
+       o sea 209 mínimos, y la gráfica de Plotly otro tanto. Al no caber NO encogían: se salían por
+       la derecha de su tarjeta y se metían encima de la de al lado —las tres matrices y las tres
+       curvas ROC de Resultados, comprobado a 820 y 1024px—, y en vertical la tercera llegaba a
+       salirse de la página.
+       La solución es dejarlas saltar de línea con un ancho MÍNIMO por columna, y ese mínimo no
+       puede ser el mismo para todas porque no todas piden lo mismo:
+         · filas de TRES (curvas ROC y matrices de Resultados) → 260px. Sale de la cuenta de la
+           matriz: 209 de rejilla + 46 de tarjeta = 255, y se redondea a 260 para no ir al filo.
+           Con eso quedan a una por fila en vertical (510px) y a dos en horizontal (349), que es
+           justo lo contrario de lo que se quería evitar: tarjetas que respiran.
+         · filas de CUATRO o más (las cuatro cifras del Resumen, los KPI de Gobernanza y Circuito)
+           → 230px, que las deja en un 2x2 limpio en los dos anchos. Con el mínimo de las de tres
+           se habrían apilado de una en una: cuatro cifras sueltas a 510px de ancho cada una.
+       Las de DOS se quedan como están: ya caben, y un min-width uniforme les habría roto sus
+       proporciones ([1.35, 1], [2.2, 1]...), que están elegidas una a una. De ahí el :has(), que
+       es lo que permite contar columnas desde el CSS. */
+    div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"]:nth-child(3)) {{
+        flex-wrap:wrap !important;
+    }}
+    div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"]:nth-child(3)) > div[data-testid="stColumn"] {{
+        min-width:260px !important;
+    }}
+    div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"]:nth-child(4)) > div[data-testid="stColumn"] {{
+        min-width:230px !important;
+    }}
 }}
 
 /* ═══════════════ MÓVIL (≤ 768 px) ═══════════════
