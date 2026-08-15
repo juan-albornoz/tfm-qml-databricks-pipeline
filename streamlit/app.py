@@ -1223,17 +1223,23 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
    pase lo que pase con ese calc() —incluido un navegador sin container queries, donde
    var(--tech-u) no resuelve y el alto cae a auto— el logo no se sale de su pastilla. */
 .tech-chip img {{ display:block; width:auto; max-width:100%; max-height:100%; object-fit:contain; }}
-/* Los dos componentes que solo llevan <script> —el que fija <html lang> y el que escribe el
-   reloj— no pintan nada y sus iframes sobran. Se colapsan con el MISMO recurso que las
-   banderas —display:contents en los envoltorios y position:fixed en el elemento—, así no
-   cuentan como ítem del flex ni abren un hueco sobre el titular. No se usa display:none a
-   propósito: un iframe así puede no llegar a ejecutar su script, y aquí el script ES todo
-   el contenido. */
+/* Los componentes que solo llevan <script> —el que fija <html lang>, el que escribe el reloj
+   y el que hace subir los contadores— no pintan nada y sus iframes sobran. Se colapsan con el
+   MISMO recurso que las banderas —display:contents en los envoltorios y position:fixed en el
+   elemento—, así no cuentan como ítem del flex ni abren un hueco sobre el titular. No se usa
+   display:none a propósito: un iframe así puede no llegar a ejecutar su script, y aquí el
+   script ES todo el contenido.
+   El position:fixed no es redundante con el width/height a 0: el `height=0` que se le pasa a
+   components.html es FALSY, así que el frontal lo descarta y planta 150 px por defecto. Sin
+   sacarlo del flujo queda una banda muerta de ese alto donde se monte el componente — que es
+   justo lo que le pasó al de la portada y está anotado en su bloque. */
 .st-key-lang_attr, .st-key-lang_attr div[data-testid="stIFrame"],
 .st-key-lang_attr div[data-testid="stElementContainer"],
 .st-key-reloj, .st-key-reloj div[data-testid="stIFrame"],
-.st-key-reloj div[data-testid="stElementContainer"] {{ display:contents !important; }}
-.st-key-lang_attr iframe, .st-key-reloj iframe {{
+.st-key-reloj div[data-testid="stElementContainer"],
+.st-key-contador_js, .st-key-contador_js div[data-testid="stIFrame"],
+.st-key-contador_js div[data-testid="stElementContainer"] {{ display:contents !important; }}
+.st-key-lang_attr iframe, .st-key-reloj iframe, .st-key-contador_js iframe {{
     position:fixed !important; width:0 !important; height:0 !important;
     border:0 !important; opacity:0 !important; pointer-events:none !important;
 }}
@@ -4466,6 +4472,223 @@ def portada_js():
         components.html(_OV_JS, height=0, width=0)
 
 
+# ═══════════════ CONTADORES ═══════════════
+# Las cifras que encabezan Resumen (las cuatro del dataset NHANES) y Resultados (los tres
+# AUC-ROC) suben desde cero al llegar a ellas. Es el único adorno de la aplicación que toca un
+# DATO, y por eso lleva tres cautelas que no son opcionales:
+#
+#   1. EL SERVIDOR SIGUE ESCRIBIENDO LA CIFRA FINAL EN EL HTML. El script solo la sustituye
+#      mientras dura la cuenta, y en el último fotograma repone la cadena original byte a byte
+#      —no una reconstrucción suya, que podría diferir en un decimal de lo que dice la memoria—.
+#      Si el iframe no llega a ejecutarse (bloqueado, error de JS, navegador viejo) lo que se ve
+#      es el número correcto y quieto, nunca un cero ni un hueco. Mismo criterio que el revelado
+#      por scroll de la portada: la hoja describe el viaje, jamás el punto de salida.
+#   2. NO SE LEE NINGÚN VALOR DE UN ATRIBUTO: se trocea el texto ya renderizado. Así la cuenta
+#      hereda gratis la notación del idioma activo —coma o punto decimal, punto o espacio
+#      inseparable de millar— sin duplicar aquí la lógica de nf() y mil(). Duplicarla es
+#      exactamente por donde se colaría una discrepancia entre lo que cuenta la animación y lo
+#      que afirma la tarjeta, y en cinco idiomas hay cinco ocasiones de equivocarse.
+#   3. SOLO SE CUENTA AL ENTRAR EN LA PÁGINA. Cualquier rerun —cambiar el tema, el idioma, mover
+#      un control— remonta el iframe; sin la guarda, las cifras volverían a correr en cada clic,
+#      que además de mareante miente: no ha entrado ningún dato nuevo.
+#
+# Con prefers-reduced-motion: reduce no se anima nada y la cifra se queda como está, igual que
+# el resto de los movimientos de la aplicación.
+#
+# La cadena es RAW (r"""...""") y no una f-string: lleva expresiones regulares, y con las llaves
+# dobladas de una f-string los cuantificadores \d{3} serían ilegibles. Los tres valores que
+# vienen de Python entran por marcas __ASI__ sustituidas con json.dumps, que es lo que separa
+# "escribir una cadena" de "inyectar lo que haya" dentro de un <script> — el mismo cuidado que
+# el reloj de cabecera.
+_CONTADOR_JS = r"""
+<script>
+(function () {
+  var W = window.parent, doc = W.document;
+  // Un solo juego de escuchas por ventana: si este iframe se vuelve a montar, el anterior se
+  // desmonta antes en vez de acumularse. parar() además REPONE las cifras que se quedaran a
+  // medias, para que un rerun en mitad de la cuenta no congele un número falso en pantalla.
+  if (W.__tfmContador) { W.__tfmContador.parar(); W.__tfmContador = null; }
+
+  var MILLAR = __MILLAR__, DECIMAL = __DECIMAL__, PAGINA = __PAGINA__;
+
+  var entrada = (W.__tfmContadorPagina !== PAGINA);
+  W.__tfmContadorPagina = PAGINA;
+  if (!entrada || W.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+
+  // 1150 ms es lo que tarda en leerse una cifra sin que la espera se note. El escalón de 90 ms
+  // por columna barre la fila de izquierda a derecha, y los 140 de base la dejan arrancar
+  // cuando la tarjeta ya ha entrado con su propia animación (.stat-card, retardo 0,20 s).
+  var DUR = 1150, BASE = 140, ESCALON = 90;
+
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // Un número es una tira de dígitos con sus millares opcionales y un decimal opcional. Se
+  // construye con los separadores del idioma ACTIVO, así que "29.400" es un solo número en
+  // español y "29,400" lo es en inglés, sin que ninguno de los dos parta por donde no debe.
+  var RE_NUM = new RegExp('\\d+(?:' + esc(MILLAR) + '\\d{3})*(?:' + esc(DECIMAL) + '\\d+)?', 'g');
+
+  function formatea(v, dec, agrupa) {
+    var p = v.toFixed(dec).split('.');
+    var ent = p[0];
+    // El millar se marca primero con U+0000 y se sustituye después. Escribirlo directo rompería
+    // en español, donde el separador de millar es el punto: entraría en el split del decimal.
+    if (agrupa) { ent = ent.replace(/\B(?=(\d{3})+(?!\d))/g, '\u0000'); }
+    ent = ent.split('\u0000').join(MILLAR);
+    return p.length > 1 ? ent + DECIMAL + p[1] : ent;
+  }
+
+  // Trocea "86% / 14%" en [86, "% / ", 14, "%"] y "0,9485" en [0,9485]. Lo fijo se conserva tal
+  // cual, así que sirve igual para una cifra sola, para dos con texto en medio y para el
+  // porcentaje doble del reparto de clases, sin un caso especial por tarjeta.
+  function trocea(txt) {
+    var piezas = [], ultimo = 0, m;
+    RE_NUM.lastIndex = 0;
+    while ((m = RE_NUM.exec(txt)) !== null) {
+      if (m.index > ultimo) { piezas.push({ fijo: txt.slice(ultimo, m.index) }); }
+      var s = m[0], i = s.indexOf(DECIMAL);
+      piezas.push({
+        num: parseFloat(s.split(MILLAR).join('').split(DECIMAL).join('.')),
+        dec: i < 0 ? 0 : s.length - i - DECIMAL.length,
+        agrupa: s.indexOf(MILLAR) >= 0
+      });
+      ultimo = m.index + s.length;
+    }
+    if (ultimo < txt.length) { piezas.push({ fijo: txt.slice(ultimo) }); }
+    return piezas;
+  }
+
+  function pinta(piezas, k) {
+    var s = '';
+    for (var i = 0; i < piezas.length; i++) {
+      var p = piezas[i];
+      s += (p.fijo !== undefined) ? p.fijo : formatea(p.num * k, p.dec, p.agrupa);
+    }
+    return s;
+  }
+
+  var activos = [], lazo = 0;
+
+  function paso(ahora) {
+    lazo = 0;
+    var quedan = [];
+    for (var i = 0; i < activos.length; i++) {
+      var el = activos[i], d = el.__tfmCont;
+      if (!el.isConnected) { continue; }          // se lo llevó un rerun por delante
+      var t = (ahora - d.t0) / DUR;
+      if (t >= 1) { el.textContent = d.original; continue; }   // ← la cadena del servidor
+      if (t > 0) { el.textContent = pinta(d.piezas, 1 - Math.pow(1 - t, 4)); }
+      quedan.push(el);
+    }
+    activos = quedan;
+    if (activos.length) { lazo = W.requestAnimationFrame(paso); }
+  }
+
+  function arranca(el) {
+    var d = el.__tfmCont;
+    if (!d || d.activo) { return; }
+    d.activo = true;
+    d.t0 = W.performance.now() + d.retardo;
+    el.textContent = pinta(d.piezas, 0);
+    activos.push(el);
+    if (!lazo) { lazo = W.requestAnimationFrame(paso); }
+  }
+
+  // Las cuatro cifras de Resumen viven DEBAJO de la portada a pantalla completa: sin observador
+  // contarían a puerta cerrada y al bajar ya estarían quietas.
+  //
+  // AQUÍ NO SE GUARDA NINGÚN NODO DE STREAMLIT, y eso es lo que hace que esto funcione al cambiar
+  // de página. La portada sí puede permitírselo —vive y muere en Resumen—, pero este script cruza
+  // páginas, y section[data-testid="stMain"] NO SOBREVIVE al cruce: Streamlit lo reconstruye. Un
+  // observador montado sobre el nodo viejo queda hablándole a un huérfano y no vuelve a disparar
+  // nunca. Se midió llegando a Resultados con la página desplazada: las tres cifras ni siquiera
+  // llegaban a registrarse (__tfmCont sin definir), porque las altas de nodos ocurrían en el
+  // árbol nuevo y el MutationObserver seguía escuchando el viejo. Por eso:
+  //   · el IntersectionObserver va contra el VIEWPORT en vez de contra la sección con scroll. Para
+  //     un elemento dentro de un contenedor que hace scroll la respuesta es idéntica —comprobado
+  //     sobre la misma cifra: 0,00 bajo la portada, 1,00 con la tarjeta en pantalla—, y el
+  //     viewport no puede quedarse obsoleto.
+  //   · el MutationObserver va contra doc.body, que Streamlit tampoco sustituye nunca.
+  var io = new W.IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (e.isIntersecting) { io.unobserve(e.target); arranca(e.target); }
+    });
+  }, { threshold: 0.5 });
+
+  // ...y aun así lo que YA se ve no espera al observador: arranca en esta misma tarea. Es el
+  // mismo seguro que se puso en el revelado de la portada, y por el mismo motivo: el primer
+  // disparo del observador es asíncrono, y si Streamlit sustituye el nodo entremedias la
+  // observación se queda hablándole a un huérfano. Lo que se ve al llegar —los tres AUC de
+  // Resultados— no puede depender de esa carrera.
+  function seVe(el) {
+    var r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < W.innerHeight * 0.9;
+  }
+
+  function registra() {
+    var nodos = doc.querySelectorAll('.count-up');
+    for (var i = 0; i < nodos.length; i++) {
+      var el = nodos[i];
+      if (el.__tfmCont) { continue; }
+      var original = el.textContent;
+      var piezas = trocea(original);
+      var hayNum = false;
+      for (var j = 0; j < piezas.length; j++) { if (piezas[j].fijo === undefined) { hayNum = true; } }
+      if (!hayNum) { continue; }
+      // La cascada sale del sitio que ocupa la tarjeta en SU FILA, no del orden en que el
+      // observador las va viendo: así el barrido es de izquierda a derecha siempre, aunque las
+      // cuatro entren en pantalla en el mismo fotograma.
+      var col = el.closest('div[data-testid="stColumn"]');
+      var pos = (col && col.parentElement)
+        ? Array.prototype.indexOf.call(col.parentElement.children, col) : 0;
+      el.__tfmCont = { original: original, piezas: piezas, retardo: BASE + pos * ESCALON };
+      if (seVe(el)) { arranca(el); } else { io.observe(el); }
+    }
+  }
+
+  // Streamlit reconstruye sus nodos en cada rerun y los nuevos nacen sin registrar. Se amortigua
+  // con rAF porque un solo rerun dispara decenas de mutaciones, y solo se observan altas y bajas
+  // de nodos: escribir textContent es un cambio de dato, no de estructura, así que la cuenta en
+  // curso no realimenta el observador.
+  var toca = false;
+  var mo = new W.MutationObserver(function () {
+    if (toca) { return; }
+    toca = true;
+    W.requestAnimationFrame(function () { toca = false; registra(); });
+  });
+  mo.observe(doc.body, { childList: true, subtree: true });
+
+  W.__tfmContador = { parar: function () {
+    io.disconnect();
+    mo.disconnect();
+    if (lazo) { W.cancelAnimationFrame(lazo); lazo = 0; }
+    for (var i = 0; i < activos.length; i++) {
+      if (activos[i].isConnected) { activos[i].textContent = activos[i].__tfmCont.original; }
+    }
+    activos = [];
+  } };
+  // Al salir de la página, Streamlit desmonta este iframe y con él muere el realm donde viven
+  // estas funciones; los observadores, que son del documento padre, se quedarían enganchados a
+  // callbacks muertos. Se sueltan a mano en el desmontaje.
+  window.addEventListener('pagehide', function () {
+    if (W.__tfmContador) { W.__tfmContador.parar(); W.__tfmContador = null; }
+  });
+
+  registra();
+})();
+</script>
+"""
+
+
+def contadores_js(pagina):
+    """Monta el contador. `pagina` es la guarda de "solo al entrar": mientras no cambie, los
+    reruns remontan el iframe sin volver a disparar la cuenta."""
+    with st.container(key="contador_js"):
+        components.html(
+            _CONTADOR_JS.replace("__MILLAR__", json.dumps(MILLAR))
+                        .replace("__DECIMAL__", json.dumps(DECIMAL))
+                        .replace("__PAGINA__", json.dumps(pagina)),
+            height=0, width=0)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 1 — OVERVIEW
 # ═══════════════════════════════════════════════════════════════════════
@@ -4497,9 +4720,14 @@ if page == "overview":
         # con el punto de millar español ("29.400"), que en inglés se lee como 29 coma 4.
         stats = [(mil(29400), S("ov_stat_bronze")), (mil(7831), S("ov_stat_silver")),
                  ("89", S("ov_stat_features")), ("86% / 14%", S("ov_stat_balance"))]
+        # count-up: la cifra sube desde cero al entrar en pantalla. Marca de CLASE y no un
+        # data-attribute porque las clases son lo que este fichero ya usa por todas partes y
+        # sobreviven con seguridad al saneado del HTML de Streamlit. El valor no viaja en la
+        # marca: el script trocea este mismo texto, así que "86% / 14%" cuenta sus dos cifras y
+        # las dos primeras heredan el separador de millar del idioma sin repetir aquí mil().
         for col, (num, lab) in zip(cols, stats):
             with col:
-                st.markdown(f'<div class="info-card stat-card"><div class="stat-num">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="info-card stat-card"><div class="stat-num count-up">{num}</div><div class="stat-label">{lab}</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1])
@@ -4608,6 +4836,9 @@ if page == "overview":
         tech_strip()
 
     portada_js()
+    # Fuera de ov_sheet, como portada_js(): dentro sería un bloque más de la hoja y el revelado
+    # por scroll lo trataría como contenido, animando un iframe que no pinta nada.
+    contadores_js("overview")
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 2 — GOBERNANZA
@@ -4972,7 +5203,7 @@ elif page == "results":
             st.markdown(f"""
             <div class="kpi-card" style="border-top:2px solid {m['color']};">
                 <div class="kpi-model"><span class="kpi-dot" style="background:{m['color']}"></span>{m['label']}</div>
-                <div class="kpi-value-auc" style="color:{m['color']};">{nf(m['auc'])}</div>
+                <div class="kpi-value-auc count-up" style="color:{m['color']};">{nf(m['auc'])}</div>
                 <div class="stat-label" style="margin:6px 0 14px;">AUC-ROC</div>
                 <div class="kpi-row"><span class="kpi-label">F1-macro</span><span class="kpi-value">{nf(m['f1_macro'])}</span></div>
                 <div class="kpi-row"><span class="kpi-label">Accuracy</span><span class="kpi-value">{nf(m['accuracy'])}</span></div>
@@ -5122,6 +5353,11 @@ elif page == "results":
     {S("res_qsvm_note")}
     </div>
     """, unsafe_allow_html=True)
+
+    # Los tres AUC-ROC de la cabecera. Va al final de la página por el mismo motivo que en
+    # Resumen —el script no depende del orden, lo recoge el observador de mutaciones— y así el
+    # componente no se cuela entre las tarjetas.
+    contadores_js("results")
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 3 — SHAP ANALYSIS
