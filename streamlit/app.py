@@ -4018,7 +4018,8 @@ _OV_JS = """
   // Un solo juego de escuchas por ventana: si este iframe se vuelve a montar (cambio de idioma,
   // de tema, ida y vuelta a la página) el anterior se desmonta antes, en vez de acumularse.
   if (W.__ovPortada) { W.__ovPortada.parar(); }
-  var quieto = W.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Aquí se leía prefers-reduced-motion para saltarse el parallax. Ya no: la portada se mueve
+  // siempre, por el mismo motivo anotado junto a .ov-anim en la hoja de la portada.
 
   // Las referencias se REBUSCAN en cuanto dejan de estar en el documento: Streamlit reconstruye
   // sus nodos en cada rerun y las que se guardaran al arrancar quedarían apuntando a huérfanos.
@@ -4041,7 +4042,6 @@ _OV_JS = """
     // La pista de scroll se va enseguida: en cuanto el gesto ha empezado ya no informa de nada.
     var pista = el('.ov-hint');
     if (pista) { pista.style.opacity = String(Math.max(0, 1 - p * 7)); }
-    if (quieto) { return; }
     // El fondo se mueve a dos tercios de la velocidad del contenido y crece un pelo: es lo que da
     // la profundidad, la sensación de que la lámina está DETRÁS y no pegada al texto.
     var img = el('.ov-hero-img');
@@ -4323,9 +4323,12 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 /* El halo va en el <svg> y NO en .ov-hint, que es quien recibe el desvanecido del scroll: si los
    dos filtros vivieran en el mismo elemento, apagar la pista al bajar apagaría también el latido
    a mitad de ciclo. Y el filtro se declara AQUÍ además de en los fotogramas —repetido a
-   propósito— porque es el estado de reposo: con `prefers-reduced-motion` la animación se anula
-   y sin esta línea la flecha se quedaría sin halo, que es lo que se ha venido a añadir. Quien
-   pide menos movimiento pierde el latido, no la señal. */
+   propósito— porque es el ESTADO DE REPOSO: si la animación no llega a correr, la flecha
+   conserva su halo en vez de quedarse pelada, que es justo lo que se vino a añadir.
+   Esa línea nació para cubrir el caso de `prefers-reduced-motion`, que anulaba el latido unas
+   reglas más abajo; esa anulación ya no existe (ver la nota junto a .ov-anim), así que hoy cubre
+   solo el caso degradado. Se mantiene: cuesta una línea y es la diferencia entre una señal
+   apagada y una legible. */
 .ov-hint svg {{
     display:block; filter:{halo_bajo};
     animation:ovBaja 1.9s cubic-bezier(0.4,0,0.2,1) infinite;
@@ -4413,12 +4416,17 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
 }}
 .ov-anim.ov-seen {{ opacity:1; transform:none; }}
-/* Quien pide menos movimiento conserva el revelado —que es scroll, no animación— y pierde el
-   parallax, el fundido de los bloques y el latido de la pista, que son movimiento añadido. */
-@media (prefers-reduced-motion: reduce) {{
-    .ov-anim {{ opacity:1 !important; transform:none !important; transition:none !important; }}
-    .ov-hint svg {{ animation:none; }}
-}}
+/* AQUÍ VIVÍA LA ANULACIÓN POR prefers-reduced-motion, y se ha retirado a propósito. Forzaba
+   .ov-anim a opacity:1 / transform:none / transition:none y apagaba el latido de la pista, de
+   modo que quien pedía menos movimiento conservaba el revelado —que es scroll, no animación— y
+   perdía el fundido de los bloques y el latido. Es la tercera y última excepción de la
+   aplicación, hermana de la del contador y la de la entrada escalonada, y por el mismo motivo:
+   el equipo desde el que se trabaja este panel tiene los efectos de animación de Windows
+   apagados, así que la portada se veía plana en escritorio y con parallax solo en el móvil y la
+   tableta. Entregadas ya la memoria y la defensa, esto es acabado visual.
+   El punto de partida invisible lo sigue poniendo el SCRIPT y no esta hoja (ver arriba), así que
+   retirar la anulación no puede dejar la página en blanco: sin script no hay .ov-anim y los
+   bloques se ven enteros. Revertirlo es reponer este bloque tal cual, con sus dos reglas. */
 /* PANTALLA BAJA, que en un teléfono es simplemente girarlo: la lámina mide 100dvh, y con la
    ventana en 390 px de alto el logotipo, el título de cuatro líneas y la pista no caben. El
    bloque va centrado con flex dentro de un contenedor con overflow:hidden, así que lo que no
