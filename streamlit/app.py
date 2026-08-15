@@ -1480,10 +1480,13 @@ a.search-src .search-web-ext {{ font-size:10.5px; opacity:0.75; margin-left:2px;
    vs. ancho — necesario para que reaplique sus estilos, ver comentario junto a esa key), así que el
    texto no puede "encogerse" con una transición: aparece/desaparece de golpe con el nuevo iframe. Un
    fundido suave en el propio iframe disimula ese salto, en vez de eliminarlo — reutiliza el mismo
-   keyframe pageFadeIn que ya usan las páginas al navegar. */
-@media (prefers-reduced-motion: no-preference) {{
-    section[data-testid="stSidebar"] iframe {{ animation: pageFadeIn 0.3s ease-out; }}
-}}
+   keyframe pageFadeIn que ya usan las páginas al navegar.
+   Ya no va dentro de @media (prefers-reduced-motion: no-preference), por la misma decisión
+   anotada en la entrada escalonada del contenido: en el equipo desde el que se trabaja este panel
+   la preferencia está siempre activa y el fundido no se veía nunca en escritorio. Aquí el
+   keyframe no lleva retardo ni `backwards`, así que quitarle la condición no puede dejar el menú
+   invisible: si la animación no corriera, el iframe se ve igual, solo que sin fundido. */
+section[data-testid="stSidebar"] iframe {{ animation: pageFadeIn 0.3s ease-out; }}
 /* ═══════════════ CABECERA DE PÁGINA ═══════════════
    Registro editorial de publicación científica: antetítulo en versalitas monoespaciadas
    (etiqueta de sección), titular en serif de pantalla, subtítulo en sans, y un filete
@@ -2286,11 +2289,14 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
    el único elemento con un remount GARANTIZADO al navegar: key distinta = componente distinto para
    Streamlit, así que se desmonta y se vuelve a montar de verdad. El resto del contenido normalmente
    reutiliza sus nodos entre reruns (para no perder el estado de sliders/botones) y una animación
-   "al aparecer" sobre ellos nunca llegaría a dispararse — por eso no se ve nada si se aplica ahí. */
-@media (prefers-reduced-motion: no-preference) {{
-    div[class*="st-key-page_enter_"] {{
-        animation: pageFadeIn 0.38s ease-out;
-    }}
+   "al aparecer" sobre ellos nunca llegaría a dispararse — por eso no se ve nada si se aplica ahí.
+   Con esta regla se cierra la lista: NINGÚN movimiento de la aplicación consulta ya
+   prefers-reduced-motion. La decisión y su porqué están escritos una sola vez, junto a la entrada
+   escalonada del contenido; aquí solo se deja constancia de que este era el último. Como el de
+   la barra lateral, el keyframe no lleva retardo ni `backwards`, así que sin animación la página
+   se ve igual, solo que sin fundido. */
+div[class*="st-key-page_enter_"] {{
+    animation: pageFadeIn 0.38s ease-out;
 }}
 @keyframes pageFadeIn {{
     from {{ opacity:0; transform:translateY(10px); }}
@@ -4513,18 +4519,22 @@ def portada_js():
 #      un control— remonta el iframe; sin la guarda, las cifras volverían a correr en cada clic,
 #      que además de mareante miente: no ha entrado ningún dato nuevo.
 #
-# ESTE ES EL ÚNICO MOVIMIENTO DE LA APLICACIÓN QUE NO MIRA prefers-reduced-motion, y conviene
-# saber por qué antes de "arreglarlo": es una excepción pedida a propósito, no un descuido.
-# Todo lo demás —la entrada de las tarjetas, el filete de los títulos, el parallax de la portada—
-# sigue dentro de su @media y se anula si el sistema pide menos movimiento; esa parte no cambia.
-# El motivo es que el equipo desde el que se trabaja este panel lleva los efectos de animación de
-# Windows apagados, así que sus navegadores piden reduce SIEMPRE (comprobado con
-# SystemParametersInfo(SPI_GETCLIENTAREAANIMATION) = 0, y en la consola con matchMedia). Con la
-# guarda puesta, el contador funcionaba en el móvil y en la tableta y no se veía jamás en
-# escritorio. La memoria y la defensa ya están entregadas: esto es acabado visual, y entre
-# respetar la preferencia y que la cifra se vea donde se mira la página, se ha elegido lo segundo.
-# Si algún día vuelve a pesar más la accesibilidad, revertirlo es reponer la condición del
-# matchMedia en la guarda de abajo, una línea.
+# ESTE CONTADOR NO MIRA prefers-reduced-motion, y aquí está escrito el porqué —que vale para
+# TODA la aplicación, porque hoy ya no queda un solo movimiento que la consulte—. No es un
+# descuido: es una decisión, y conviene leerla antes de "arreglarla".
+#
+# El equipo desde el que se trabaja este panel lleva los efectos de animación de Windows
+# apagados, así que sus navegadores piden reduce SIEMPRE — comprobado con
+# SystemParametersInfo(SPI_GETCLIENTAREAANIMATION) = 0 y en la consola con matchMedia. Con las
+# guardas puestas, la aplicación se veía animada en el móvil y en la tableta y completamente
+# plana en Chrome y en Firefox de escritorio, que es justo donde se compone. La memoria y la
+# defensa ya están entregadas: esto es acabado visual, y entre respetar la preferencia del
+# sistema y que el trabajo se vea donde se mira, se ha elegido lo segundo.
+#
+# Las guardas se retiraron en cinco sitios, cada uno con su nota al lado: este contador, la
+# entrada escalonada del contenido, la anulación de .ov-anim y del latido en la portada, el
+# parallax dentro de _OV_JS, el fundido del menú lateral y el de página al navegar. Revertir
+# cualquiera es reponer su condición, que en todos los casos es una línea.
 #
 # La cadena es RAW (r"""...""") y no una f-string: lleva expresiones regulares, y con las llaves
 # dobladas de una f-string los cuantificadores \d{3} serían ilegibles. Los tres valores que
@@ -4544,9 +4554,9 @@ _CONTADOR_JS = r"""
 
   var entrada = (W.__tfmContadorPagina !== PAGINA);
   W.__tfmContadorPagina = PAGINA;
-  // Aquí NO se consulta prefers-reduced-motion, a diferencia del resto de la aplicación: el
-  // porqué está arriba, en la cabecera del bloque. Lo único que corta la cuenta es no haber
-  // cambiado de página.
+  // Aquí NO se consulta prefers-reduced-motion; el porqué —que hoy vale para toda la
+  // aplicación— está arriba, en la cabecera del bloque. Lo único que corta la cuenta es no
+  // haber cambiado de página.
   if (!entrada) { return; }
 
   // 1150 ms es lo que tarda en leerse una cifra sin que la espera se note. El escalón de 90 ms
