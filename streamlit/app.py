@@ -4492,8 +4492,18 @@ def portada_js():
 #      un control— remonta el iframe; sin la guarda, las cifras volverían a correr en cada clic,
 #      que además de mareante miente: no ha entrado ningún dato nuevo.
 #
-# Con prefers-reduced-motion: reduce no se anima nada y la cifra se queda como está, igual que
-# el resto de los movimientos de la aplicación.
+# ESTE ES EL ÚNICO MOVIMIENTO DE LA APLICACIÓN QUE NO MIRA prefers-reduced-motion, y conviene
+# saber por qué antes de "arreglarlo": es una excepción pedida a propósito, no un descuido.
+# Todo lo demás —la entrada de las tarjetas, el filete de los títulos, el parallax de la portada—
+# sigue dentro de su @media y se anula si el sistema pide menos movimiento; esa parte no cambia.
+# El motivo es que el equipo desde el que se trabaja este panel lleva los efectos de animación de
+# Windows apagados, así que sus navegadores piden reduce SIEMPRE (comprobado con
+# SystemParametersInfo(SPI_GETCLIENTAREAANIMATION) = 0, y en la consola con matchMedia). Con la
+# guarda puesta, el contador funcionaba en el móvil y en la tableta y no se veía jamás en
+# escritorio. La memoria y la defensa ya están entregadas: esto es acabado visual, y entre
+# respetar la preferencia y que la cifra se vea donde se mira la página, se ha elegido lo segundo.
+# Si algún día vuelve a pesar más la accesibilidad, revertirlo es reponer la condición del
+# matchMedia en la guarda de abajo, una línea.
 #
 # La cadena es RAW (r"""...""") y no una f-string: lleva expresiones regulares, y con las llaves
 # dobladas de una f-string los cuantificadores \d{3} serían ilegibles. Los tres valores que
@@ -4513,7 +4523,10 @@ _CONTADOR_JS = r"""
 
   var entrada = (W.__tfmContadorPagina !== PAGINA);
   W.__tfmContadorPagina = PAGINA;
-  if (!entrada || W.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+  // Aquí NO se consulta prefers-reduced-motion, a diferencia del resto de la aplicación: el
+  // porqué está arriba, en la cabecera del bloque. Lo único que corta la cuenta es no haber
+  // cambiado de página.
+  if (!entrada) { return; }
 
   // 1150 ms es lo que tarda en leerse una cifra sin que la espera se note. El escalón de 90 ms
   // por columna barre la fila de izquierda a derecha, y los 140 de base la dejan arrancar
