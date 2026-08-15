@@ -4884,11 +4884,20 @@ elif page == "governance":
             (mil(GOV_SUITE["registros"]), S("gov_kpi_records")),
             ("15/15", S("gov_kpi_leakage")),
         ]
+        # count-up, igual que las cuatro cifras de Resumen y los AUC de Resultados. Las dos
+        # razones ("15/15") cuentan sus DOS numeros, que es lo que hace el troceador con
+        # cualquier texto mixto; no se les pone un caso especial porque el denominador quieto
+        # obligaria a distinguir "15/15" de "86% / 14%", y esa distincion no la puede hacer el
+        # script sin que alguien le diga cual es cual desde Python.
+        # Aqui las tarjetas no son columnas de st.columns sino celdas de .compare-grid, asi que
+        # closest('stColumn') no encuentra nada y las cuatro arrancan con el mismo retardo base:
+        # entran a la vez en vez de en cascada. Es correcto para una rejilla propia, donde no hay
+        # un orden de columnas de Streamlit al que engancharse.
         st.markdown(
             '<div class="compare-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">'
             + "".join(
                 f'<div class="info-card stat-card">'
-                f'<div class="stat-num">{v}</div>'
+                f'<div class="stat-num count-up">{v}</div>'
                 f'<div class="stat-label">{lab}</div></div>'
                 for v, lab in _kpis)
             + "</div>", unsafe_allow_html=True)
@@ -5215,6 +5224,12 @@ elif page == "governance":
             f'<div class="clinical-note">'
             f'{S("gov_footer_note").format(fuente=S(GOV_SUITE_FUENTE))}</div>',
             unsafe_allow_html=True)
+
+    # Los cuatro KPI de Calidad del dato. Va FUERA de los tres tabs, al nivel de la página: el
+    # componente no pinta nada y no tiene por qué vivir dentro de una pestaña. Que las tarjetas
+    # estén en el tab que arranca abierto no lo cambia — si algún día dejaran de estarlo, el
+    # observador las recogería igual cuando la pestaña se muestre.
+    contadores_js("governance")
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 3 — RESULTS
