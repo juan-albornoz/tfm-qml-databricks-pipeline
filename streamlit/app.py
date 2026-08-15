@@ -864,29 +864,66 @@ section[data-testid="stSidebar"] div[style*="cursor: col-resize"] {{ pointer-eve
    escritorio no se notaba porque manda nuestro toggle, pero en el teléfono, que es donde se usan
    los nativos, salía la flecha de Streamlit con su forma y su color.
    OJO a la asimetría de los dos testids, que es real y no un descuido: stExpandSidebarButton ES
-   el <button>, mientras que stSidebarCollapseButton es el <div> que lo contiene. */
+   el <button>, mientras que stSidebarCollapseButton es el <div> que lo contiene.
+   LAS MEDIDAS DE AQUÍ SON LAS DEL TELÉFONO, y por eso no van dentro de la media query: estos dos
+   botones NO EXISTEN por encima de los 768px —el de cerrar va en display:none unas líneas más
+   arriba y el de abrir ni siquiera llega al DOM mientras la barra esté desplegada, que en
+   escritorio es siempre (comprobado a 820, 1024 y 1440px: querySelector devuelve null)—. O sea
+   que este bloque es, en la práctica, CSS de móvil, y nada de lo que se toque aquí puede alterar
+   el escritorio.
+   El disco baja de 34 a 30px: sobre una barra de 320px y una cabecera de 46 era la pieza más
+   grande de la pantalla, y con la flecha ya a su tamaño no necesita tanto cuerpo. La pareja
+   disco/flecha queda en 30/19, la MISMA proporción que el toggle propio de escritorio (24/15),
+   subida a la escala del dedo. */
 [data-testid="stSidebarCollapseButton"] button,
 button[data-testid="stExpandSidebarButton"] {{
+    /* Referencia de posicionamiento para el ::after que amplía el área táctil (ver abajo). */
+    position:relative !important;
     background-color:{TOGGLE_DISCO} !important;
     color:{TOGGLE_FLECHA} !important;
     border:1px solid {TOGGLE_DISCO} !important;
     border-radius:50% !important;
     box-shadow: 0 2px 6px rgba(20,30,40,0.10), 0 1px 3px rgba(20,30,40,0.08) !important;
-    width:34px !important; height:34px !important; min-height:34px !important; padding:0 !important;
+    /* min-width explícito porque Streamlit le pone uno propio de 28px: sin él, el disco no
+       bajaría de esa medida por mucho que se le pida un ancho menor. */
+    width:30px !important; height:30px !important;
+    min-width:30px !important; min-height:30px !important; padding:0 !important;
     display:flex !important; align-items:center !important; justify-content:center !important;
     transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }}
 /* El icono nativo NO es un <svg>: es una ligadura de Material dentro de un <span>, con su propio
    dibujo (una flecha doble) y su propio color. Se retira entero y la flecha la pone el ::before
    con la misma máscara del toggle propio; al pintarse con currentColor entra sola en la
-   transición de color del botón y en el C_PRIMARY del :hover. */
-[data-testid="stSidebarCollapseButton"] button span[data-testid="stIconMaterial"],
-button[data-testid="stExpandSidebarButton"] span[data-testid="stIconMaterial"] {{
+   transición de color del botón y en el C_PRIMARY del :hover.
+   OJO AL SELECTOR, que aquí estuvo el fallo: la ligadura viene envuelta en DOS <span> anidados
+   —button > span (el contenedor del icono, 24x24) > span[data-testid="stIconMaterial"] (la
+   ligadura)— y esta regla apuntaba solo al de dentro. El envoltorio sobrevivía, y aunque no
+   pintaba nada seguía ocupando sus 24px de caja... con flex:0 0 auto, o sea INENCOGIBLE. Dentro
+   de un disco cuyo interior son 28px, el flex tenía que sacar esos 24 de algún sitio, y el único
+   que cedía era nuestra flecha: de los 17px declarados se quedaba en 8 —y, al repartirse la
+   línea en orden, arrinconada contra el borde izquierdo—. De ahí lo que se veía en el teléfono:
+   un disco grande con una flecha diminuta y descentrada. Ocultando el ENVOLTORIO, el
+   stIconMaterial se va con él (es su hijo) y la flecha se queda sola en la caja. */
+[data-testid="stSidebarCollapseButton"] button > span,
+button[data-testid="stExpandSidebarButton"] > span {{
     display:none !important;
 }}
 [data-testid="stSidebarCollapseButton"] button::before,
 button[data-testid="stExpandSidebarButton"]::before {{
-    content:""; display:block; width:17px; height:17px; background-color:currentColor;
+    /* flex:0 0 auto es el cinturón de seguridad de lo anterior: aunque Streamlit vuelva algún día
+       a meter algo dentro del botón, la flecha ya no cederá su tamaño para hacerle sitio. */
+    content:""; display:block; flex:0 0 auto;
+    width:19px; height:19px; background-color:currentColor;
+}}
+/* Área táctil de 44px —el mínimo de las guías de iOS— sin engordar el disco: un rectángulo
+   transparente que desborda el botón por los cuatro lados. Va en position:absolute, así que NO
+   entra en la línea flex (no le quita sitio a la flecha) y, al ser hijo del botón, el toque lo
+   recibe el botón. Importa porque en el teléfono este es el único mando que abre y cierra el
+   panel. Los 8px salen de que el bloque contenedor de un absolute es la caja de RELLENO, que
+   aquí mide 28 (30 menos los dos bordes): 28 + 8 + 8 = 44 justos. */
+[data-testid="stSidebarCollapseButton"] button::after,
+button[data-testid="stExpandSidebarButton"]::after {{
+    content:""; position:absolute; inset:-8px; border-radius:50%;
 }}
 /* Cada uno con su sentido fijo: cerrar apunta a la izquierda, abrir a la derecha. */
 [data-testid="stSidebarCollapseButton"] button::before {{
