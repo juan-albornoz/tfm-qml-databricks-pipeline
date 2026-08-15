@@ -3113,25 +3113,38 @@ with st.sidebar:
        puede quedarse colgada de un contenedor interno que un día se renombre.
 
        backwards es obligatorio: sin él, un bloque con retardo se vería opaco durante ese
-       retardo y luego parpadearía a cero para entrar. Y como toda la regla vive dentro de
-       prefers-reduced-motion, quien pida menos movimiento no recibe ni la animación ni el
-       estado inicial — ve la página quieta y completa, nunca en blanco. */
-    @media (prefers-reduced-motion: no-preference) {{
-        .page-eyebrow, .page-title, .page-subtitle, .page-rule,
-        .section-title, .section-sub, .lead-card, .clinical-note,
-        .kpi-card, .info-card, .stat-card {{
-            animation: tfmEnter{_page_idx_anim} 0.42s cubic-bezier(0.22,1,0.36,1) backwards;
-        }}
-        .page-title    {{ animation-delay:0.06s; }}
-        .page-subtitle {{ animation-delay:0.11s; }}
-        .page-rule     {{ animation-delay:0.15s; }}
-        .section-title, .section-sub {{ animation-delay:0.17s; }}
-        .lead-card, .clinical-note, .kpi-card, .info-card, .stat-card {{ animation-delay:0.20s; }}
-        /* El filete del título de sección se dibuja solo, de izquierda a derecha. Es el
-           gesto editorial de la página —la regla que cierra el titular— hecho visible. */
-        .section-title::after {{
-            animation: tfmRule{_page_idx_anim} 0.6s cubic-bezier(0.22,1,0.36,1) 0.22s backwards;
-        }}
+       retardo y luego parpadearía a cero para entrar.
+
+       ESTA CASCADA YA NO VIVE DENTRO DE prefers-reduced-motion, y es deliberado. Es la segunda
+       excepción de la aplicación, hermana de la del contador y por el mismo motivo: el equipo
+       desde el que se trabaja este panel lleva los efectos de animación de Windows apagados
+       —SystemParametersInfo(SPI_GETCLIENTAREAANIMATION) = 0—, así que sus navegadores piden
+       reduce siempre y la entrada escalonada no se veía NUNCA en escritorio, solo en el móvil y
+       en la tableta. Entregadas ya la memoria y la defensa, esto es acabado visual y se ha
+       elegido que se vea donde se mira la página. Revertirlo es volver a envolver el bloque en
+       @media (prefers-reduced-motion: no-preference).
+
+       Ojo a lo que eso cambia en el `backwards`: antes, quien pedía menos movimiento no recibía
+       ni la animación ni el estado inicial, y veía la página quieta y completa. Ahora la recibe
+       todo el mundo, así que durante el retardo el bloque está en el `from` del keyframe —opaco
+       y 12 px más abajo—. Es el comportamiento buscado, pero implica que estos elementos
+       dependen de que la animación llegue a correr para hacerse visibles: si algún día se toca
+       el nombre del keyframe o se rompe su declaración, no se quedan sin animar, se quedan sin
+       verse. El keyframe se emite tres líneas más abajo, en este mismo <style>. */
+    .page-eyebrow, .page-title, .page-subtitle, .page-rule,
+    .section-title, .section-sub, .lead-card, .clinical-note,
+    .kpi-card, .info-card, .stat-card {{
+        animation: tfmEnter{_page_idx_anim} 0.42s cubic-bezier(0.22,1,0.36,1) backwards;
+    }}
+    .page-title    {{ animation-delay:0.06s; }}
+    .page-subtitle {{ animation-delay:0.11s; }}
+    .page-rule     {{ animation-delay:0.15s; }}
+    .section-title, .section-sub {{ animation-delay:0.17s; }}
+    .lead-card, .clinical-note, .kpi-card, .info-card, .stat-card {{ animation-delay:0.20s; }}
+    /* El filete del título de sección se dibuja solo, de izquierda a derecha. Es el
+       gesto editorial de la página —la regla que cierra el titular— hecho visible. */
+    .section-title::after {{
+        animation: tfmRule{_page_idx_anim} 0.6s cubic-bezier(0.22,1,0.36,1) 0.22s backwards;
     }}
     @keyframes tfmEnter{_page_idx_anim} {{
         from {{ opacity:0; transform:translateY(12px); }}
