@@ -195,48 +195,65 @@ st.set_page_config(page_title="QML DataOps", page_icon="◆", layout="wide", ini
 # ═════════════════════════════════════════════════════════════════════════
 # SISTEMA DE DISEÑO
 # ═════════════════════════════════════════════════════════════════════════
-# PALETA BASE (definida por el autor):
-#   #F5A623  ámbar           #F9C449  oro       #FBDD8B  crema
-#   #E9E9E9  gris claro      #1C1F26  carbón
+# PALETA BASE (definida por el autor, y definitiva):
+#   #05060A  abismo     #141826  pizarra    #2B2F3A  grafito
+#   #FFB703  ámbar      #F1F5F9  niebla
 #
-# Medida con el validador, la paleta tiene DOS familias muy desiguales, y de ahí
-# sale todo el reparto:
-#   · Los tres cálidos caben en 17° de tono (73° → 90°) y son todos altísimos en
-#     luminosidad (L 0,784 · 0,847 · 0,905). Sobre blanco dan 2,03:1 · 1,61:1 ·
-#     1,33:1 — NINGUNO llega al 3:1 que exige una marca de datos. Sobre el carbón
-#     dan 8,1:1 · 10,2:1 · 12,4:1. Es una paleta concebida para fondo oscuro, y el
-#     tema oscuro es donde rinde al máximo.
-#   · #F5A623 ↔ #F9C449 → ΔE 7,1 en visión normal (el suelo es 15): tal cual, los
-#     dos cálidos vecinos son el mismo color para cualquier ojo, no solo para quien
-#     tiene daltonismo.
-#   · Dos neutros puros que hacen todo el trabajo estructural: #E9E9E9 (croma 0,000)
-#     y #1C1F26 (croma 0,014 — 16,5:1 sobre blanco, el ancla de contraste).
+# Medida con el validador, esta paleta tiene una propiedad que las anteriores no
+# tenían y que decide TODO el reparto: sus tres oscuros no son tres colores, son
+# UNA ESCALERA.
+#   · Comparten tono casi exacto (271° · 272° · 269°) con croma mínimo (0,011 ·
+#     0,028 · 0,021) y se escalonan limpiamente en luminosidad: L 0,123 · 0,212 ·
+#     0,306. Entre peldaños consecutivos hay 1,15:1 y 1,32:1 — demasiado poco para
+#     leerse como colores distintos, que es EXACTAMENTE lo que se quiere de unos
+#     planos de elevación. El tema oscuro no los reparte, los apila: lienzo →
+#     tarjeta → superficie alterna. Es la paleta la que pide el aspecto "elevado".
+#   · El ámbar es el único cromático (C 0,171, h 80°) y el más brillante de las tres
+#     paletas que ha tenido la app. Sobre los tres oscuros da 11,6 / 10,1 / 7,7:1.
+#     Sobre la niebla, 1,6:1 — como siempre, un color concebido para fondo oscuro.
+#   · La niebla #F1F5F9 es fría (h 248°) y está altísima: L 0,968, a 1,10:1 del
+#     blanco. Eso tiene una consecuencia que hay que tener presente en todo el tema
+#     claro: la tarjeta blanca sobre este lienzo CASI NO SE DESPEGA POR COLOR. La
+#     elevación en claro la sostienen la sombra y el filete, no el escalón tonal —
+#     ver SHADOW, que por esto se rehizo a tres capas.
+#   · Lo que esta paleta NO trae es un tono medio: no hay nada entre L 0,306 y
+#     L 0,825. Los pasos intermedios que necesitan la segunda serie, la rampa y las
+#     tintas apagadas se DERIVAN sobre el eje frío (h 265°), que es el de la propia
+#     escalera. No hay ni un color inventado fuera de esa línea.
 #
-# Reparto en consecuencia:
-#   · INTERFAZ (fondos, superficies, bordes, tinta, acentos) → los 5 tonos. Carbón y
-#     gris son superficie y tinta; el ámbar es el acento de marca; oro y crema, realce.
-#   · SERIES (los 3 modelos) → NO caben tres cálidos. Se probó por enumeración: el
-#     mejor trío cálido posible se queda en ΔE 15,0-15,1 (justo en el filo del suelo)
-#     y FALLA en oscuro, además de convertir el tercer tono en un oliva turbio que ya
-#     no parece la paleta. El reparto que sí pasa usa las DOS familias —
-#     tinta · gris · ámbar— y es además la lectura correcta del relato: los dos
-#     modelos clásicos en neutro, el cuántico en el color de marca. El color va donde
-#     está la tesis.
-#   · RAMP (magnitud) → rampa de un solo tono sobre el eje cálido (h 78°), cinco pasos
-#     de luminosidad monótona. Una escala de magnitud tiene que ser monocroma para que
-#     el orden se lea sin leyenda.
+# Reparto en consecuencia — las dos familias tienen trabajos DISTINTOS y no se cruzan:
+#   · FRÍOS (abismo · pizarra · grafito + derivados) → ESTRUCTURA y MAGNITUD: los
+#     planos de elevación, bordes, tinta, los dos modelos clásicos y la rampa entera.
+#   · ÁMBAR → SEÑAL: acento de marca, foco, navegación activa, filetes, halos y el
+#     modelo cuántico. Es el único color de la app que grita, así que solo se le
+#     deja gritar donde hay algo que señalar.
+#   · SERIES (los 3 modelos) → tinta · pizarra media · ámbar. Los dos clásicos en la
+#     familia fría, el cuántico en el color de marca: el color va donde está la
+#     tesis. El ámbar separa al cuántico también por TONO, que es lo que sobrevive
+#     al daltonismo (peor caso simulado: ΔE 30,5).
+#   · RAMP (magnitud) → rampa fría de un solo tono (h 265°), cinco pasos de
+#     luminosidad monótona sobre el eje de la escalera. Va en frío y NO en ámbar a
+#     propósito: si la magnitud fuera dorada, el ojo no podría distinguir "esta
+#     celda vale mucho" de "esto está seleccionado", que es lo que dice el ámbar en
+#     el resto de la aplicación. Una escala de magnitud tiene que ser monocroma
+#     para que el orden se lea sin leyenda, y aquí además tiene que ser MUDA.
 #
-# Resultados del validador con los valores de abajo (--pairs all):
-#   SERIES claro  → CVD ΔE 14,3 · visión normal 17,1 · contraste ≥3:1 los tres
-#   SERIES oscuro → CVD ΔE 16,8 · visión normal 17,2 · contraste ≥3:1 los tres
-#   RAMP claro / RAMP oscuro → monotonía, ΔL, tono único y contraste: TODAS PASS
-#   Único FAIL, deliberado: el suelo de croma sobre los dos slots neutros. Ese suelo
-#   existe para que un tono no "lea gris" y deje de hacer trabajo de identidad; aquí
-#   los neutros SON neutros a propósito y con un solo cromático entre ellos no hay
-#   ambigüedad posible (tinta ↔ gris ΔE 32). Ojo: el gris de serie es FRÍO (h 267°,
-#   el tono del propio carbón aclarado) y no cálido — un taupe cálido colapsaba
-#   contra el ámbar en ΔE 10. Si se retoca cualquier hex, hay que volver a pasar el
-#   validador.
+# Resultados del validador con los valores de abajo:
+#   SERIES oscuro → ΔE normal 29,4 / 33,9 / 45,9 · peor CVD 28,6 · ≥3:1 los tres
+#   SERIES claro  → ΔE normal 22,2 / 54,9 / 46,7 · peor CVD 21,7 · ≥3:1 los tres
+#   RAMP claro / RAMP oscuro → monotonía, ΔL constante, tono único: TODAS PASS
+#   TINTA, ACENTO y ESTADO → los tres niveles de texto, los dos acentos y los tres
+#   colores de estado pasan 4,5:1 contra los CUATRO fondos de su tema (tarjeta,
+#   lienzo, barra lateral y superficie alterna), no solo contra el más favorable.
+#   Se subió de tres fondos a cuatro respecto de la revisión anterior porque en esta
+#   paleta la superficie alterna es el grafito, bastante más claro que la tarjeta, y
+#   ahí se colaban dos colores que pasaban en los otros tres. Ver C_PRIMARY, que es
+#   donde está la advertencia sobre medir contra el fondo equivocado.
+#   Único FAIL, deliberado y heredado: el suelo de croma sobre los slots neutros de
+#   SERIES. Ese suelo existe para que un tono no "lea gris" y deje de hacer trabajo
+#   de identidad; aquí el neutro ES neutro a propósito y con la pizarra media y el
+#   ámbar al lado no hay ambigüedad posible. Si se retoca cualquier hex, hay que
+#   volver a pasar el validador.
 # ─────────────────────────────────────────────────────────────────────────
 
 # La app ABRE EN OSCURO. Es solo el valor de partida, no una restricción: la cápsula-interruptor
@@ -539,66 +556,97 @@ CSS_FLAGS_MOVIL = "\n    ".join(
     _css_banderas(FLAG_TOP_M, _FLAG_ANCHO_M, _FLAG_ALTO_M, _MENU_BORDE_M, con_imagen=False))
 
 # ── Paleta base, literal. Referencia única para todo lo demás. ──
-P_AMBAR, P_ORO, P_CREMA, P_GRIS, P_CARBON = "#F5A623", "#F9C449", "#FBDD8B", "#E9E9E9", "#1C1F26"
+P_ABISMO, P_PIZARRA, P_GRAFITO, P_AMBAR, P_NIEBLA = "#05060A", "#141826", "#2B2F3A", "#FFB703", "#F1F5F9"
+# Paso alto del ámbar. NO está en la paleta del autor: se deriva subiendo la luminosidad
+# del #FFB703 (L 0,825 → 0,876) con el tono intacto (h 81°). Existe porque el ámbar es el
+# único cálido de la paleta y hay dos sitios que necesitan DOS pasos cálidos y no uno:
+# el degradado del filete de portada y el acento enfático en tema oscuro (C_DARK). Sin
+# él, ese degradado sería un color plano y ese acento no tendría a dónde separarse.
+P_AMBAR_ALTO = "#FFCE75"
 
 # ── Escala CATEGÓRICA: identidad de cada modelo. Orden fijo, nunca reciclado. ──
-# Tinta = baseline clásico · gris = puente estructural · ámbar = cuántico.
-# Los dos clásicos van en las dos familias neutras del autor (carbón y gris claro),
-# invertidas entre temas para que la que hace de tinta sea siempre la que contrasta.
-# El slot cuántico lleva el color de marca: en oscuro es el #F9C449 del autor sin
-# tocar (10,2:1); en claro se baja a L 0,64 porque el original da 1,61:1 sobre blanco
-# y como relleno de barra sería invisible. Se conserva el tono, se corrige el paso.
+# Tinta = baseline clásico · pizarra media = puente estructural · ámbar = cuántico.
+# Los dos clásicos van en la familia FRÍA, invertidos entre temas para que el que hace
+# de tinta sea siempre el que contrasta: niebla/pizarra en el slot de LightGBM, y en el
+# de SVM un paso MEDIO del eje frío (h 265°) que la paleta no trae hecho — sus tres
+# oscuros están todos por debajo de L 0,31 y ninguno llega al 3:1 que exige un relleno
+# de barra sobre la tarjeta. Se deriva a L 0,64 en oscuro y a L 0,47 en claro: mismo
+# tono que la escalera, la luminosidad que hace falta en cada fondo.
+# El slot cuántico lleva el color de marca: en oscuro es el #FFB703 del autor sin tocar
+# (10,1:1); en claro se baja a L 0,655 porque el original da 1,75:1 sobre blanco y como
+# relleno de barra sería invisible. Se conserva el tono, se corrige el paso.
 SERIES = {
-    "lightgbm": P_GRIS    if _is_dark else P_CARBON,
-    "svm_rbf":  "#8A8F99" if _is_dark else "#71747C",
-    "qsvm":     P_ORO     if _is_dark else "#C07C08",
+    "lightgbm": P_NIEBLA  if _is_dark else P_PIZARRA,
+    "svm_rbf":  "#7D8CAB" if _is_dark else "#4C5A7A",
+    "qsvm":     P_AMBAR   if _is_dark else "#BD8500",
 }
 
 # ── Escala SECUENCIAL: magnitud (matriz de confusión, velocímetro) ──
-# Un solo tono (h 78°, el eje cálido de la paleta), luminosidad monótona. El índice 4
-# es SIEMPRE el extremo de máxima magnitud: en claro eso es el paso más oscuro y en
-# oscuro el más brillante — en ambos casos, el que más se despega de su fondo.
-RAMP = (["#724D00", "#9A6A00", "#C48800", "#EBAA2D", "#FFCF83"] if _is_dark
-        else ["#EDAB30", "#CC8E00", "#A57200", "#805800", "#604100"])
+# Un solo tono (h 265°, el eje FRÍO de la escalera), luminosidad monótona. Va en frío y
+# no en ámbar por la razón de arriba: el ámbar significa "señal" en el resto de la app y
+# una magnitud dorada no se distinguiría de una selección.
+# El índice 4 es SIEMPRE el extremo de máxima magnitud: en claro eso es el paso más
+# oscuro y en oscuro el más brillante — en ambos casos, el que más se despega de su
+# fondo. Los pasos van a ΔL constante (≈0,10 en oscuro, 0,12 en claro), no a ojo: es lo
+# que hace que el orden se lea sin leyenda.
+RAMP = (["#333D51", "#4A5671", "#657391", "#8492AF", "#B1BBD0"] if _is_dark
+        else ["#B4BED3", "#8997B4", "#647392", "#45516B", "#283042"])
 
 # ── Acento de marca (cromo de interfaz: navegación, foco, sliders, reglas) ──
-# En oscuro es el #F5A623 del autor sin tocar (8,1:1 sobre la superficie). En claro
-# ese mismo ámbar da 2,03:1 y no puede llevar texto: el acento baja del mismo tono, y
+# En oscuro es el #FFB703 del autor sin tocar (10,1:1 sobre la superficie). En claro
+# ese mismo ámbar da 1,75:1 y no puede llevar texto: el acento baja del mismo tono, y
 # el ámbar puro queda reservado a rellenos y tintes, donde no se le pide legibilidad.
 #
-# CUÁNTO baja se corrigió midiendo, y el motivo importa porque se repite por toda la
-# paleta: el paso anterior era L 0,55 (#9A6504) y venía anotado como "4,96:1", cifra
-# CIERTA pero medida solo contra SURFACE, que es blanco puro. El acento no vive solo en
-# las tarjetas: cae también sobre el lienzo (#F4F3F0) en los antetítulos y las cifras
-# del deslizador, y sobre la barra lateral (#E9E9E9) en los enlaces del buscador. Ahí
-# bajaba a 4,47:1 y 4,08:1 — por debajo del 4,5:1 de WCAG para texto pequeño.
-# L 0,51 es el paso MÁS CLARO que pasa en los tres con margen (5,84 sobre tarjeta,
-# 5,26 sobre lienzo, 4,81 sobre barra lateral), así que se conserva todo el color que
-# se puede conservar. Sigue por encima de C_DARK, que es el escalón siguiente.
-# Al medir un acento nuevo, medirlo contra el fondo MÁS OSCURO de los tres, no contra
+# CUÁNTO baja se decidió midiendo, y el motivo importa porque se repite por toda la
+# paleta: el acento no vive solo en las tarjetas. Cae también sobre el lienzo (#F1F5F9)
+# en los antetítulos y las cifras del deslizador, sobre la barra lateral (#E2E9F0) en
+# los enlaces del buscador, y sobre la superficie alterna. Medido SOLO contra el blanco
+# de la tarjeta, cualquier paso hasta L 0,57 parece pasar; contra la barra lateral, que
+# es el fondo claro más oscuro de la app, el mismo color se queda en 3,7:1 — por debajo
+# del 4,5:1 de WCAG.
+# L 0,52 (#8A6000) es el paso MÁS CLARO que pasa en los CUATRO con margen (5,59 sobre
+# tarjeta, 5,11 sobre lienzo, 4,57 sobre barra lateral y alterna), así que se conserva
+# todo el color que se puede conservar.
+# Al medir un acento nuevo, medirlo contra el fondo MÁS OSCURO de los cuatro, no contra
 # el blanco.
-C_PRIMARY = P_AMBAR if _is_dark else "#8B5B04"
-C_DARK    = P_ORO if _is_dark else "#6B4600"
+C_PRIMARY = P_AMBAR if _is_dark else "#8A6000"
+# C_DARK es el acento ENFÁTICO: el mismo oro separado un paso MÁS de la superficie, en
+# la dirección que corresponda a cada tema (más brillante en oscuro, más profundo en
+# claro). Lo usan los rótulos que tienen que ganarle al acento normal sin cambiar de
+# color — el botón de la puerta que toca en la esfera de Bloch, el ítem seleccionado.
+C_DARK    = P_AMBAR_ALTO if _is_dark else "#664600"
 C_QUANTUM = SERIES["qsvm"]          # acento del componente cuántico (Bloch, ZZFeatureMap)
-# Pasos intermedios de la rampa. Se toman del extremo VISIBLE de cada una — la clara
-# corre brillante→oscuro y la oscura oscuro→brillante, así que el paso "medio-alto" es
-# RAMP[1] en claro y RAMP[3] en oscuro. Con esto el halo del interruptor de tema y el
-# anillo de las láminas pesan ópticamente igual en ambos temas.
-# (La crema P_CREMA no tiene alias propio: se usa a través de RAMP y de SERIES, que es
-# donde le toca, y nunca como color de texto en claro — ahí da 1,33:1.)
-C_MID2  = RAMP[3] if _is_dark else RAMP[1]
+# En la paleta original C_QUANTUM y C_PRIMARY eran dos cálidos distintos (#F9C449 y
+# #F5A623), pero se llevaban ΔE 7,1: el mismo color para cualquier ojo. Aquí hay UN
+# solo cálido y en oscuro los dos valen #FFB703. No se pierde nada que se viera.
+#
+# Pasos intermedios. Aquí SE SEPARAN los dos, que antes salían ambos de la rampa:
+#   · C_MID1 es dato — la retícula de ticks del deslizador y las líneas guía de las
+#     gráficas—, así que sale de la RAMPA, que es la escala del dato.
+#   · C_MID2 es BRILLO — el halo del interruptor de tema, el anillo de las láminas,
+#     el pulgar del deslizador, el latido de la portada—, así que sale del ORO, que
+#     es la familia de la señal. Con la rampa ahora en frío, dejarlo donde estaba
+#     habría apagado todos los halos de la app a un azul que no se ve sobre el fondo
+#     azul. Cada tema toma el paso del oro que pesa en su fondo: el oro pleno sobre
+#     oscuro, el paso de relleno sobre claro.
 C_MID1  = RAMP[2]
+C_MID2  = P_AMBAR if _is_dark else "#BD8500"
 
 # ── Colores de ESTADO (reservados: nunca se reutilizan como “serie 4”) ──
 # Única excepción deliberada a la paleta base: bien/atención/grave tienen que leerse
-# como estado de forma inmediata y universal. Con una marca ámbar hay un riesgo extra —
-# el “atención” canónico ES ámbar y se confundiría con el acento—, así que se desplaza
-# a un naranja quemado claramente más rojo (h 46° frente a los 73° de la marca) y el
-# “grave” a rojo (h 29°). Los tres van SIEMPRE acompañados de su etiqueta de texto.
+# como estado de forma inmediata y universal. Con una marca dorada hay un riesgo extra —
+# el “atención” canónico ES dorado y se confundiría con el acento—, así que se desplaza
+# a un naranja quemado claramente más rojo (h 45° frente a los 80° de la marca) y el
+# “grave” a rojo (h 27°). Los tres van SIEMPRE acompañados de su etiqueta de texto.
+# Los seis pasan 4,5:1 contra los CUATRO fondos de su tema: se usan como TINTA (el
+# rótulo "passed", las cifras de los KPI), no solo como puntos de color. El "grave"
+# oscuro subió a L 0,70 respecto de la revisión anterior por ese cuarto fondo: sobre el
+# grafito —la superficie alterna, el plano más claro del tema oscuro— se quedaba en
+# 4,28:1 mientras pasaba de sobra en los otros tres.
 STATUS = {
-    "good":     "#4FBE8C" if _is_dark else "#2F6A4E",
-    "warning":  "#F0834A" if _is_dark else "#B4531B",
-    "critical": "#EE6A5C" if _is_dark else "#A93226",
+    "good":     "#3FC98B" if _is_dark else "#196646",
+    "warning":  "#F5854B" if _is_dark else "#984012",
+    "critical": "#F46F66" if _is_dark else "#9C2B24",
 }
 
 # ── Tipografía ──
@@ -620,41 +668,94 @@ def T(tema=None):
     con la app en claro (ver .ov-hero-img). El parámetro se conserva porque es la forma de pedir
     una paleta cruzada sin copiar hexadecimales a mano, que es justo lo que hay que evitar.
 
-    Las dos superficies clave son literalmente los dos neutros del autor, cada una en
-    el tema donde le toca ser el fondo de tarjeta: #1C1F26 en oscuro y —por el otro
-    extremo— #E9E9E9 como barra lateral y superficie alterna en claro, con blanco puro
-    para las tarjetas. El lienzo de fondo se separa un paso de la tarjeta en ambos
-    temas (#F4F3F0 en claro, #12151B en oscuro) para que la tarjeta se vea flotar.
+    El tema OSCURO usa los tres oscuros del autor tal cual, y en el orden en que ya
+    venían escalonados — porque venían escalonados. Es una ESCALERA DE ELEVACIÓN de
+    cuatro planos, y de ella sale todo el aspecto "elevado" del tema:
 
-    El par tinta/superficie es el que da el contraste que se pedía: 16,5:1 en claro
-    (#1C1F26 sobre blanco) y 13,6:1 en oscuro (#E9E9E9 sobre #1C1F26) — muy por encima
-    del 4,5:1 de WCAG. Los dos escalones de tinta apagada mantienen 8,3:1 y 5,0:1 en
-    claro, 7,3:1 y 4,8:1 en oscuro, así que TODOS los niveles de texto de la app pasan
-    WCAG AA, incluido el más atenuado.
+        barra lateral  #0A0E19   L 0,166   el plano que RECIBE (recede)
+        lienzo         #05060A   L 0,123   el suelo, el más profundo
+        tarjeta        #141826   L 0,212   +1,15:1 sobre el lienzo
+        alterna        #2B2F3A   L 0,306   +1,32:1 sobre la tarjeta
 
-    NOTA: ninguno de los tres cálidos se usa como color de texto sobre blanco: dan
-    2,03:1, 1,61:1 y 1,33:1. Viven en bordes, rellenos y realces; cuando el acento
-    tiene que llevar texto en claro, usa el paso oscurecido C_PRIMARY (5,84:1 sobre
-    esta superficie, y nunca por debajo de 4,81:1 en los otros dos fondos claros de
-    la app — ver allí, que es donde está la advertencia sobre medir contra el blanco).
+    Que los saltos sean de 1,15 y 1,32 no es un defecto: es exactamente lo que se le
+    pide a unos planos de elevación. Se distinguen como ALTURAS, no como colores, y
+    quien termina de separarlos es la sombra más el filete de .kpi-card. Si el salto
+    fuera mayor cada tarjeta parecería un bloque de otro color pegado encima, que es
+    el aspecto de panel de 2015 que el sistema lleva evitando desde el principio.
+
+    Hay UNA inversión respecto de las paletas anteriores, y es forzada: antes la barra
+    lateral caía POR DEBAJO del lienzo, y aquí no puede. El lienzo está clavado en
+    #05060A por decisión de paleta y ya casi no queda recorrido por debajo — el paso
+    siguiente hacia abajo es negro puro, que da 1,02:1 contra el lienzo (invisible) y
+    encima banda en pantallas malas. Así que la barra sube en vez de bajar: L 0,166,
+    1,05:1 sobre el lienzo. Ver .ov-hero-img, que usa sidebar_bg como telón y a la que
+    esta inversión sí le cambia el sentido de la profundidad.
+
+    El tema CLARO tiene el problema contrario y hay que tenerlo presente: el lienzo
+    #F1F5F9 está en L 0,968, a solo 1,10:1 del blanco. La tarjeta blanca CASI NO SE
+    DESPEGA POR COLOR — mucho menos que con el platino anterior (1,31:1). Por eso en
+    claro la elevación no la lleva el escalón tonal sino la SOMBRA (rehecha a tres
+    capas, ver SHADOW) y el filete de borde, que a 1,47:1 sobre la tarjeta es lo que
+    de verdad dibuja su contorno. La barra lateral y la superficie alterna comparten
+    un paso más oscuro (#E2E9F0): son el mismo plano, como en las paletas anteriores.
+
+    El par tinta/superficie da el contraste que se pedía: 17,7:1 en claro (#141826
+    sobre blanco) y 16,1:1 en oscuro (#F1F5F9 sobre #141826) — muy por encima del
+    4,5:1 de WCAG. Los escalones de tinta apagada se midieron contra los CUATRO fondos
+    de su tema, no solo contra la tarjeta: 8,9:1 y 6,0:1 en claro (4,9:1 en el peor
+    caso), 8,8:1 y 5,6:1 en oscuro (4,5:1 sobre el grafito, que es el fondo que más
+    aprieta). TODOS los niveles de texto de la app pasan WCAG AA, incluido el más
+    atenuado y sobre el fondo más adverso.
+    Las tintas apagadas son FRÍAS (h 265°) y no grises: comparten tono con la escalera,
+    así que el texto secundario parece hundirse en el plano en vez de ensuciarse, que
+    es lo que pasa cuando se apaga con gris neutro sobre fondo frío. Por lo mismo, los
+    neutros claros llevan el tono del propio #F1F5F9 (h 248°) y no croma cero.
+
+    NOTA: el ámbar NO se usa como color de texto sobre blanco — da 1,75:1. Vive en
+    bordes, rellenos y realces; cuando el acento tiene que llevar texto en claro, usa
+    el paso oscurecido C_PRIMARY (5,59:1 sobre esta superficie, y nunca por debajo de
+    4,57:1 en los otros tres fondos claros — ver allí, que es donde está la advertencia
+    sobre medir contra el blanco).
     """
     if (tema or st.session_state.theme) == "dark":
-        return dict(bg="#12151B", surface=P_CARBON, surface_alt="#262A33",
-                     text=P_GRIS, text_secondary="#A9ADB6", text_muted="#868B95",
-                     border="#2C313B", border_strong="#3D434F",
-                     sidebar_bg="#0E1116", sidebar_active="#232833")
-    return dict(bg="#F4F3F0", surface="#FFFFFF", surface_alt=P_GRIS,
-                 text=P_CARBON, text_secondary="#4A4E57", text_muted="#6B6F78",
-                 border="#DCDBD6", border_strong="#BFBEB8",
-                 sidebar_bg=P_GRIS, sidebar_active="#DAD9D3")
+        return dict(bg=P_ABISMO, surface=P_PIZARRA, surface_alt=P_GRAFITO,
+                     text=P_NIEBLA, text_secondary="#B2B7C2", text_muted="#949CAD",
+                     border="#252937", border_strong="#424757",
+                     sidebar_bg="#0A0E19", sidebar_active="#1F2432")
+    return dict(bg=P_NIEBLA, surface="#FFFFFF", surface_alt="#E2E9F0",
+                 text=P_PIZARRA, text_secondary="#414A5E", text_muted="#5A6376",
+                 border="#CDD6DF", border_strong="#A5B1BD",
+                 sidebar_bg="#E2E9F0", sidebar_active="#D5DDE6")
 
 t = T()
 
 # ── Elevación: una sola definición de sombra para TODAS las tarjetas ──
-SHADOW = ("0 1px 2px rgba(0,0,0,0.30), 0 6px 20px -6px rgba(0,0,0,0.50)" if _is_dark
-          else "0 1px 1.5px rgba(11,26,38,0.04), 0 4px 14px -4px rgba(11,26,38,0.07)")
-SHADOW_HOVER = ("0 2px 4px rgba(0,0,0,0.35), 0 16px 34px -10px rgba(0,0,0,0.62)" if _is_dark
-                else "0 2px 4px rgba(11,26,38,0.05), 0 16px 32px -10px rgba(11,26,38,0.13)")
+# TRES CAPAS y no dos, y aquí está la mitad del aspecto "elevado" de la app. Una sombra
+# de una sola capa dice "hay una caja"; tres dicen a qué ALTURA está, porque es como se
+# comporta la luz real: un contacto muy corto y casi opaco justo bajo el borde, una
+# sombra media que da el cuerpo, y una difusa y muy abierta que sitúa la pieza en la
+# habitación. Es la diferencia entre un panel y una tarjeta que flota.
+#
+# En CLARO esto no es cosmética, es estructural, y el motivo está en T(): el lienzo
+# #F1F5F9 se queda a 1,10:1 de la tarjeta blanca, así que POR COLOR la tarjeta no se
+# despega — casi todo el trabajo de separarla lo hacen estas tres capas y el filete de
+# borde. Con la paleta anterior (lienzo a 1,31:1) bastaban dos capas flojas; aquí no.
+# El tinte es el propio #05060A (5,6,10) y no un negro neutro: sobre un papel frío como
+# el #F1F5F9 una sombra neutra lee gris sucio, y teñida del oscuro de la paleta lee como
+# sombra de verdad.
+#
+# En OSCURO el reparto es el contrario: sobre un lienzo casi negro una sombra negra casi
+# no tiene recorrido, así que allí quien separa es que la TARJETA ES MÁS CLARA que el
+# lienzo (los 1,15:1 de la escalera) más el brillo cenital de CARD_SHEEN. La sombra sigue
+# estando —y bien opaca— porque es lo que hunde el borde inferior, pero es la segunda voz.
+SHADOW = ("0 1px 2px rgba(0,0,0,0.55), 0 4px 10px -2px rgba(0,0,0,0.45), "
+          "0 12px 30px -8px rgba(0,0,0,0.70)" if _is_dark else
+          "0 1px 2px rgba(5,6,10,0.06), 0 4px 10px -2px rgba(5,6,10,0.08), "
+          "0 12px 28px -8px rgba(5,6,10,0.10)")
+SHADOW_HOVER = ("0 2px 4px rgba(0,0,0,0.60), 0 8px 18px -4px rgba(0,0,0,0.55), "
+                "0 24px 48px -12px rgba(0,0,0,0.80)" if _is_dark else
+                "0 2px 4px rgba(5,6,10,0.08), 0 8px 18px -4px rgba(5,6,10,0.12), "
+                "0 24px 44px -12px rgba(5,6,10,0.16)")
 
 # ── Brillo de tarjeta: luz cenital, no un color ───────────────────────────────
 # Un degradado vertical brevísimo sobre la superficie. Es lo que separa una tarjeta "plana
@@ -666,8 +767,8 @@ SHADOW_HOVER = ("0 2px 4px rgba(0,0,0,0.35), 0 16px 34px -10px rgba(0,0,0,0.62)"
 # se mueve la luminosidad, y en una cantidad (3,5% y 2,5%) que no llega a tocar ningún ratio.
 # En oscuro la luz suma por arriba; en claro no hay recorrido hacia el blanco desde el blanco,
 # así que el volumen se consigue al revés, sombreando muy levemente por abajo.
-CARD_SHEEN = ("linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0) 45%)" if _is_dark
-              else "linear-gradient(180deg, rgba(11,26,38,0) 55%, rgba(11,26,38,0.025))")
+CARD_SHEEN = ("linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0) 45%)" if _is_dark
+              else "linear-gradient(180deg, rgba(5,6,10,0) 55%, rgba(5,6,10,0.022))")
 
 # ── Relieve del buscador (neumorfismo) ────────────────────────────────────────
 # Dos sombras opuestas en vez de una: la oscura abajo-derecha y la clara arriba-izquierda
@@ -677,43 +778,45 @@ CARD_SHEEN = ("linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255
 # lo justo para que el relieve tenga de dónde salir, y el contorno lo dibujan las sombras.
 # La asimetría entre temas no es un descuido: en claro el papel tiene recorrido hacia el
 # blanco y la luz puede ir casi opaca (0,92), mientras que en oscuro cualquier blanco por
-# encima del 4-5% sobre #0E1116 se lee como niebla gris y no como luz. Allí el relieve lo
+# encima del 4-5% sobre #0A0E19 se lee como niebla gris y no como luz. Allí el relieve lo
 # sostiene la sombra negra, que sí tiene todo el rango por delante.
 # NEU_INSET es el mismo relieve del revés (hundido) y marca el estado activo: es el gesto
 # propio de este lenguaje —el control se PULSA— y evita añadir un cerco de color que
 # rompería el monocromo.
-NEU_BG     = "#151920" if _is_dark else "#EDEDEC"
-NEU_RAISED = ("5px 5px 11px rgba(0,0,0,0.55), -5px -5px 11px rgba(255,255,255,0.045)" if _is_dark
-              else "5px 5px 11px rgba(11,26,38,0.14), -5px -5px 11px rgba(255,255,255,0.92)")
-NEU_INSET  = ("inset 3px 3px 7px rgba(0,0,0,0.62), inset -3px -3px 7px rgba(255,255,255,0.05)"
+NEU_BG     = "#141824" if _is_dark else "#EAEFF5"
+NEU_RAISED = ("5px 5px 11px rgba(0,0,0,0.60), -5px -5px 11px rgba(255,255,255,0.050)" if _is_dark
+              else "5px 5px 11px rgba(5,6,10,0.14), -5px -5px 11px rgba(255,255,255,0.95)")
+NEU_INSET  = ("inset 3px 3px 7px rgba(0,0,0,0.68), inset -3px -3px 7px rgba(255,255,255,0.055)"
               if _is_dark else
-              "inset 3px 3px 7px rgba(11,26,38,0.16), inset -3px -3px 7px rgba(255,255,255,0.95)")
+              "inset 3px 3px 7px rgba(5,6,10,0.16), inset -3px -3px 7px rgba(255,255,255,0.98)")
 
 # ── Luz del lienzo: dos halos en las esquinas superiores ──────────────────────
 # En OSCURO la luz se hace sumando color: sobre un fondo casi negro un ámbar al 12% sube
-# la luminancia y el ojo lo lee como un halo. En CLARO ese mismo gesto no funciona — la
-# saturación cuesta luminancia, así que cualquier tono de marca sobre papel lo OSCURECE y
-# lee como suciedad, no como luz. Por eso en claro se hace al revés: la esquina sube hacia
-# el blanco y la temperatura la pone la crema, el tono que la paleta reserva justo para
-# esto (1,33:1 sobre blanco — inservible como texto, perfecto como tinte).
-# El segundo halo va en blanco puro: sobre un papel cálido (#F4F3F0) el blanco lee como luz
-# FRÍA, y esa diferencia de temperatura entre las dos esquinas es todo el efecto. El oro
-# cuántico no aparece aquí porque en claro no puede hacer de luz; se queda donde sí se
-# lee, en las gráficas y los filetes.
-# Sobre papel el margen es estrechísimo: el lienzo ya está en L 0,896 y el techo absoluto es
-# el blanco (1,0), así que ningún halo claro puede pasar de ~1,11:1 contra el fondo — el
-# oscuro llega a 1,22:1 porque parte de casi cero y tiene todo el rango por delante. Por eso
-# la crema entra solo al 12% en el blanco: cada punto de saturación que se le añade cuesta
-# luminancia, y lo que se busca aquí es luz cálida, no un tinte.
-C_LUZ = "#FFFBF1"   # la crema disuelta en blanco. Como ella, nunca lleva texto.
-HALOS = (f"radial-gradient(1100px 520px at 12% -8%, {C_PRIMARY}1E, transparent 60%),"
-         f"radial-gradient(900px 460px at 100% 0%, {C_QUANTUM}16, transparent 62%)"
+# la luminancia y el ojo lo lee como un halo. Y aquí rinde más que nunca, porque el lienzo
+# #05060A es el más profundo que ha tenido la app (L 0,123): hay todo el rango por delante,
+# así que el halo puede llegar a 1,30:1 contra el fondo sin parecer una mancha.
+# En CLARO ese mismo gesto no funciona — la saturación cuesta luminancia, así que cualquier
+# tono de marca sobre papel lo OSCURECE y lee como suciedad, no como luz. Por eso en claro
+# se hace al revés: la esquina sube hacia el blanco y la temperatura la pone C_LUZ, el
+# ámbar disuelto casi del todo en blanco (1,04:1 sobre blanco — inservible como texto,
+# perfecto como tinte).
+# El segundo halo va en blanco puro: sobre un lienzo FRÍO (#F1F5F9, h 248°) el blanco lee
+# como luz cálida-neutra, y esa diferencia de temperatura entre las dos esquinas es todo el
+# efecto — invertida respecto de la paleta anterior, donde el lienzo era cálido y el blanco
+# hacía de luz fría. El ámbar cuántico no aparece aquí porque en claro no puede hacer de
+# luz; se queda donde sí se lee, en las gráficas y los filetes.
+# El margen en claro volvió a estrecharse: el lienzo está en L 0,968, a 1,10:1 del blanco,
+# así que ningún halo claro puede pasar de ahí. Se dejan casi opacos justamente por eso —
+# con tan poco recorrido, bajar la opacidad es apagarlos del todo.
+C_LUZ = "#FFFCF0"   # el ámbar disuelto en blanco. Como él, nunca lleva texto.
+HALOS = (f"radial-gradient(1100px 520px at 12% -8%, {C_PRIMARY}24, transparent 60%),"
+         f"radial-gradient(900px 460px at 100% 0%, {t['border_strong']}3D, transparent 62%)"
          if _is_dark else
-         f"radial-gradient(1100px 560px at 12% -8%, {C_LUZ}F2, transparent 64%),"
-         f"radial-gradient(900px 460px at 100% 0%, #FFFFFFCC, transparent 62%)")
+         f"radial-gradient(1100px 560px at 12% -8%, {C_LUZ}FF, transparent 64%),"
+         f"radial-gradient(900px 460px at 100% 0%, #FFFFFFF2, transparent 62%)")
 # Mismo principio en el velo de la barra lateral: en oscuro tiñe, en claro alumbra.
 VELO_SIDEBAR = (f"linear-gradient(180deg, {C_PRIMARY}14, transparent 42%)" if _is_dark
-                else f"linear-gradient(180deg, {C_LUZ}8C, transparent 46%)")
+                else f"linear-gradient(180deg, {C_LUZ}B3, transparent 46%)")
 
 narrow = st.session_state.sidebar_narrow
 SIDEBAR_WIDTH = "84px" if narrow else "270px"
@@ -753,16 +856,16 @@ FLECHA_TOGGLE = FLECHA_EXPANDIR if narrow else FLECHA_COLAPSAR
 # El disco del toggle va en el tema CONTRARIO al de la app: claro sobre la barra oscura y oscuro
 # sobre la barra clara. Es el único control que se sale a propósito de la escala de superficies de
 # T(): con sidebar_bg de fondo se mimetizaba con la barra sobre cuyo borde se apoya, y es el gesto
-# que más se busca de un vistazo. Son los dos neutros del autor —los mismos que T() reparte entre
-# tinta y superficie—, aquí intercambiados, así que el par mantiene los 13,6:1 / 16,5:1 de contraste
-# entre flecha y disco en cada tema.
-TOGGLE_DISCO  = P_GRIS if _is_dark else P_CARBON
-TOGGLE_FLECHA = P_CARBON if _is_dark else P_GRIS
+# que más se busca de un vistazo. Son los dos extremos de la paleta —los mismos que T() reparte
+# entre tinta y superficie—, aquí intercambiados; al ser un único par, el contraste entre flecha
+# y disco es el mismo 16,1:1 en los dos temas.
+TOGGLE_DISCO  = P_NIEBLA if _is_dark else P_PIZARRA
+TOGGLE_FLECHA = P_PIZARRA if _is_dark else P_NIEBLA
 # Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si usáramos
 # un azul fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
 # En claro NO se usa RAMP[0]: ese paso está calibrado para pintar DATO sobre blanco y como
 # carril de control resultaba demasiado saturado. Aquí va un tinte más apagado del mismo tono.
-SLIDER_GROOVE = "#DFDCD3" if st.session_state.theme == "light" else t["surface_alt"]
+SLIDER_GROOVE = "#C9CFDD" if st.session_state.theme == "light" else t["surface_alt"]
 
 # ── Tratamiento de las figuras PNG de fondo blanco (beeswarm SHAP, circuito) según tema ──
 # Esas imágenes tienen fondo blanco intrínseco (figuras científicas del TFM). En tema claro se funden
@@ -830,7 +933,7 @@ section[data-testid="stSidebar"] {{
     background-image:{VELO_SIDEBAR};
     border-right:1px solid {t['border']};
     box-shadow: {"1px 0 0 rgba(255,255,255,0.03), 8px 0 28px rgba(0,0,0,0.42)" if _is_dark
-                 else "1px 0 2px rgba(11,26,38,0.04), 6px 0 22px -8px rgba(11,26,38,0.09)"};
+                 else "1px 0 2px rgba(5,6,10,0.04), 6px 0 22px -8px rgba(5,6,10,0.09)"};
     width:{SIDEBAR_WIDTH} !important; min-width:{SIDEBAR_WIDTH} !important; max-width:{SIDEBAR_WIDTH} !important;
     /* Colapsar/descolapsar desliza el ancho en vez de saltar de golpe entre 270 y 84px. */
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1), min-width 0.32s cubic-bezier(0.4,0,0.2,1),
@@ -883,7 +986,7 @@ button[data-testid="stExpandSidebarButton"] {{
     color:{TOGGLE_FLECHA} !important;
     border:1px solid {TOGGLE_DISCO} !important;
     border-radius:50% !important;
-    box-shadow: 0 2px 6px rgba(20,30,40,0.10), 0 1px 3px rgba(20,30,40,0.08) !important;
+    box-shadow: 0 2px 6px rgba(5,6,10,0.10), 0 1px 3px rgba(5,6,10,0.08) !important;
     /* min-width explícito porque Streamlit le pone uno propio de 28px: sin él, el disco no
        bajaría de esa medida por mucho que se le pida un ancho menor. */
     width:30px !important; height:30px !important;
@@ -953,17 +1056,17 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
        alrededor de un disco invertido le pondría un halo justo donde ya hay borde de sidebar. */
     border-radius:50% !important; border:1px solid {TOGGLE_DISCO} !important;
     background-color:{TOGGLE_DISCO} !important; color:{TOGGLE_FLECHA} !important;
-    box-shadow: 0 1px 4px rgba(20,30,40,0.15), 0 1px 2px rgba(20,30,40,0.10) !important;
+    box-shadow: 0 1px 4px rgba(5,6,10,0.15), 0 1px 2px rgba(5,6,10,0.10) !important;
     z-index:1000 !important; margin:0 !important;
     /* Acompaña al borde de la sidebar en el mismo tiempo/curva que su transición de ancho, así el
        botón viaja pegado al borde en vez de saltar de golpe a su nueva posición. */
     transition: left 0.32s cubic-bezier(0.4,0,0.2,1), top 0.32s cubic-bezier(0.4,0,0.2,1),
                 background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
 }}
-/* El realce lo lleva ahora el DISCO, no la flecha. Antes bastaba con teñir la flecha de ámbar
-   porque el disco iba en el tono de la barra; sobre el disco invertido, ese mismo ámbar quedaba
-   lavado (P_AMBAR sobre #E9E9E9 no llega a 2:1). Pintando el disco de marca y dejando la flecha en
-   su neutro, el par conserva contraste de sobra en los dos temas y el hover se lee incluso mejor. */
+/* El realce lo lleva ahora el DISCO, no la flecha. Antes bastaba con teñir la flecha de oro
+   porque el disco iba en el tono de la barra; sobre el disco invertido, ese mismo oro quedaba
+   lavado (P_AMBAR sobre la niebla no llega a 1,6:1). Pintando el disco de marca y dejando la flecha
+   en su neutro, el par conserva contraste de sobra en los dos temas y el hover se lee incluso mejor. */
 .st-key-toggle_sidebar button:hover {{
     background-color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
 }}
@@ -1004,7 +1107,7 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 .st-key-theme_toggle button {{
     width:30px !important; height:15px !important; min-height:15px !important; padding:0 !important;
     border-radius:999px !important; border:none !important;
-    background-color:{"#FFFFFF" if st.session_state.theme == "light" else "#080A0E"} !important;
+    background-color:{"#FFFFFF" if st.session_state.theme == "light" else "#060810"} !important;
     box-shadow: 0 0 0 1px {C_MID2}55, 0 0 7px 1.5px {C_MID2}99, 0 0 15px 4px {C_MID2}55 !important;
     transition: box-shadow 0.2s ease, transform 0.15s ease;
 }}
@@ -1060,7 +1163,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     /* overflow visible: la flecha del disparador es un pseudoelemento que sale de la caja
        del botón, y Streamlit recorta los suyos por defecto. */
     overflow:visible !important;
-    box-shadow: 0 1px 3px rgba(20,30,40,0.18) !important;
+    box-shadow: 0 1px 3px rgba(5,6,10,0.18) !important;
     z-index:1001 !important;
     transition: opacity 0.18s ease, filter 0.18s ease, transform 0.18s ease,
                 box-shadow 0.16s ease, border-color 0.16s ease !important;
@@ -1075,7 +1178,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
 .st-key-lang_{LANG} button {{
     opacity:1 !important; filter:none !important;
     border-color:{C_PRIMARY} !important;
-    box-shadow: 0 0 0 1.5px {C_PRIMARY}66, 0 1px 3px rgba(20,30,40,0.18) !important;
+    box-shadow: 0 0 0 1.5px {C_PRIMARY}66, 0 1px 3px rgba(5,6,10,0.18) !important;
     cursor:pointer !important;
 }}
 /* La flecha va DIBUJADA con bordes, no escrita con un carácter tipo "▾": este panel se
@@ -1109,7 +1212,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     opacity:0.72 !important;
     transform:translateY(0) !important;
     pointer-events:auto !important;
-    box-shadow: 0 2px 8px rgba(20,30,40,0.22) !important;
+    box-shadow: 0 2px 8px rgba(5,6,10,0.22) !important;
 }}
 /* La bandera concreta bajo el cursor sube a plena tinta: dentro del panel abierto, el
    contraste vuelve a distinguir «la que voy a pulsar» de «las demás». */
@@ -1173,10 +1276,11 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
 /* Tira de tecnologías (Resumen).
    LA PASTILLA ES CLARA EN LOS DOS TEMAS a propósito, y no es un descuido: la mitad de estas
    marcas son monocromas oscuras —el logotipo de GitHub es #11110F y el de Qiskit #010101, y
-   el texto de Spark y de scikit-learn tampoco aguanta— así que sobre el fondo carbón
-   desaparecerían. Recolorearlas no es una opción: las guías de marca lo prohíben. Se les da
+   el texto de Spark y de scikit-learn tampoco aguanta— así que sobre el fondo pizarra
+   desaparecerian. Recolorearlas no es una opcion: las guias de marca lo prohiben. Se les da
    entonces el fondo claro para el que fueron diseñadas y la marca viaja intacta; en tema
-   oscuro la pastilla baja un punto de blanco para no deslumbrar sobre el carbón.
+   oscuro la pastilla toma la niebla de la paleta, que ya es un blanco roto y no deslumbra
+   sobre la pizarra, y en claro sube un punto por encima del lienzo para despegarse de él.
    El alto de cada imagen lo calcula _tech_alto() por área óptica — ver allí el porqué. */
 /* Rejilla de DOS FILAS FIJAS de {TECH_POR_FILA}, a cualquier ancho y a cualquier zoom.
    Antes la tira repartía por ancho (auto-fit + minmax) y solo por encima de 1400px se fijaba el
@@ -1213,12 +1317,48 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     height:52px; height:clamp(28px, 5.2cqw, 52px);
     padding:0 11px; padding:0 clamp(4px, 1.1cqw, 11px);
     box-sizing:border-box;
-    background:{'#E9E9EC' if _is_dark else '#F7F7F8'};
-    border:1px solid rgba(28,31,38,{0.16 if _is_dark else 0.09});
+    background:{P_NIEBLA if _is_dark else '#F8FAFD'};
+    /* EL MARCO. Hace un trabajo DISTINTO en cada tema, y por eso no es el mismo valor:
+         · En CLARO lo sostiene TODO. La placa (#F8FAFD) sobre el lienzo (#F1F5F9) da 1,05:1
+           — medido, no estimado: sin marco la pastilla sencillamente no existe, y así estaba
+           antes, con un borde al 9% que se quedaba en 1,22:1. Aquí va el borde del tema, que
+           es el mismo hilo que ya dibuja el contorno de las tarjetas: 1,34:1 contra el lienzo
+           y 1,41:1 contra la placa, o sea visible por los DOS lados, que es lo que hace que
+           se lea como un marco y no como una mancha con el canto sucio.
+         · En OSCURO la placa ya se separa sola por fuerza bruta (18,5:1 contra el lienzo).
+           Ahí el marco no separa: da CANTO. Un negro al 18% sobre la propia placa la baja a
+           #C7CACE en su primer píxel (1,50:1), y eso convierte un rectángulo recortado en una
+           pieza con borde. Un aro CLARO por fuera habría sido lo natural en otro sitio, pero
+           sobre un fondo casi negro leería como halo encendido, no como marco. */
+    border:1px solid {'rgba(5,6,10,0.18)' if _is_dark else t['border']};
     border-radius:9px; border-radius:clamp(6px, 0.9cqw, 9px);
-    transition: transform 0.14s ease, box-shadow 0.16s ease;
+    /* Y el ASIENTO, que es la otra mitad de "elevado": hasta ahora la pastilla solo tenía
+       sombra al pasar el ratón, así que en reposo —que es como se ve el 99% del tiempo—
+       estaba pegada al fondo como una calcomanía. Va la misma gramática que .kpi-card pero a
+       escala de pastilla: un hilo interior abajo que le da grosor, un contacto corto y una
+       difusa corta. Nada más: son 14 piezas seguidas y una sombra generosa las convertiría en
+       una fila de botones. En oscuro la sombra pesa mucho más (0,55/0,60 frente a 0,05/0,08)
+       porque cae sobre casi negro y ahí un alfa bajo no oscurece nada. */
+    box-shadow:
+        inset 0 -1px 0 rgba(5,6,10,0.055),
+        0 1px 1px rgba(5,6,10,{0.55 if _is_dark else 0.05}),
+        0 3px 8px -2px rgba(5,6,10,{0.60 if _is_dark else 0.08});
+    transition: transform 0.14s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }}
-.tech-chip:hover {{ transform:translateY(-2px); box-shadow:0 4px 12px rgba(20,30,40,0.16); }}
+/* El hover es LITERALMENTE el de .kpi-card —sube 2px, el borde se tiñe de acento y un aro de
+   1px lo acompaña—, y eso es deliberado: son las mismas dos alfas (0x59 en el borde, 0x26 en
+   el aro). Que la pastilla más pequeña de la app conteste al ratón igual que la tarjeta más
+   grande es justo lo que hace que la interfaz parezca un sistema y no una colección de piezas.
+   El aro va en el box-shadow y NO engordando el borde, que desplazaría el logo un píxel. */
+.tech-chip:hover {{
+    transform:translateY(-2px);
+    border-color:{C_PRIMARY}59;
+    box-shadow:
+        inset 0 -1px 0 rgba(5,6,10,0.055),
+        0 0 0 1px {C_PRIMARY}26,
+        0 2px 3px rgba(5,6,10,{0.55 if _is_dark else 0.06}),
+        0 8px 18px -4px rgba(5,6,10,{0.65 if _is_dark else 0.13});
+}}
 /* El height va EN LÍNEA, uno por marca (ver tech_strip). Los dos topes de aquí son la red:
    pase lo que pase con ese calc() —incluido un navegador sin container queries, donde
    var(--tech-u) no resuelve y el alto cae a auto— el logo no se sale de su pastilla. */
@@ -1252,14 +1392,15 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
 .sidebar-footer .footer-name {{ font-size:12.5px; font-weight:500; color:{t['text']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
-/* text_secondary y no text_muted, que es lo que llevaba: los contrastes que garantiza la paleta
-   —"los dos escalones de tinta apagada mantienen 8,3:1 y 5,0:1 en claro"— están medidos contra
-   SURFACE, que es blanco puro. Este rótulo no vive ahí sino sobre sidebar_bg, que en claro es el
-   gris #E9E9E9, y sobre ese fondo el escalón más apagado se queda en 4,15:1: por debajo del
-   4,5:1 de WCAG para texto pequeño. Un escalón arriba resuelve, y con margen en los dos temas
-   (6,9:1 en claro y 8,4:1 en oscuro). La jerarquía del pie no se pierde, que es lo que ese
-   escalón defendía: el nombre sigue por encima —tinta plena, 12,5px y peso 500— y esta línea
-   sigue por debajo, más pequeña, en mono y con la caja abierta por el espaciado. */
+/* text_secondary y no text_muted, que es lo que llevaba. El fallo original fue medir contra
+   SURFACE —blanco puro— un rótulo que no vive ahí sino sobre sidebar_bg: allí el escalón más
+   apagado se quedaba en 4,15:1, por debajo del 4,5:1 de WCAG para texto pequeño.
+   La paleta nueva ya cierra ese agujero por su cuenta —los tres niveles de tinta se calibraron
+   contra los TRES fondos, barra lateral incluida, y text_muted da 4,73:1 allí—, así que hoy
+   esto no sería un bug. Se mantiene text_secondary igualmente porque el margen es sano
+   (6,4:1 en claro y 8,8:1 en oscuro) y porque la jerarquía del pie no depende de este escalón:
+   el nombre sigue por encima —tinta plena, 12,5px y peso 500— y esta línea sigue por debajo,
+   más pequeña, en mono y con la caja abierta por el espaciado. */
 .sidebar-footer .footer-uni {{ font-family:{FONT_MONO}; font-size:12px; font-weight:400; letter-spacing:0.06em;
     color:{t['text_secondary']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
 /* El option_menu vive en un iframe con fondo propio: igualarlo al de la sidebar (sin caja/sombra
@@ -1591,12 +1732,12 @@ section[data-testid="stSidebar"] iframe {{ animation: pageFadeIn 0.3s ease-out; 
    apagados y sin sombra. El estado deshabilitado de Streamlit solo baja la opacidad, y a la
    mitad de opacidad los tres se parecían demasiado como para ver de un vistazo cuál es el
    siguiente paso — que es toda la interacción de esta sección. */
-/* C_DARK y no C_QUANTUM, que es lo que había: el acento cuántico en claro es #C07C08, y ese
-   tono está declarado ARRIBA como relleno de barra —"en claro se baja a L 0,64 (…) como relleno
-   de barra sería invisible"—, no como tinta. De rótulo daba 3,43:1 sobre la superficie blanca
+/* C_DARK y no C_QUANTUM, que es lo que había: el acento cuántico en claro es #BD8500, y ese
+   tono está declarado ARRIBA como relleno de barra —"en claro se baja a L 0,655 (…) como relleno
+   de barra sería invisible"—, no como tinta. De rótulo da 3,22:1 sobre la superficie blanca
    del botón, por debajo del 4,5:1 de WCAG para texto. C_DARK es el paso oscurecido del MISMO
-   oro y sube a 8,4:1. En tema oscuro los dos son literalmente el mismo valor (P_ORO), así que
-   esto no cambia ni un píxel allí: solo repara el claro. */
+   ámbar y sube a 8,60:1. En tema oscuro C_DARK es el paso ALTO del ámbar (#FFCE75) y también
+   gana al acento normal, así que la regla vale igual en los dos temas. */
 {_sel_ent("button:enabled", _ENT_PASO)} {{
     border-color:{C_DARK} !important; color:{C_DARK} !important;
 }}
@@ -1851,11 +1992,42 @@ div[data-testid="stPlotlyChart"] .gtitle {{ font-weight:400 !important; }}
    cambiar de aspecto al bajar por la página. Sin negrita en ninguno: la identifica el punto
    de color de al lado, no el grosor de la letra. */
 .cm-title {{ font-size:13px; font-weight:400; color:{t['text']}; margin-bottom:16px; display:flex; align-items:center; gap:8px; }}
-.cm-grid {{ display:grid; grid-template-columns:64px 1fr 1fr; gap:4px; align-items:stretch; }}
+/* La columna de etiquetas va a `min-content` y no a un ancho fijo. Iba a 64px y ahí se leía
+   "REAL / DIABET / ES": la palabra se partía por la mitad.
+   La CAUSA no era el ancho sino una herencia: el CSS base de Streamlit pone
+   `overflow-wrap:break-word` en los contenedores de markdown, y esa propiedad se HEREDA hasta
+   aquí. Con ella el navegador tiene permiso para trocear una palabra cuando no cabe; sin ella
+   nunca lo haría, por estrecha que fuera la caja. Por eso el arreglo de verdad está abajo, en
+   .cm-rowlabel, y esto es solo la mitad que le da el sitio que necesita.
+   `min-content` = el ancho de la PALABRA más larga, ni un píxel más. Es justo la garantía que
+   hace falta —que ninguna palabra tenga que partirse— sin robarle a las celdas el ancho de la
+   FRASE entera, que es lo que pasaba con `auto`: en francés "Pas de diab." se lo llevaba a
+   105px y ahogaba la matriz. Con min-content el peor caso son los 8 caracteres de DIABETES
+   (es/en/de) = 63,4px de texto + 10 de padding = 73,4; el francés y el italiano piden menos y
+   dejan que su frase salte por el espacio, que es un corte legítimo.
+   Medido sobre las cajas de línea ya pintadas, en IBM Plex Mono 12px con 0,06em de espaciado.
+   Ver el presupuesto de ancho del breakpoint, que tuvo que subir por esto. */
+.cm-grid {{ display:grid; grid-template-columns:min-content 1fr 1fr; gap:4px; align-items:stretch; }}
+/* El encabezado de COLUMNA lleva el mismo overflow-wrap:normal que el de fila, y por el mismo
+   motivo: hereda el break-word de Streamlit. Hoy no se le nota —su celda (73px en el ancho
+   mínimo) da de sobra para DIABETES, que pide 63,4—, así que se salva por holgura de
+   presupuesto y no por regla. Se le pone igualmente: es el mismo defecto, y basta con que
+   alguien estreche una celda o alargue una traducción para que aparezca aquí el "DIABET / ES"
+   que se acaba de quitar de la otra etiqueta. */
 .cm-collabel {{ font-family:{FONT_MONO}; font-size:12px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase;
-    color:{t['text_muted']}; text-align:center; align-self:end; padding-bottom:7px; line-height:1.45; }}
+    color:{t['text_muted']}; text-align:center; align-self:end; padding-bottom:7px; line-height:1.45;
+    overflow-wrap:normal; }}
+/* overflow-wrap:normal es EL arreglo del "DIABET / ES", y va aquí porque lo que se está
+   deshaciendo es una herencia: Streamlit declara `overflow-wrap:break-word` más arriba y esa
+   propiedad baja sola hasta esta etiqueta. Devuelta a `normal`, el navegador solo puede cortar
+   donde el idioma permite —espacios y el <br> de la cadena—, nunca dentro de una palabra.
+   No se usa `white-space:nowrap`: eso prohibiría también el corte por el espacio, que sí es
+   legítimo y es el que necesitan el francés y el italiano para no llevarse media matriz.
+   Emparejado con el `min-content` de la rejilla, la garantía es completa: la columna siempre
+   mide al menos la palabra más larga, así que no hay ancho en el que una palabra no quepa. */
 .cm-rowlabel {{ font-family:{FONT_MONO}; font-size:12px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase;
-    color:{t['text_muted']}; text-align:right; align-self:center; padding-right:10px; line-height:1.45; }}
+    color:{t['text_muted']}; text-align:right; align-self:center; padding-right:10px; line-height:1.45;
+    overflow-wrap:normal; }}
 /* gap:4px + este anillo del color de la superficie = el separador de 2px que exige el
    sistema de diseño entre rellenos contiguos, para que dos celdas de tono parecido no
    se lean como una sola mancha. */
@@ -1908,7 +2080,7 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color:{C_PRIMARY} !important
    escritorio y en español las tres pestañas de Gobernanza entran de sobra. En el teléfono
    —o en un idioma largo, o con la ventana estrecha— Streamlit añade estos botones con un
    degradado de desvanecido BLANCO INCRUSTADO, `linear-gradient(to right, transparent, #FFF)`,
-   heredado de su tema base. Sobre el carbón del tema oscuro eso es una banda blanca de 20px
+   heredado de su tema base. Sobre el cadete del tema oscuro eso es una banda blanca de 20px
    pegada al canto de la tira, con la flecha en tinta oscura encima.
    El degradado se rehace contra el fondo REAL de la página (t['bg'], que es sobre lo que se
    apoya la tira) y la flecha toma el color de texto secundario, el mismo que los rótulos
@@ -1916,9 +2088,9 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color:{C_PRIMARY} !important
    No lo cazó el detector de widgets sin vestir porque busca `background-color` y aquí el
    blanco viaja en un `background-image`.
    El extremo transparente va con el sufijo `00` sobre el propio color y NO con `transparent`:
-   la palabra clave equivale a negro con alfa 0, y al interpolar contra el carbón el degradado
+   la palabra clave equivale a negro con alfa 0, y al interpolar contra el cadete el degradado
    se ensucia por el medio. Tampoco vale hex_to_rgba() aquí — se define más abajo que esta hoja,
-   que se evalúa al importar el módulo. Mismo recurso que el filete ámbar de la portada. */
+   que se evalúa al importar el módulo. Mismo recurso que el filete dorado de la portada. */
 button[data-testid="stTabsScrollRight"] {{
     background-image:linear-gradient(to right, {t['bg']}00, {t['bg']} 40%) !important;
 }}
@@ -1934,7 +2106,7 @@ button[data-testid="stTabsScrollRight"] svg, button[data-testid="stTabsScrollLef
 /* ═══════════════ EXPANDER (Gobernanza · Registro de decisiones) ═══════════════
    Único widget nativo que quedaba sin vestir, y en tema oscuro se rompía: config.toml no fija
    `base`, así que Streamlit pinta el expander con su tema CLARO (barra casi blanca), mientras
-   que el rótulo hereda el color de .stApp, que en oscuro es gris claro. Rótulo claro sobre
+   que el rótulo hereda el color de .stApp, que en oscuro es platino. Rótulo claro sobre
    barra clara = invisible; solo se leía al pasar el ratón, porque el hover sí aplica acento.
    Aquí se pinta con la paleta de la app, de modo que sigue al tema en ambos sentidos. La
    cabecera va en surface_alt para que se distinga del cuerpo desplegado (surface) tanto en
@@ -1962,7 +2134,7 @@ button[data-testid="stTabsScrollRight"] svg, button[data-testid="stTabsScrollLef
 /* Scrollbar fino y en paleta (WebKit + Firefox): sustituye la barra gruesa del SO por un acabado sobrio.
    Ojo: en Firefox las reglas ::-webkit-scrollbar NO se aplican — todo el acabado lo da la línea
    scrollbar-width / scrollbar-color de abajo, sin estado :hover posible. Por eso el pulgar usa
-   border_strong y no border: con el tono de borde (#E1E8EE en claro) quedaba casi invisible sobre
+   border_strong y no border: con el tono de borde (#CDD6DF en claro) quedaba casi invisible sobre
    el fondo, y en Firefox no hay hover que lo rescate. */
 *::-webkit-scrollbar {{ width:10px; height:10px; }}
 *::-webkit-scrollbar-track {{ background:transparent; }}
@@ -2068,7 +2240,7 @@ div[data-baseweb="slider"] > div > div > div:last-child {{
     height:10px !important; border-radius:999px !important;
     background-color:{SLIDER_GROOVE} !important;   /* tiñe el tramo no relleno hacia la paleta */
     position:relative; z-index:0;
-    box-shadow: inset 0 1px 3px rgba(20,30,40,0.20), inset 0 -1px 0 rgba(255,255,255,0.45);
+    box-shadow: inset 0 1px 3px rgba(5,6,10,0.20), inset 0 -1px 0 rgba(255,255,255,0.45);
 }}
 /* Degradado del relleno + brillo, sin tocar el background-image dinámico de BaseWeb.
    Truco: un blanco que se desvanece hacia la derecha. Sobre el tramo RELLENO (izquierda) aclara el
@@ -2078,7 +2250,7 @@ div[data-baseweb="slider"] > div > div > div:last-child {{
 div[data-baseweb="slider"] > div > div > div:last-child::after {{
     content:""; position:absolute; inset:0; border-radius:999px; pointer-events:none;
     background:
-        linear-gradient(to bottom, rgba(255,255,255,0.22), rgba(255,255,255,0) 60%, rgba(20,30,40,0.10)),
+        linear-gradient(to bottom, rgba(255,255,255,0.22), rgba(255,255,255,0) 60%, rgba(5,6,10,0.10)),
         linear-gradient(to right, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.07) 55%, rgba(255,255,255,0) 80%);
 }}
 /* Pulgar: se mantiene 12x12 (geometría de BaseWeb); el círculo visible es el ::before.
@@ -2092,7 +2264,7 @@ div[role="slider"]::before {{
     width:22px; height:22px; transform:translate(-50%, -50%); border-radius:50%;
     background:linear-gradient(180deg, {t['surface']} 0%, {t['surface_alt']} 100%);
     border:1px solid {C_MID2};
-    box-shadow: 0 1px 3px rgba(20,30,40,0.30), 0 3px 8px rgba(20,30,40,0.16);
+    box-shadow: 0 1px 3px rgba(5,6,10,0.30), 0 3px 8px rgba(5,6,10,0.16);
 }}
 /* Muesca central del pulgar (la rayita vertical de la referencia), en color de marca */
 div[role="slider"]::after {{
@@ -2105,8 +2277,8 @@ div[role="slider"]:active {{ cursor:grabbing !important; }}
 /* El valor sobre el pulgar sube para no chocar con los ticks.
    Y se le pone COLOR, que es lo único del deslizador que se había quedado sin vestir: el carril,
    el aro del pulgar y la muesca ya van en C_PRIMARY (ver arriba), pero la cifra la seguía
-   pintando el `primaryColor` de config.toml. Ese ajuste es de SERVIDOR, o sea el mismo #C07C08
-   en los dos temas: en oscuro aguanta (5,3:1), pero en claro caía a 3,09:1 sobre el lienzo, y es
+   pintando el `primaryColor` de config.toml. Ese ajuste es de SERVIDOR, o sea el mismo #BD8500
+   en los dos temas: en oscuro aguanta (5,5:1), pero en claro cae a 2,94:1 sobre el lienzo, y es
    justo el número que estás leyendo mientras arrastras el mando. C_PRIMARY es el acento que SÍ
    puede llevar texto —es literalmente su definición, "cromo de interfaz: navegación, foco,
    sliders"— y de paso ata la cifra al resto del control.
@@ -2158,17 +2330,22 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
        rejilla nuestra sino el flex de Streamlit—. Con la barra fija en 270px, al contenido le
        quedan 550px en una tableta vertical y 754 en horizontal; repartidos entre TRES columnas
        salen 159 y 227px, y en ese ancho hay piezas que sencillamente no caben: la matriz de
-       confusión pide 64px de etiquetas más dos celdas que no bajan de ~72 (sus cifras son de 22px),
-       o sea 209 mínimos, y la gráfica de Plotly otro tanto. Al no caber NO encogían: se salían por
+       confusión pide 74px de etiquetas más dos celdas que no bajan de ~72 (sus cifras son de 22px),
+       o sea 218 mínimos, y la gráfica de Plotly otro tanto. Al no caber NO encogían: se salían por
        la derecha de su tarjeta y se metían encima de la de al lado —las tres matrices y las tres
        curvas ROC de Resultados, comprobado a 820 y 1024px—, y en vertical la tercera llegaba a
        salirse de la página.
        La solución es dejarlas saltar de línea con un ancho MÍNIMO por columna, y ese mínimo no
        puede ser el mismo para todas porque no todas piden lo mismo:
-         · filas de TRES (curvas ROC y matrices de Resultados) → 260px. Sale de la cuenta de la
-           matriz: 209 de rejilla + 46 de tarjeta = 255, y se redondea a 260 para no ir al filo.
-           Con eso quedan a una por fila en vertical (510px) y a dos en horizontal (349), que es
-           justo lo contrario de lo que se quería evitar: tarjetas que respiran.
+         · filas de TRES (curvas ROC y matrices de Resultados) → 266px. Sale de la cuenta de la
+           matriz: 218 de rejilla + 46 de tarjeta = 264, y se redondea a 266 para no ir al filo.
+           Con eso quedan a una por fila en vertical (510px, porque 2×266 = 532 no entra) y a
+           dos en horizontal (754px), que es justo lo contrario de lo que se quería evitar:
+           tarjetas que respiran.
+           Los 218 subieron desde 209 al hacer `auto` la columna de etiquetas: los 64px fijos
+           de antes partían "DIABETES" a media palabra, y los 74 son lo que de verdad mide el
+           token más largo (63,4 de texto + 10 de padding). El aire sale de la fila, no de las
+           celdas — que se quedan en sus ~72 y no bajan de ahí.
          · filas de CUATRO o más (las cuatro cifras del Resumen, los KPI de Gobernanza y Circuito)
            → 230px, que las deja en un 2x2 limpio en los dos anchos. Con el mínimo de las de tres
            se habrían apilado de una en una: cuatro cifras sueltas a 510px de ancho cada una.
@@ -2179,7 +2356,7 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
         flex-wrap:wrap !important;
     }}
     div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"]:nth-child(3)) > div[data-testid="stColumn"] {{
-        min-width:260px !important;
+        min-width:266px !important;
     }}
     div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"]:nth-child(4)) > div[data-testid="stColumn"] {{
         min-width:230px !important;
@@ -2262,8 +2439,11 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
     .page-rule {{ margin-bottom:22px; }}
     .kpi-card, .info-card {{ padding:16px 16px; }}
     .stat-card {{ min-height:88px !important; }}
-    /* Matriz de confusión: la columna de etiquetas fija en 64 px ahoga las celdas en pantalla estrecha */
-    .cm-grid {{ grid-template-columns:52px 1fr 1fr; }}
+    /* La matriz de confusión YA NO lleva override de columnas. Había uno que bajaba las
+       etiquetas de 64 a 52px para no ahogar las celdas en pantalla estrecha, y era justo el
+       que peor partía las palabras: si a 64px no cabía "DIABETES", a 52 menos. Ahora la
+       columna es `auto` en los dos anchos —mide el token más largo y ya está—, y a quien se
+       le da el aire que le falta es a la FILA ENTERA, subiendo su min-width (ver allí). */
     .cm-num {{ font-size:19px; }}
     /* El resto de la jerarquía tipográfica también baja un escalón en móvil, en la misma proporción
        que el título/subtítulo de arriba — así todo el texto queda a escala del viewport, no solo la
@@ -3094,8 +3274,8 @@ with st.sidebar:
     }}
     /* El icono activo sube al acento pareja: como ahora los siete van en C_PRIMARY, ese color
        ya no distingue al seleccionado. C_DARK se separa en la dirección correcta en cada tema
-       —más brillante en oscuro (#F9C449), más profundo en claro (#6B4600)—, así que el ítem
-       activo gana peso en ambos. Contraste sobre el fondo del ítem activo: 9,15:1 y 5,94:1.
+       —más brillante en oscuro (#FFCE75), más profundo en claro (#664600)—, así que el ítem
+       activo gana peso en ambos. Contraste sobre el fondo del ítem activo: 10,57:1 y 6,27:1.
        El !important sigue haciendo falta: nav-link-selected pinta color sobre el <a> y, sin
        forzar, esa cascada se lleva por delante el color en línea del <i>. */
     nav[role="navigation"] a.nav-link.active i {{
@@ -3389,21 +3569,22 @@ def ink_over(hex_color, alpha, surface):
     """Tinta legible sobre un relleno SEMITRANSPARENTE, calculada, no supuesta.
 
     El fondo real de una celda pintada con alfa es la MEZCLA del color con la
-    superficie de debajo, no el color a secas. Con la paleta azul anterior daba igual
-    —todas las series eran oscuras y el blanco valía siempre—, pero con esta no: en
-    tema oscuro la serie de LightGBM es #E9E9E9 y la de QSVM #F9C449, así que una
-    tinta blanca fija sería blanco sobre blanco. Aquí se compone la mezcla y se elige
-    entre carbón y blanco el que más contraste dé, de modo que la regla sigue siendo
-    correcta si mañana se vuelve a cambiar la paleta.
+    superficie de debajo, no el color a secas. Con una paleta toda oscura daría igual
+    —el blanco valdría siempre—, pero con esta no: en tema oscuro la serie de LightGBM
+    es #F1F5F9 y la de QSVM #FFB703, así que una tinta blanca fija sería blanco sobre
+    blanco. Aquí se compone la mezcla y se elige entre el noche y el blanco el que más
+    contraste dé, de modo que la regla sigue siendo correcta si mañana se vuelve a
+    cambiar la paleta — y de hecho ya ha sobrevivido a DOS cambios enteros sin tocarse:
+    lo único que cambió fue el hex de la tinta oscura, que se lee de la paleta.
 
     Devuelve (tinta, tinta_atenuada) para el número y su etiqueta.
     """
     mix = tuple(f * alpha + b * (1 - alpha)
                 for f, b in zip(_hex_rgb(hex_color), _hex_rgb(surface)))
     lum = _rel_luminance(mix)
-    if (1.05 / (lum + 0.05)) >= ((lum + 0.05) / (_rel_luminance(_hex_rgb(P_CARBON)) + 0.05)):
+    if (1.05 / (lum + 0.05)) >= ((lum + 0.05) / (_rel_luminance(_hex_rgb(P_ABISMO)) + 0.05)):
         return "#FFFFFF", "rgba(255,255,255,0.78)"
-    return P_CARBON, hex_to_rgba(P_CARBON, 0.72)
+    return P_ABISMO, hex_to_rgba(P_ABISMO, 0.72)
 
 # ── Separadores numéricos de cada idioma: (millar, decimal) ──
 # Cuatro de las cinco lenguas escriben la coma como separador DECIMAL, pero NO comparten
@@ -3997,7 +4178,7 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
 # pedida a T("dark")— porque aclarar una fotografía la desarma. Pero esta no es una fotografía:
 # es una RETÍCULA CLARA SOBRE UN DEGRADADO PLANO, y eso es justo lo que se puede invertir sin
 # perder nada. El tema claro no necesita, por tanto, un segundo archivo: sale del mismo. La lámina
-# pasa entonces a tomar la paleta ACTIVA en los dos temas —en oscuro es el telón de carbón de
+# pasa entonces a tomar la paleta ACTIVA en los dos temas —en oscuro es el telón azul noche de
 # siempre, sin tocar una coma; en claro es papel con la retícula en tinta— y con ella se va el
 # problema que arrastraba: la tira de cabecera ya no cruza dos capas opuestas (ver su nota, o
 # mejor, su ausencia). El cómo está en .ov-hero-img.
@@ -4133,8 +4314,10 @@ def portada_resumen():
     :has() apuntaría al que no es.
     """
     # EL COLOR DE LA LÁMINA, que es el único punto donde los dos temas se separan. En oscuro es el
-    # carbón de la barra lateral, un paso por debajo del lienzo: el telón se despega de la hoja que
-    # lo tapa. En claro es EXACTAMENTE el lienzo, ni un paso de diferencia, y eso no es pereza sino
+    # color de la barra lateral, que en ESTA paleta queda un paso por ENCIMA del lienzo y no por
+    # debajo (ver T(): el lienzo #05060A ya no deja sitio por abajo). El telón sigue despegándose
+    # de la hoja que lo tapa, solo que ahora por arriba — lo que importa es que haya salto, no su
+    # signo, porque la hoja es opaca y el borde se lee igual en las dos direcciones. En claro es EXACTAMENTE el lienzo, ni un paso de diferencia, y eso no es pereza sino
     # el requisito de .ov-hero-img: para que el negativo se funda con la página, lámina y hoja
     # tienen que ser el MISMO papel. De aquí salen también los cuatro velos, que no introducen
     # color propio — son este mismo fondo con alfa.
@@ -4142,13 +4325,14 @@ def portada_resumen():
     # La lámina en claro es papel, así que el título va en tinta y el halo que lo despega de la
     # retícula tiene que ser CLARO: la sombra negra de siempre, alrededor de un texto oscuro,
     # solo lo emborrona. Misma inversión para el logotipo, que pasa de proyectar sombra sobre
-    # carbón a apoyarse sobre papel — y ahí un negro al 55% se lee como suciedad, no como relieve.
+    # el azul oscuro a apoyarse sobre papel — y ahí un negro al 55% se lee como suciedad, no como relieve.
     sombra_tit  = ("0 2px 16px rgba(0,0,0,0.55)" if _is_dark
                    else f"0 1px 12px {hex_to_rgba(lamina, 0.88)}")
     sombra_logo = ("0 6px 18px rgba(0,0,0,0.55)" if _is_dark
-                   else "0 4px 12px rgba(11,26,38,0.14)")
+                   else "0 4px 12px rgba(5,6,10,0.14)")
     # EL HALO DE LA PISTA, prestado de la cápsula-interruptor del pie de la barra lateral: mismo
-    # color (C_MID2, el paso medio-alto de la rampa cálida, que ya está resuelto para los dos
+    # color (C_MID2, el paso del ORO que pesa en cada tema — ver su definición: es justo este halo
+    # el que obligó a sacarlo de la rampa cuando la rampa se volvió fría—, resuelto para los dos
     # temas) y mismas tres capas —cerco, brillo y difusión—. Aquellas son box-shadow porque la
     # cápsula es una caja; una flecha dibujada a trazo no tiene caja que sombrear, así que aquí
     # van como drop-shadow, que sigue la silueta del trazo en vez de su rectángulo. La conversión
@@ -4167,7 +4351,7 @@ def portada_resumen():
     # claras pasa a ser fondo claro con líneas oscuras. Cuatro pasos, en este orden:
     #
     #   invert(1)          el negativo. Por sí solo también gira el TONO: el cian de la esfera
-    #                      sale por su complementario, un naranja apagado que no es el ámbar de
+    #                      sale por su complementario, un naranja apagado que no es el oro de
     #                      la marca y que la ensucia sin llegar a citarla.
     #   hue-rotate(180deg) devuelve el tono a su sitio. Es el complemento exacto del giro que
     #                      acaba de dar la inversión, así que la retícula vuelve a ser azul —la
@@ -4204,7 +4388,7 @@ div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
 
 /* ── Y A SANGRE TAMBIÉN POR ARRIBA ──────────────────────────────────────────────────────────
    Quitar el padding no bastaba: la lámina seguía empezando 64 px por debajo del canto, y en esa
-   franja se veía el fondo de .stApp —con su halo ámbar— cortado a cuchillo contra la fotografía,
+   franja se veía el fondo de .stApp —con su halo dorado— cortado a cuchillo contra la fotografía,
    justo a la altura del reloj y las banderas. Esos 64 px no son padding de nadie: son HUECO DE
    REJILLA. El bloque vertical raíz es un flex con gap de 1rem y por delante de la lámina van
    cuatro hijos que no pintan nada —la hoja de estilos general y los tres componentes de
@@ -4241,7 +4425,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     font-family:{FONT_SANS};
     /* El grupo de mezcla del negativo. Sin esto, el multiply de .ov-hero-img no se detendría en
        el fondo de la lámina: buscaría hacia atrás el primer contexto de apilamiento y acabaría
-       mezclándose con el lienzo de .stApp Y CON SUS HALOS ámbar, que es un fondo distinto y
+       mezclándose con el lienzo de .stApp Y CON SUS HALOS dorados, que es un fondo distinto y
        además no uniforme. Aquí el contexto lo crearía de todos modos el bloque pegajoso —tiene
        position:sticky con z-index—, pero eso es un efecto colateral de OTRA regla escrita para
        otra cosa; declararlo aquí deja el grupo donde de verdad tiene que estar. */
@@ -4261,7 +4445,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
    y otro vertical que asienta la imagen por arriba y por abajo. Ninguno introduce color propio:
    los dos son el MISMO fondo de la lámina con alfa, así que apagan la imagen sin desplazarle el
    matiz. Por eso el mismo par de degradados sirve para los dos temas sin tocar un solo número:
-   en oscuro `lamina` es carbón y los velos OSCURECEN; en claro es papel y ACLARAN. La operación
+   en oscuro `lamina` es azul noche y los velos OSCURECEN; en claro es papel y ACLARAN. La operación
    es la misma —acercar la imagen al fondo—, y el reparto de alfas, que es lo que está medido
    contra la caja de texto, no depende de hacia qué lado se acerque. */
 .ov-hero-veil {{
@@ -4298,7 +4482,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
    Por eso esto NO reutiliza .page-eyebrow ni su calco de aquí: aquel es mono, en versalitas y
    a 0.16em de espaciado, y con 150 caracteres saldrían ocho líneas de mayúsculas ilegibles.
    Serif, caja normal e interlineado corto, que es como se lee un título.
-   La huincha ámbar se conserva —es la firma visual de la marca— pero alineada con la PRIMERA
+   La huincha dorada se conserva —es la firma visual de la marca— pero alineada con la PRIMERA
    LÍNEA: flex-start más un margen óptico de 0.62em, porque centrada en un bloque de tres o
    cuatro líneas quedaría flotando en mitad del texto. La sombra no es decorativa: el título
    cae sobre la imagen y el velo no garantiza el mismo fondo en todos los anchos — y por eso
@@ -4352,7 +4536,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 .ov-bar {{
     position:absolute; top:0; left:0; right:0; height:2px; z-index:4;
     transform-origin:left center; transform:scaleX(0);
-    background:linear-gradient(90deg, {P_AMBAR}, {P_ORO});
+    background:linear-gradient(90deg, {P_AMBAR}, {P_AMBAR_ALTO});
     pointer-events:none;
 }}
 
@@ -6405,7 +6589,7 @@ elif page == "predictor":
                                     text=pct(_yv, 0), showarrow=False,
                                     font=dict(family=PLOTLY_MONO, size=11.5, color=t["text_secondary"]))
             # "Estás aquí". Único punto CÁLIDO de la figura, y a propósito: con dos series
-            # neutras (tinta y gris) todo lo demás es acromático, así que el ámbar de marca no
+            # frías (tinta y acero) todo lo demás es de la familia azul, así que el oro de marca no
             # compite con ninguna y da a la gráfica el foco que le faltaba. No es una tercera
             # serie: es cromo de interfaz —el eco de la posición del slider—, el mismo papel que
             # ya tiene en sliders y anillos de foco. El punto en sí conserva el color de
@@ -6414,7 +6598,7 @@ elif page == "predictor":
                                       line=dict(color=hex_to_rgba(C_PRIMARY, 0.50), width=1.5, dash="dot"),
                                       showlegend=False, hoverinfo="skip"))
             # Halo suave + ANILLO abierto. Con dos discos rellenos superpuestos el foco salía
-            # como una moneda marrón —el ámbar al 28 % sobre carbón es barro—; el anillo lo
+            # como una moneda marrón —el oro al 28 % sobre el azul oscuro es barro—; el anillo lo
             # convierte en una diana nítida y el halo solo aporta la irradiación.
             _fig.add_trace(go.Scatter(x=[_cur_x], y=[risk], mode="markers",
                                       marker=dict(size=28, color=hex_to_rgba(P_AMBAR, 0.10),
@@ -6433,7 +6617,7 @@ elif page == "predictor":
                                       marker=dict(size=12, color=SERIES["lightgbm"],
                                                   line=dict(color=t["surface"], width=2)),
                                       showlegend=False, hoverinfo="skip"))
-            # El valor actual, anclado al eje y con filete ámbar para que se lea como parte del
+            # El valor actual, anclado al eje y con filete dorado para que se lea como parte del
             # mismo gesto que la plomada. Se ancla por el lado que no se sale del lienzo.
             _frac = (_cur_x - _clo) / (_chi - _clo) if _chi > _clo else 0.5
             _fig.add_annotation(x=_cur_x, y=0, yanchor="bottom", yshift=8,
