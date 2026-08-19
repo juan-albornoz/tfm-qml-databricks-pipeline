@@ -349,7 +349,7 @@ _POS_TAB = "{}__pos_tab"
 # cuerpo de cada página—: solo la usa el saneo de ?tab= tras el enrutado, para que el
 # parámetro no se quede colgando en la URL de una página que no tiene pestañas. Si alguna
 # otra página estrena tabs, hay que añadirla aquí.
-_PAGINAS_CON_TABS = ("governance", "shap")
+_PAGINAS_CON_TABS = ("governance", "shap", "circuit")
 
 # Clave (nuestra, no de widget) que marca que ?tab= ya se ha consumido en esta sesión.
 _TAB_URL_LEIDA = "__tab_url_leida"
@@ -3116,8 +3116,18 @@ with st.sidebar:
     _MENU_OPTIONS = S("nav")
     if "page" not in st.session_state:
         _page_url = st.query_params.get("page")
-        st.session_state.page = (_page_url if _page_url in i18n.PAGE_KEYS
-                                 else i18n.PAGE_KEYS[0])
+        # Una clave RETIRADA no cae al Resumen: se traduce a donde vive hoy su contenido, con su
+        # pestaña ya abierta (ver i18n.PAGES_RETIRADAS). Es el caso de ?page=bloch, que se pudo
+        # compartir cuando la Esfera de Bloch era una entrada del menú. La posición se escribe en
+        # la clave PROPIA de tabs_i18n y no en ?tab=, así que no se pisa con el parámetro y no
+        # depende de que este bloque corra antes o después del saneo de la URL.
+        if _page_url in i18n.PAGES_RETIRADAS:
+            _destino, _grupo, _pos = i18n.PAGES_RETIRADAS[_page_url]
+            st.session_state.page = _destino
+            st.session_state[_POS_TAB.format(_grupo)] = _pos
+        else:
+            st.session_state.page = (_page_url if _page_url in i18n.PAGE_KEYS
+                                     else i18n.PAGE_KEYS[0])
 
     # Sin tooltip, pero con nombre accesible. El globito con "Expandir"/"Colapsar" repetía en
     # palabras lo que la flecha ya dice —apunta siempre al lado al que se moverá la barra—,
@@ -3162,16 +3172,28 @@ with st.sidebar:
             st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
     else:
-        def _ir_a_resultado(_pagina):
-            """Navega a la página del resultado y vacía la caja.
+        def _ir_a_resultado(_pagina, _tab=None):
+            """Navega a la página del resultado —y a su pestaña— y vacía la caja.
 
             Va como CALLBACK y no como código tras el `if st.button(...)`: el valor de un
             widget solo puede tocarse desde un callback (fuera lanza StreamlitAPIException),
             y sin vaciar la caja la lista de resultados seguiría abierta empujando el menú
             hacia abajo después de haber navegado.
+
+            `_tab` llega solo en las secciones que viven DENTRO de una pestaña (hoy las de la
+            Esfera de Bloch, en Circuito Cuántico) y es (grupo, posición). Se abre esa pestaña
+            por la misma vía que usa tabs_i18n para sobrevivir a un cambio de idioma: se guarda
+            la posición en su clave propia y se BORRA el estado del widget, de modo que en la
+            pasada siguiente manda el `default=rotulos[pos]` de tabs_i18n. Escribir la posición
+            sin borrar el estado no bastaba —Streamlit ignora `default` cuando el widget ya
+            tiene valor—, y el salto se quedaba en la pestaña que estuviera abierta.
             """
             st.session_state.page = _pagina
             st.session_state.menu_force_index = i18n.PAGE_KEYS.index(_pagina)
+            if _tab is not None:
+                _grupo, _pos = _tab
+                st.session_state[_POS_TAB.format(_grupo)] = _pos
+                st.session_state.pop(_grupo, None)
             st.session_state.nav_search = ""
 
         _q = (st.text_input(S("search_label"), key="nav_search", placeholder=S("search_ph"),
@@ -3184,7 +3206,7 @@ with st.sidebar:
                     # 270 px de ancho, "Curva de respuesta · Predictor en Vivo" se parte en
                     # dos líneas y la lista deja de leerse como lista.
                     st.button(_h["label"], key=f"nav_hit_{_i}", width="stretch",
-                              on_click=_ir_a_resultado, args=(_h["page"],),
+                              on_click=_ir_a_resultado, args=(_h["page"], _h.get("tab")),
                               help=None if _h["kind"] == 0 else S("search_in").format(
                                   p=_MENU_OPTIONS[i18n.PAGE_KEYS.index(_h["page"])]))
                 if not _hits:
@@ -5665,7 +5687,7 @@ elif page == "results":
     contadores_js("results")
 
 # ═══════════════════════════════════════════════════════════════════════
-# PAGINA 3 — SHAP ANALYSIS
+# PAGINA 4 — SHAP ANALYSIS
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "shap":
     header(S("sh_eyebrow"), S("sh_title"), S("sh_subtitle"))
@@ -5746,595 +5768,623 @@ elif page == "shap":
         shap_summary_image("SHAP Summary SVM.png", S("sh_fig_svm_title"), S("sh_fig_svm_cap"))
 
 # ═══════════════════════════════════════════════════════════════════════
-# PAGINA 4 — QUANTUM CIRCUIT
+# PAGINA 5 — QUANTUM CIRCUIT
 # ═══════════════════════════════════════════════════════════════════════
 elif page == "circuit":
     header(S("qc_eyebrow"), S("qc_title"), S("qc_subtitle"))
 
-    # Misma construcción que los cuatro KPIs de Gobernanza → Calidad del dato: una sola .compare-grid
-    # de cuatro columnas iguales en vez de st.columns. El grid estira las tarjetas a la misma altura
-    # y reparte el ancho en fracciones, así que la fila se reescala entera con el zoom en lugar de
-    # que cada columna crezca por su cuenta. Lo único propio de esta página es la clase .quantum,
-    # que pinta el filete superior en oro.
-    _specs = zip(["8", "2", "Linear", "2.5.0"], S("qc_specs"))
-    st.markdown(
-        '<div class="compare-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">'
-        + "".join(
-            f'<div class="info-card stat-card quantum">'
-            f'<div class="stat-num">{v}</div>'
-            f'<div class="stat-label">{lab}</div></div>'
-            for v, lab in _specs)
-        + "</div>", unsafe_allow_html=True)
-
-    # "Cómo funciona" a ancho completo: sus dos párrafos son conceptualmente independientes
-    # (codificación vs. kernel), así que van lado a lado en vez de apilados — a ancho completo el
-    # texto apilado dejaría líneas incómodamente largas, y apilado-estrecho (como antes, dentro de
-    # media página) dejaba la columna vecina con un hueco vacío grande por debajo.
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<div class="section-title">{S("qc_how_title")}</div>', unsafe_allow_html=True)
-    # El realce de los <b> lo pone .qc-prose b en la hoja de estilos, no un style en línea:
-    # así los dos párrafos se leen como prosa en los dos idiomas y se revisan de corrido.
-    # El suelo de la pista va en min(320px, 100%), no en 320px a secas: auto-fit SIEMPRE coloca al
-    # menos una pista y esa pista conserva su mínimo, así que en un teléfono de 360-375px (ancho útil
-    # ~294-311px dentro de la tarjeta) los 320px desbordaban y sacaban scroll horizontal a toda la
-    # página. Con min() el suelo cede al ancho disponible cuando ya no cabe; por encima de 320px el
-    # comportamiento es idéntico al de antes.
-    st.markdown(f"""
-    <div class="info-card">
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap:28px;">
-        <p class="qc-prose">{S("qc_how_p1")}</p>
-        <p class="qc-prose">{S("qc_how_p2")}</p>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Fila de dos columnas: la gráfica de importancia (izquierda) ocupa proporcionalmente más ancho
-    # que la lista de estadísticas de entrenamiento (derecha) — con 8 barras horizontales necesita más
-    # espacio para leerse cómoda; la lista de KPIs es compacta y no lo necesita. El resto de la app
-    # estira el ELEMENTO más corto con CSS (mismo truco que .compare-grid / .st-key-bloch_row) en vez
-    # de dejar hueco vacío bajo un bloque de altura fija — aquí la nota de la derecha crece hasta
-    # igualar la altura de la gráfica.
-    st.markdown("<br>", unsafe_allow_html=True)
-    qc_row = st.container(key="qc_stats_row")
-    col1, col2 = qc_row.columns([1.35, 1])
-    with col1:
-        st.markdown(f'<div class="section-title">{S("qc_feat_title")}</div>', unsafe_allow_html=True)
-        # Datos propios de esta gráfica (no QSVM_FEATURES): esa lista alimenta también los sliders de
-        # Esfera de Bloch y Predictor en Vivo, y la actualización pedida (BMXBMI sustituye a WTINT2YR,
-        # sin variables DIQ) es solo para este ranking del Random Forest — no debe alterar esas páginas.
-        names = list(reversed(list(RF_TOP8_IMPORTANCE.keys())))
-        values = list(reversed(list(RF_TOP8_IMPORTANCE.values())))
-        customdata = [[code, _wrap_hover(VAR_DESC.get(code, code))] for code in names]
-        fig = go.Figure()
-        # Sombra casi imperceptible detrás de cada barra: misma posición y grosor exactos que la barra
-        # real (ambas con width/offset automáticos, sin forzar ningún valor a mano — eso fue lo que se
-        # veía tosco), apenas un 3% más larga y muy tenue. Solo se asoma una hebra de color detrás de
-        # la punta, como una sombra proyectada suave — nada agresivo.
-        fig.add_trace(go.Bar(
-            x=[v * 1.03 for v in values], y=names, orientation="h",
-            marker_color=hex_to_rgba(t["text"], 0.07), marker_line_width=0,
-            hoverinfo="skip", showlegend=False,
-        ))
-        # Violeta: son las 8 variables que alimentan el QSVM, así que llevan el acento
-        # cuántico y no el azul de marca — la página entera queda cosida al componente.
-        fig.add_trace(go.Bar(
-            x=values, y=names, orientation="h", marker_color=C_QUANTUM, cliponaxis=False,
-            text=[nf(v) for v in values], textposition="outside",
-            textfont=dict(family=PLOTLY_MONO, size=12.5, color=t["text_secondary"]),
-            customdata=customdata, showlegend=False,
-            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
-        ))
-        plotly_layout(fig, height=300, barmode="overlay", bargap=0.34,
-                      # Margen izquierdo reducido (150→95): pega las etiquetas al borde de la tarjeta
-                      # en vez de dejarlas centradas con aire de sobra. Al ser el ancho de la tarjeta
-                      # fijo, ese espacio liberado pasa directo al área de barras — se agrandan solas,
-                      # de forma proporcional, sin tocar la tarjeta que las contiene.
-                      xaxis=dict(title=dict(text=S("qc_xaxis"), font=dict(size=13)),
-                                 showgrid=True, gridcolor=GRID, range=[0, max(values) * 1.3], fixedrange=True),
-                      # showgrid=False como en el embudo de Gobernanza: la rejilla del eje de
-                      # categorías cruza el centro de cada fila y tacha la cifra del extremo.
-                      yaxis=dict(showgrid=False, tickfont=dict(family=PLOTLY_MONO, size=13, color=t["text"]),
-                                 fixedrange=True),
-                      margin=dict(l=95, r=70, t=20, b=40))
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-
-    with col2:
-        st.markdown(f'<div class="section-title">{S("qc_train_title")}</div>', unsafe_allow_html=True)
-        # Lista vertical de KPIs (mismo patrón .kpi-row que Esfera de Bloch / Predictor en Vivo) en vez
-        # de tarjetas en grilla: más compacta en una columna estrecha y de un vistazo. Incluye los dos
-        # datos que antes solo estaban en la nota de texto (instancias del test y tiempo de inferencia).
-        # Los tres valores con cifra pasan por nf()/mil(): "21,1 min" y "1.567" iban escritos a mano y
-        # se quedaban con el separador español al cambiar de idioma.
-        tstats = zip(S("qc_tstats"),
-                     ["500", f"{nf(21.1, 1)} min", mil(1567), f"{nf(144.5, 1)} min", "[425, 70]"])
-        kpi_rows = "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span><span class="kpi-value">{v}</span></div>' for l, v in tstats)
-        st.markdown(f'<div class="info-card">{kpi_rows}</div>', unsafe_allow_html=True)
-
-    # La nota va DEBAJO de la fila (ancho completo), no dentro de col2: así la tarjeta de KPIs es el
-    # único elemento de esa columna y puede estirarse limpio hasta igualar la altura de la gráfica —
-    # si la nota se quedara dentro de col2, empujaría esa columna más abajo que la de la gráfica.
-    st.markdown(f"""
-    <div class="clinical-note" style="margin-top:16px;">
-    {S("qc_note")}
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Diagrama del circuito a ancho completo (fuera de col1/col2: con 8 qubits y las 4 secciones de
-    # entrelazamiento apiladas, comprimirlo a la mitad de la página dejaría las etiquetas P(...) ilegibles.
-    _circuit_path = FIGURES_DIR / "Circuito Cuantico 8qb.png"
-    if _circuit_path.exists():
-        st.markdown(f'<div class="section-title" style="margin-top:20px;">{S("qc_circuit_title")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="section-sub">{S("qc_circuit_sub")}</div>', unsafe_allow_html=True)
-        _circuit_b64 = _b64_image_autocrop(str(_circuit_path))
-        st.markdown(f"""
-        <div class="fig-card" style="padding:14px; max-width:900px; margin:0 auto;">
-            <img src="data:image/png;base64,{_circuit_b64}" style="width:100%; display:block; border-radius:6px;">
-        </div>
-        """, unsafe_allow_html=True)
-
-# ═══════════════════════════════════════════════════════════════════════
-# PAGINA 5 — BLOCH SPHERE EMULATOR
-# ═══════════════════════════════════════════════════════════════════════
-elif page == "bloch":
-    header(S("bl_eyebrow"), S("bl_title"), S("bl_subtitle"))
-
-    # Qué es una esfera de Bloch, antes de enseñar una. El subtítulo dice qué se está viendo
-    # (la codificación), pero da por sabido el soporte donde se dibuja; a quien llega desde el
-    # lado clínico la figura le queda en una bola con una flecha. Va en .clinical-note, el mismo
-    # recurso con el que el Predictor en Vivo aclara qué estima su formulario: nota de entrada,
-    # una sola vez, antes de los controles.
-    st.markdown(f"""
-    <div class="clinical-note" style="margin-bottom:16px;">
-    {S("bl_what_note")}
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Contenedor con clave (genera .st-key-bloch_row) para poder estirar la gráfica 3D hasta el alto
-    # de la columna izquierda y que ambas tarjetas cierren alineadas abajo — ver CSS .st-key-bloch_row.
-    bloch_row = st.container(key="bloch_row")
-    col1, col2 = bloch_row.columns([1, 1.3])
-    with col1:
-        # LOS DOS CONTROLES LLEVAN CLAVE, y no es cosmética: sin ella, la IDENTIDAD del widget
-        # para Streamlit es su rótulo, y los dos rótulos cambian con la bandera. El resultado
-        # medido era que pulsar un idioma devolvía el selector a LBXGH y el deslizador a su
-        # valor por defecto —quien estuviera mirando la glucosa a 6,9 aparecía en HbA1c a 5,7—,
-        # mientras que los ocho deslizadores del Predictor en Vivo, que sí tienen clave desde
-        # siempre, conservaban el suyo. Era la misma incoherencia que tabs_i18n arregló para las
-        # pestañas, en la única página donde quedaba.
-        #
-        # La del selector es FIJA porque lo que guarda es el CÓDIGO NHANES ("LBXGH"), que no se
-        # traduce. La del deslizador lleva el código DENTRO porque su rango, su paso y su unidad
-        # son propios de cada variable: con una clave común, el valor guardado para la glucosa
-        # (100 mg/dL) reaparecería al saltar a HbA1c, cuyo eje llega a 15.
-        #
-        # Eso NO convierte la clave en una memoria por variable, y conviene no confundirlo
-        # (comprobado en el navegador): mientras hay otra variable elegida, el deslizador de
-        # esta no se dibuja, así que Streamlit poda su estado por «stale» —el mismo mecanismo
-        # que se explica largo en tabs_i18n— y al volver arranca de nuevo en su valor por
-        # defecto. Que es justo lo que se quiere de un cambio de variable. Lo que la clave
-        # arregla es lo otro: los reruns en los que la variable NO cambia (bandera, tema,
-        # colapsar la barra), donde antes el rótulo traducido hacía que el widget se diera por
-        # nuevo y se perdiera la posición.
-        var_code = st.selectbox(S("bl_var"), list(QSVM_FEATURES.keys()),
-                                 format_func=lambda c: f"{c} — {q_label(c)}", key="bl_var")
-        v = QSVM_FEATURES[var_code]
-        lo, hi = v["range"]
-        val = st.slider(S("bl_value").format(unidad=q_unit(var_code)),
-                        float(lo), float(hi), float(v["default"]),
-                        step=v["step"], format=v["fmt"], key=f"bl_val_{var_code}")
-
-        x_norm = (val - lo) / (hi - lo)
-        # θ ∈ [0, π], NO [0, 2π]. La parametrización estándar de la esfera de Bloch es
-        # |ψ⟩ = cos(θ/2)|0⟩ + e^{iφ}·sin(θ/2)|1⟩ con θ acotado a [0, π]: recorrer 2π daba una
-        # vuelta completa y hacía la representación doblemente degenerada — el mínimo y el
-        # máximo de cada variable caían en el MISMO estado (HbA1c 4,0 % y 15,0 % daban ambos
-        # P(|0⟩) = 100 %) — y además volvía α = cos(θ/2) negativo en toda la mitad superior
-        # del rango, mostrado sin explicación en la tarjeta de amplitudes.
-        theta = x_norm * np.pi
-        alpha = np.cos(theta / 2)
-        beta = np.sin(theta / 2)
-        p0, p1 = alpha**2, beta**2
-
-        st.markdown(f"""
-        <div class="info-card">
-            <div class="kpi-row"><span class="kpi-label">{S("bl_xnorm")}</span><span class="kpi-value">{nf(x_norm, 3)}</span></div>
-            <div class="kpi-row"><span class="kpi-label">{S("bl_theta")}</span><span class="kpi-value">{nf(theta, 3)} {S("bl_rad")}</span></div>
-            <div class="kpi-row"><span class="kpi-label">{S("bl_alpha")}</span><span class="kpi-value">{nf(alpha, 3)}</span></div>
-            <div class="kpi-row"><span class="kpi-label">{S("bl_beta")}</span><span class="kpi-value">{nf(beta, 3)}</span></div>
-            <div class="kpi-row"><span class="kpi-label">P(|0⟩)</span><span class="kpi-value">{pct(p0)}</span></div>
-            <div class="kpi-row"><span class="kpi-label">P(|1⟩)</span><span class="kpi-value">{pct(p1)}</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        # Superficie esférica sombreada + círculos máximos: la misma base que la Q-sphere
-        # de más abajo, definida una sola vez en esfera_base().
-        fig = esfera_base()
-        # Ejes cartesianos
-        for ax_x, ax_y, ax_z in [([-1.06,1.06],[0,0],[0,0]), ([0,0],[-1.06,1.06],[0,0]), ([0,0],[0,0],[-1.10,1.10])]:
-            fig.add_trace(go.Scatter3d(x=ax_x, y=ax_y, z=ax_z, mode="lines",
-                                        line=dict(color=t["border_strong"], width=1.5), showlegend=False, hoverinfo="skip"))
-        # Vector de estado |ψ⟩ (φ = 0 → contenido en el plano XZ), en el acento cuántico
-        px, py, pz = np.sin(theta), 0.0, np.cos(theta)
-        fig.add_trace(go.Scatter3d(x=[0, px], y=[0, py], z=[0, pz], mode="lines",
-                                    line=dict(color=C_QUANTUM, width=7), showlegend=False, hoverinfo="skip"))
-        # Punta de flecha (cono) apuntando hacia afuera a lo largo del vector
-        fig.add_trace(go.Cone(x=[px], y=[py], z=[pz], u=[px], v=[py], w=[pz],
-                              sizemode="absolute", sizeref=0.18, anchor="tip", showscale=False,
-                              colorscale=[[0, C_QUANTUM], [1, C_QUANTUM]], hoverinfo="skip"))
-        # Proyección vertical al plano ecuatorial (pista de profundidad sutil)
-        fig.add_trace(go.Scatter3d(x=[px, px], y=[py, py], z=[pz, 0], mode="lines", opacity=0.42,
-                                    line=dict(color=C_QUANTUM, width=2, dash="dot"), showlegend=False, hoverinfo="skip"))
-        # Punto del estado: anillo del color de la superficie alrededor del marcador, para que
-        # se despegue de la esfera cuando el vector queda por delante de ella.
-        fig.add_trace(go.Scatter3d(x=[px], y=[py], z=[pz], mode="markers",
-                                    marker=dict(size=7, color=C_QUANTUM,
-                                                line=dict(color=t["surface"], width=2)), showlegend=False,
-                                    hovertemplate=f"|ψ⟩ ({var_code})<extra></extra>"))
-        # Etiquetas de los polos
-        fig.add_trace(go.Scatter3d(x=[0,0], y=[0,0], z=[1.08,-1.08], mode="text", text=["|0⟩","|1⟩"],
-                                    textfont=dict(family=PLOTLY_MONO, size=14, color=t["text_secondary"]),
-                                    showlegend=False, hoverinfo="skip"))
-        # ── Arco de θ, como en los diagramas canónicos de la esfera de Bloch ──────────
-        # θ ES el valor clínico una vez normalizado, así que dibujarlo cierra el circuito entre
-        # la cifra de la tarjeta de la izquierda y la figura: se ve DE DÓNDE sale el ángulo. Va
-        # en el plano XZ porque φ=0 (ver el vector, más arriba), a radio corto para no tocar ni
-        # el vector ni la superficie, y en tinta apagada porque es cota, no dato.
-        # Por debajo de ~0,05 rad no se dibuja: un arco de dos píxeles no se lee como arco, se
-        # lee como un borrón junto al eje.
-        if theta > 0.05:
-            _arc = np.linspace(0, theta, 40)
-            fig.add_trace(go.Scatter3d(x=0.32*np.sin(_arc), y=np.zeros_like(_arc), z=0.32*np.cos(_arc),
-                                        mode="lines", line=dict(color=t["text_muted"], width=2),
-                                        showlegend=False, hoverinfo="skip"))
-            fig.add_trace(go.Scatter3d(x=[0.44*np.sin(theta/2)], y=[0.0], z=[0.44*np.cos(theta/2)],
-                                        mode="text", text=["θ"],
-                                        textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_muted"]),
-                                        showlegend=False, hoverinfo="skip"))
-        # ── Valor de la variable, EN el punto ────────────────────────────────────────
-        # Sin esto la esfera enseña una posición pero no dice de qué, y hay que mirar al
-        # selector de al lado para saber qué representa la flecha. Dos líneas y no una: el
-        # rótulo más largo ("Glucosa en ayunas = 100 mg/dL") pide unos 200 px y se saldría de
-        # la tarjeta; partido por el "=" la línea más ancha baja a la mitad larga.
-        # Siempre a la IZQUIERDA: el vector vive en el semiplano x≥0 (φ=0 y sen θ≥0 en [0,π]),
-        # así que en pantalla sale del centro hacia arriba-izquierda y ese lado queda libre en
-        # todo el recorrido.
-        # Y arriba o abajo SEGÚN EL HEMISFERIO, que no es un adorno: en los extremos del
-        # deslizador el punto aterriza justo en un polo, y ahí |0⟩ y |1⟩ ya ocupan sitio —el de
-        # arriba por encima, el de abajo por debajo—. Alejándose del ecuador se esquivan los
-        # dos: con la variable al mínimo la etiqueta cae bajo el polo norte, y al máximo sube
-        # sobre el polo sur. Sin esta regla, al llevar el deslizador al tope la etiqueta tapaba
-        # |1⟩ por completo (comprobado exportando la figura).
-        _dec = 1 if v["step"] < 1 else 0
-        fig.add_trace(go.Scatter3d(
-            x=[px], y=[py], z=[pz], mode="text",
-            text=[f"{q_label(var_code)}<br>{nf(val, _dec)} {q_unit(var_code)}"],
-            textposition="bottom left" if pz >= 0 else "top left",
-            textfont=dict(family=PLOTLY_MONO, size=12, color=C_QUANTUM),
-            showlegend=False, hoverinfo="skip"))
-        # Alto FIJO en píxeles (sin autosize): tamaño idéntico en cada rerun y en cualquier navegador
-        # (Firefox incluido). 486 px ≈ alto natural de la columna izquierda (selectbox + slider +
-        # tarjeta de métricas), para que el fondo de esta tarjeta quede alineado con el de aquella.
-        # Sube/baja este valor para agrandar/reducir la esfera.
-        fig.update_layout(
-            height=486, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
-            scene=dict(
-                # Rangos apretados (±1.08 en vez de ±1.4): la esfera de radio 1 llena ~93% del cubo en
-                # vez de ~71% → ~30% más grande DENTRO de la misma tarjeta, sin cambiar su tamaño en px.
-                # z un poco más holgado (±1.12) para dejar aire a las etiquetas |0⟩/|1⟩.
-                xaxis=dict(visible=False, range=[-1.08, 1.08]),
-                yaxis=dict(visible=False, range=[-1.08, 1.08]),
-                zaxis=dict(visible=False, range=[-1.12, 1.12]),
-                aspectmode="cube", dragmode="orbit",
-                camera=dict(eye=dict(x=1.45, y=1.45, z=0.75)),
-            ),
-        )
-        # key estable: sin ella Streamlit remonta el iframe de Plotly en cada rerun y la esfera
-        # parpadea/encoge; con key reutiliza el mismo componente y solo actualiza los datos.
-        st.plotly_chart(fig, width="stretch", key="bloch_sphere",
-                        config={"displayModeBar": False, "responsive": True})
-
-    st.markdown(f"""
-    <div class="clinical-note">
-    {S("bl_note")}
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ═══════════════════════════════════════════════════════════════════
-    # ENTRELAZAMIENTO DE TRES QUBITS
-    # ═══════════════════════════════════════════════════════════════════
-    # POR QUÉ AQUÍ Y NO AL FINAL DE CIRCUITO CUÁNTICO. La nota de arriba (bl_note) cierra la
-    # página diciendo que el entrelazamiento "solo es representable en el espacio conjunto":
-    # esta sección es esa frase hecha figura. El argumento entero —que un estado entrelazado
-    # NO cabe en una esfera de Bloch por qubit— solo se entiende habiendo visto antes la
-    # esfera de un qubit, y esa esfera está justo encima; en Circuito Cuántico la sección
-    # habría llegado sin ese precedente, entre las especificaciones del ZZFeatureMap y las
-    # cifras de entrenamiento, que es una página de fichas y no de didáctica.
+    # DOS PESTAÑAS, y la segunda era una página del menú hasta este cambio. La Esfera de Bloch
+    # entra aquí porque es LA MISMA MATERIA a otra escala —un qubit, luego tres, y al final los
+    # ocho del modelo, que son los de esta página— y porque un menú de siete entradas dedicaba
+    # DOS a visualización cuántica: al dejar de ser la app solo el apoyo de la defensa, ese peso
+    # le restaba sitio en el primer nivel a las páginas que mejor explican el proyecto, Resumen
+    # y Predictor en Vivo. No se ha tocado NADA de su contenido ni de su interactividad; ha
+    # cambiado el nivel al que vive, y solo eso.
     #
-    # POR QUÉ TRES Y NO DOS, que es donde estaba la sección antes. Con dos qubits el recorrido
-    # termina en el estado de Bell y las tres cifras locales caen a su extremo; con tres, el
-    # GHZ da EXACTAMENTE esas mismas tres cifras —el titular no se mueve—, pero aparece una
-    # cuarta que dos qubits no pueden enseñar: la concurrencia del par q₀q₁, que sube a 1 en el
-    # paso 2 y vuelve a 0 en el 3. Ver ent_local(): el tercer CNOT crea entrelazamiento global
-    # DESHACIENDO el del par, y eso es lo que hay que saber para leer la matriz de información
-    # mutua por parejas del ZZFeatureMap de ocho qubits que viene justo debajo.
-    #
-    # El paso ES el estado. Lo único que persiste entre reruns es el entero `ent_paso`; el
-    # vector se recalcula desde |000⟩ en cada pasada (ver ent_statevector). Los botones van con
-    # on_click y no con `if st.button(...)`: el callback corre ANTES de que el script se
-    # reejecute, así que el circuito, la Q-sphere y las métricas se pintan ya con el paso
-    # nuevo. Con la forma `if` haría falta un st.rerun() explícito para no ir un paso por
-    # detrás — el mismo motivo por el que el toggle de la sidebar sí lo lleva.
-    st.session_state.setdefault("ent_paso", 0)
-    st.session_state.setdefault("ent_counts", None)
+    # Vía tabs_i18n y no st.tabs pelado, por lo mismo que Gobernanza y Análisis SHAP: los dos
+    # rótulos cambian con la bandera, así que sin esto el widget se da por nuevo y la pestaña
+    # abierta se pierde al traducir o al recargar. Y OJO: "circuit" TIENE que estar en
+    # _PAGINAS_CON_TABS, o el saneo de ?tab= de más arriba lo borra antes de que tabs_i18n
+    # llegue a leerlo y la pestaña no sobreviviría a un F5.
+    tab_qc, tab_bloch = tabs_i18n("qc_tabs", key="qc_tabs")
 
-    def _ent_paso(destino):
-        """Mueve el circuito al paso `destino` y tira las mediciones anteriores.
-
-        Lo segundo importa tanto como lo primero: un histograma de |00⟩+|11⟩ bajo un circuito
-        que ya no tiene el CNOT sería una figura que miente. Al cambiar de paso, la muestra
-        vuelve a estar vacía y hay que volver a pedirla.
-        """
-        st.session_state.ent_paso = destino
-        st.session_state.ent_counts = None
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<div class="section-title">{S("bl_ent_title")}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="section-sub">{S("bl_ent_sub")}</div>', unsafe_allow_html=True)
-    st.markdown(f"""
-    <div class="clinical-note" style="margin-bottom:16px;">
-    {S("bl_ent_intro")}
-    </div>
-    """, unsafe_allow_html=True)
-
-    paso = st.session_state.ent_paso
-    psi = ent_statevector(paso)
-    local = ent_local(psi)
-
-    # Botonera: cada puerta se habilita SOLO en su turno. Un circuito no admite aplicar el
-    # CNOT antes que la Hadamard —saldría un estado producto sin entrelazar y la sección
-    # perdería el hilo—, y el segundo CNOT antes del primero rompería la cadena que construye
-    # el GHZ, así que la secuencia la impone el propio control en vez de un aviso a posteriori.
-    # El de reiniciar siempre está vivo: se puede rehacer el recorrido entero.
-    b1, b2, b3, b4 = st.columns([1.15, 1.5, 1.5, 1])
-    for _col, _clave, _rotulo, _destino in (
-            (b1, "ent_h", "bl_ent_btn_h", 1),
-            (b2, "ent_cnot1", "bl_ent_btn_cnot1", 2),
-            (b3, "ent_cnot2", "bl_ent_btn_cnot2", 3)):
-        with _col:
-            st.button(S(_rotulo), key=_clave, width="stretch",
-                      disabled=paso != _destino - 1, on_click=_ent_paso, args=(_destino,))
-    with b4:
-        st.button(S("bl_ent_btn_reset"), key="ent_reset", width="stretch",
-                  disabled=paso == 0, on_click=_ent_paso, args=(0,))
-
-    # Las tres frases del paso actual, en la misma tarjeta de prosa que usa "Cómo funciona"
-    # del Circuito Cuántico. Van FUERA de las columnas y a ancho completo: es el texto que
-    # explica las dos figuras de debajo, no el pie de ninguna de las dos.
-    st.markdown(f'<div class="info-card" style="margin-top:12px;">'
-                f'<p class="qc-prose">{S("bl_ent_step_note")[paso]}</p></div>',
-                unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    ent_row = st.container(key="ent_row")
-    col1, col2 = ent_row.columns([1, 1.15])
-    with col1:
-        st.markdown(f'<div class="section-title">{S("bl_ent_circuit_title")}</div>', unsafe_allow_html=True)
-        # fig-vector y no .fig-card a secas: este circuito se dibuja con la paleta activa, así
-        # que necesita la superficie del tema debajo y no el blanco fijo de las láminas raster
-        # —ver el bloque .fig-card.fig-vector de la hoja de estilos, donde está el porqué—.
-        st.markdown(f'<div class="fig-card fig-vector" style="padding:18px 14px;">'
-                    f'{ent_circuito_svg(paso, st.session_state.ent_counts is not None)}</div>',
-                    unsafe_allow_html=True)
-        # Las cuatro cifras de ent_local(), que son el argumento cuantitativo de la sección.
-        # Mismo patrón .kpi-row que la tarjeta de amplitudes de arriba, a propósito: se leen
-        # como su continuación —allí el estado de UN qubit, aquí lo que queda de él dentro
-        # del trío—. La longitud del vector va la primera porque es la que se puede contrastar
-        # con la figura de esta misma página: 1 = hay flecha que dibujar, 0 = no la hay. La
-        # concurrencia va la última porque es la que solo se entiende con las otras tres ya
-        # leídas: dice que lo que hay entrelazado es el conjunto y no las parejas.
-        _kpi_lab = S("bl_ent_kpi")
-        _kpi_val = [nf(local["r"], 3), nf(local["pureza"], 3),
-                    f'{nf(local["entropia"], 3)} {S("bl_ent_bits")}',
-                    nf(local["concurrencia"], 3)]
+    # ──────────────────── PESTAÑA A — CIRCUITO ZZFEATUREMAP ────────────────────
+    with tab_qc:
+        # Misma construcción que los cuatro KPIs de Gobernanza → Calidad del dato: una sola .compare-grid
+        # de cuatro columnas iguales en vez de st.columns. El grid estira las tarjetas a la misma altura
+        # y reparte el ancho en fracciones, así que la fila se reescala entera con el zoom en lugar de
+        # que cada columna crezca por su cuenta. Lo único propio de esta página es la clase .quantum,
+        # que pinta el filete superior en oro.
+        _specs = zip(["8", "2", "Linear", "2.5.0"], S("qc_specs"))
         st.markdown(
-            '<div class="info-card" style="margin-top:14px;">'
-            + "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span>'
-                      f'<span class="kpi-value">{v}</span></div>'
-                      for l, v in zip(_kpi_lab, _kpi_val))
+            '<div class="compare-grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));">'
+            + "".join(
+                f'<div class="info-card stat-card quantum">'
+                f'<div class="stat-num">{v}</div>'
+                f'<div class="stat-label">{lab}</div></div>'
+                for v, lab in _specs)
             + "</div>", unsafe_allow_html=True)
 
-    with col2:
-        st.markdown(f'<div class="section-title">{S("bl_ent_qsphere_title")}</div>', unsafe_allow_html=True)
-        # key estable por el mismo motivo que en la esfera de arriba: sin ella Streamlit
-        # remonta el iframe en cada rerun y la figura parpadea. Aquí además el rerun ocurre
-        # en cada pulsación, así que se notaría el triple.
-        st.plotly_chart(ent_qsphere_fig(psi), width="stretch", key="ent_qsphere",
-                        config={"displayModeBar": False, "responsive": True})
-
-    # ── Medición ────────────────────────────────────────────────────────
-    # La Q-sphere enseña el estado; esto enseña lo que se MIDE, que es lo único observable y
-    # la prueba empírica del entrelazamiento: 000 y 111 a partes iguales, y las otras SEIS
-    # combinaciones nunca. Se habilita desde el primer paso y no solo en el GHZ, porque el
-    # contraste es parte de la lección — tras la Hadamard sola salen 000 y 100, o sea q0 al
-    # azar y los otros dos fijos en 0; cada CNOT que se añade ata un qubit más al primero.
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<div class="section-title">{S("bl_ent_meas_title")}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="section-sub">{S("bl_ent_meas_sub")}</div>', unsafe_allow_html=True)
-
-    m1, m2 = st.columns([2.2, 1])
-    with m1:
-        # Con clave por lo mismo que los dos controles de arriba: su rótulo se traduce, así que
-        # sin ella cambiar de bandera devolvía el número de disparos a 1.000 dejando en pantalla
-        # el histograma de la tanda anterior —que sí sobrevive, porque vive en una clave nuestra—.
-        # O sea, el control decía 1.000 y la figura de al lado seguía contando 5.000.
-        shots = st.slider(S("bl_ent_meas_n"), 100, 10000, 1000, step=100, key="ent_shots")
-    with m2:
-        # El aire de arriba alinea el botón con el carril del deslizador de al lado: el
-        # slider gasta su primera línea en el rótulo y sin esto el botón subía por encima.
-        st.markdown('<div style="height:30px;"></div>', unsafe_allow_html=True)
-        if st.button(S("bl_ent_meas_btn"), key="ent_medir", width="stretch"):
-            # Muestreo multinomial sobre |ψ|². Es EXACTAMENTE lo que hace un simulador ideal
-            # sin ruido: cada disparo es un sorteo independiente con las probabilidades de
-            # Born, y el simulador no añade nada más cuando no se le pide modelo de ruido.
-            # Sin semilla fija a propósito: dos tandas seguidas dan cifras distintas, que es
-            # justo lo que se quiere enseñar —la proporción es estable, el recuento exacto
-            # no— y con semilla fija parecería un resultado calculado en vez de muestreado.
-            rng = np.random.default_rng()
-            st.session_state.ent_counts = rng.multinomial(shots, psi ** 2).tolist()
-
-    counts = st.session_state.ent_counts
-    if counts is None:
-        # Hueco explícito en vez de una figura vacía: una gráfica con ocho barras a cero se
-        # lee como un resultado ("no sale nada"), que es lo contrario de "aún no has medido".
-        st.markdown(f'<div class="info-card" style="text-align:center; color:{t["text_muted"]}; '
-                    f'padding:34px 18px;">{S("bl_ent_meas_empty")}</div>', unsafe_allow_html=True)
-    else:
-        total = sum(counts)
-        fig = go.Figure()
-        # Los ocho resultados posibles SIEMPRE en el eje, incluidos los que salen a cero: que
-        # las seis combinaciones mixtas aparezcan etiquetadas y vacías es el dato. Si se
-        # filtraran las barras nulas, la figura enseñaría dos resultados equiprobables y no
-        # habría forma de ver que faltan otros seis — y con tres qubits ese vacío pesa más
-        # que con dos: seis de ocho, no dos de cuatro.
-        fig.add_trace(go.Bar(
-            x=[f"|{b}⟩" for b in ENT_BASE], y=counts,
-            marker_color=[C_QUANTUM if c else hex_to_rgba(t["text"], 0.10) for c in counts],
-            text=[mil(c) for c in counts], textposition="outside",
-            textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_secondary"]),
-            customdata=[[pct(c / total)] for c in counts], showlegend=False, cliponaxis=False,
-            hovertemplate="<b>%{x}</b><br>%{y} " + S("bl_ent_hover_shots") + "<br>%{customdata[0]}<extra></extra>",
-        ))
-        plotly_layout(fig, height=320,
-                      xaxis=dict(showgrid=False, fixedrange=True,
-                                 tickfont=dict(family=PLOTLY_MONO, size=15, color=t["text"])),
-                      yaxis=dict(title=dict(text=S("bl_ent_meas_yaxis"), font=dict(size=13)),
-                                 showgrid=True, gridcolor=GRID, fixedrange=True,
-                                 range=[0, max(counts) * 1.18]),
-                      margin=dict(l=60, r=20, t=26, b=40))
-        st.plotly_chart(fig, width="stretch", key="ent_hist", config={"displayModeBar": False})
-        st.markdown(f'<div class="clinical-note">{S("bl_ent_meas_note")[paso]}</div>',
-                    unsafe_allow_html=True)
-
-    # Nota de honestidad metodológica, en la misma línea que bl_note: la sección de arriba
-    # dice qué NO reproduce la esfera del ZZFeatureMap, y esta dice con qué está calculado lo
-    # que se acaba de ver. En un TFM eso no es un pie de página, es parte del resultado.
-    st.markdown(f'<div class="clinical-note" style="margin-top:16px;">{S("bl_ent_impl_note")}</div>',
-                unsafe_allow_html=True)
-
-    # ═══════════════════════════════════════════════════════════════════
-    # EL ZZFEATUREMAP REAL (8 qubits)
-    # ═══════════════════════════════════════════════════════════════════
-    # Tercer escalón de la página: un qubit → dos → los ocho del modelo. Cada uno usa el
-    # vocabulario del anterior, y ese encadenamiento es lo que hace legible este último — |r|
-    # es LA MISMA cifra que la sección de 2 qubits acaba de explicar con el estado de Bell.
-    # Sin ese precedente, estas ocho barras serían ocho números entre 0 y 1 sin significado.
-    #
-    # NO LLEVA CONTROLES PROPIOS: usa el selector y el deslizador del principio de la página.
-    # Añadir un segundo par para las mismas ocho variables habría dejado dos controles que
-    # dicen lo mismo. Y así el gesto de la página es uno solo: mueves una variable clínica y
-    # ves su efecto a las tres escalas, la esfera de arriba y las dos figuras de aquí.
-    # Además tiene premio: con entrelazamiento lineal, mover UNA variable solo altera su
-    # qubit y sus vecinos inmediatos (verificado barriendo HbA1c por su rango completo: q0,
-    # q1 y q2 se mueven; de q3 a q7 no cambian ni un decimal). El cono de luz del circuito se
-    # ve arrastrando el deslizador.
-    #
-    # La sección entera es opcional: si falta scaler_correcto.json no hay forma de escalar las
-    # features como las escaló el pipeline, y se omite en silencio en vez de inventar una
-    # normalización distinta — mismo criterio que el diagrama del circuito de 8 qubits, que
-    # solo se pinta si su PNG está en disco.
-    _esc = _load_scaler_and_medians()
-    if _esc is not None and all(f in _esc["features"] for f in QSVM_FEATURES):
+        # "Cómo funciona" a ancho completo: sus dos párrafos son conceptualmente independientes
+        # (codificación vs. kernel), así que van lado a lado en vez de apilados — a ancho completo el
+        # texto apilado dejaría líneas incómodamente largas, y apilado-estrecho (como antes, dentro de
+        # media página) dejaba la columna vecina con un hueco vacío grande por debajo.
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="section-title">{S("bl_zz_title")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="section-sub">{S("bl_zz_sub")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("qc_how_title")}</div>', unsafe_allow_html=True)
+        # El realce de los <b> lo pone .qc-prose b en la hoja de estilos, no un style en línea:
+        # así los dos párrafos se leen como prosa en los dos idiomas y se revisan de corrido.
+        # El suelo de la pista va en min(320px, 100%), no en 320px a secas: auto-fit SIEMPRE coloca al
+        # menos una pista y esa pista conserva su mínimo, así que en un teléfono de 360-375px (ancho útil
+        # ~294-311px dentro de la tarjeta) los 320px desbordaban y sacaban scroll horizontal a toda la
+        # página. Con min() el suelo cede al ancho disponible cuando ya no cabe; por encima de 320px el
+        # comportamiento es idéntico al de antes.
         st.markdown(f"""
-        <div class="clinical-note" style="margin-bottom:16px;">
-        {S("bl_zz_intro")}
+        <div class="info-card">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap:28px;">
+            <p class="qc-prose">{S("qc_how_p1")}</p>
+            <p class="qc-prose">{S("qc_how_p2")}</p>
+        </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Las 8 features en su valor de referencia, salvo la que el lector tiene elegida
-        # arriba. var_code y val vienen del selector y el deslizador de la esfera: `with`
-        # no abre ámbito en Python, así que siguen vivos aquí.
-        _perfil = {c: float(f["default"]) for c, f in QSVM_FEATURES.items()}
-        _perfil[var_code] = float(val)
-        _codigos = list(QSVM_FEATURES.keys())
-        r_len, MI = zz_metricas(tuple(_perfil[c] for c in _codigos))
-
-        st.markdown(
-            f'<div class="section-sub" style="margin-top:-6px;">'
-            f'{S("bl_zz_current").format(var=q_label(var_code), val=nf(val, 1 if v["step"] < 1 else 0), unidad=q_unit(var_code))}'
-            f'</div>', unsafe_allow_html=True)
-
-        zz_row = st.container(key="zz_row")
-        zc1, zc2 = zz_row.columns([1, 1.15])
-        with zc1:
-            st.markdown(f'<div class="section-title">{S("bl_zz_r_title")}</div>', unsafe_allow_html=True)
-            # Barras horizontales con el mismo tratamiento que el ranking RF del Circuito
-            # Cuántico: la lista es la misma y leerlas igual ayuda a cruzarlas. Se invierte
-            # el orden porque Plotly apila el eje de categorías de abajo arriba y así el
-            # primer qubit queda arriba, como en el diagrama del circuito.
-            _orden = list(reversed(_codigos))
-            _vals = [float(r_len[_codigos.index(c)]) for c in _orden]
+        # Fila de dos columnas: la gráfica de importancia (izquierda) ocupa proporcionalmente más ancho
+        # que la lista de estadísticas de entrenamiento (derecha) — con 8 barras horizontales necesita más
+        # espacio para leerse cómoda; la lista de KPIs es compacta y no lo necesita. El resto de la app
+        # estira el ELEMENTO más corto con CSS (mismo truco que .compare-grid / .st-key-bloch_row) en vez
+        # de dejar hueco vacío bajo un bloque de altura fija — aquí la nota de la derecha crece hasta
+        # igualar la altura de la gráfica.
+        st.markdown("<br>", unsafe_allow_html=True)
+        qc_row = st.container(key="qc_stats_row")
+        col1, col2 = qc_row.columns([1.35, 1])
+        with col1:
+            st.markdown(f'<div class="section-title">{S("qc_feat_title")}</div>', unsafe_allow_html=True)
+            # Datos propios de esta gráfica (no QSVM_FEATURES): esa lista alimenta también los sliders de
+            # Esfera de Bloch y Predictor en Vivo, y la actualización pedida (BMXBMI sustituye a WTINT2YR,
+            # sin variables DIQ) es solo para este ranking del Random Forest — no debe alterar esas páginas.
+            names = list(reversed(list(RF_TOP8_IMPORTANCE.keys())))
+            values = list(reversed(list(RF_TOP8_IMPORTANCE.values())))
+            customdata = [[code, _wrap_hover(VAR_DESC.get(code, code))] for code in names]
             fig = go.Figure()
-            # La variable que el lector está moviendo va en el acento de marca y el resto en
-            # el cuántico: sin eso, al arrastrar el deslizador se ve cambiar una barra sin
-            # saber cuál se estaba tocando.
+            # Sombra casi imperceptible detrás de cada barra: misma posición y grosor exactos que la barra
+            # real (ambas con width/offset automáticos, sin forzar ningún valor a mano — eso fue lo que se
+            # veía tosco), apenas un 3% más larga y muy tenue. Solo se asoma una hebra de color detrás de
+            # la punta, como una sombra proyectada suave — nada agresivo.
             fig.add_trace(go.Bar(
-                x=_vals, y=_orden, orientation="h", cliponaxis=False,
-                marker_color=[C_PRIMARY if c == var_code else C_QUANTUM for c in _orden],
-                text=[nf(x, 3) for x in _vals], textposition="outside",
-                textfont=dict(family=PLOTLY_MONO, size=12.5, color=t["text_secondary"]),
-                customdata=[[q_label(c)] for c in _orden], showlegend=False,
-                hovertemplate="<b>%{customdata[0]}</b><br>|r| = %{x:.3f}<extra></extra>"))
-            plotly_layout(fig, height=340,
-                          xaxis=dict(title=dict(text=S("bl_zz_r_xaxis"), font=dict(size=13)),
-                                     range=[0, 1.16], showgrid=True, gridcolor=GRID, fixedrange=True),
-                          yaxis=dict(showgrid=False, fixedrange=True,
-                                     tickfont=dict(family=PLOTLY_MONO, size=12, color=t["text"])),
-                          margin=dict(l=88, r=54, t=20, b=42))
-            st.plotly_chart(fig, width="stretch", key="zz_r", config={"displayModeBar": False})
-
-        with zc2:
-            st.markdown(f'<div class="section-title">{S("bl_zz_mi_title")}</div>', unsafe_allow_html=True)
-            # Diagonal en blanco: I(i:i) no es cero, es la entropía del propio qubit, y
-            # pintarla en la misma escala que los pares sería comparar dos magnitudes
-            # distintas. Con NaN, Plotly deja la celda al color del fondo.
-            _z = MI.copy().astype(float)
-            np.fill_diagonal(_z, np.nan)
-            _txt = [["" if i == j else nf(_z[i, j], 2) for j in range(ZZ_N)] for i in range(ZZ_N)]
-            fig = go.Figure(go.Heatmap(
-                z=_z, x=_codigos, y=_codigos,
-                # Escala FIJA de 0 al tope teórico (2 bits). Adaptarla al máximo de cada
-                # render habría hecho que el mismo color significara cosas distintas según
-                # dónde estuviera el deslizador, que en un control en vivo es lo peor
-                # posible. El extremo inferior es la superficie de la tarjeta, así que un
-                # par sin correlación se ve literalmente vacío.
-                zmin=0, zmax=ZZ_MI_MAX,
-                colorscale=[[0.0, t["surface_alt"]], [0.25, RAMP[0]], [0.5, RAMP[1]],
-                            [0.75, RAMP[2]], [1.0, RAMP[3]]],
-                text=_txt, texttemplate="%{text}", xgap=2, ygap=2,
-                textfont=dict(family=PLOTLY_MONO, size=11, color=t["text"]),
-                hovertemplate="<b>%{y} · %{x}</b><br>%{z:.3f} " + S("bl_ent_bits") + "<extra></extra>",
-                colorbar=dict(title=dict(text=S("bl_zz_mi_cbar"), font=dict(size=12)),
-                              thickness=10, outlinewidth=0, len=0.86,
-                              tickfont=dict(family=PLOTLY_MONO, size=11)),
+                x=[v * 1.03 for v in values], y=names, orientation="h",
+                marker_color=hex_to_rgba(t["text"], 0.07), marker_line_width=0,
+                hoverinfo="skip", showlegend=False,
             ))
-            plotly_layout(fig, height=340,
-                          xaxis=dict(showgrid=False, fixedrange=True, side="top",
-                                     tickfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"])),
-                          # autorange invertido: la primera variable arriba, para que la
-                          # diagonal caiga de arriba-izquierda a abajo-derecha como se lee
-                          # cualquier matriz, y no al revés.
-                          yaxis=dict(showgrid=False, fixedrange=True, autorange="reversed",
-                                     tickfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"])),
-                          margin=dict(l=76, r=10, t=54, b=10))
-            st.plotly_chart(fig, width="stretch", key="zz_mi", config={"displayModeBar": False})
+            # Violeta: son las 8 variables que alimentan el QSVM, así que llevan el acento
+            # cuántico y no el azul de marca — la página entera queda cosida al componente.
+            fig.add_trace(go.Bar(
+                x=values, y=names, orientation="h", marker_color=C_QUANTUM, cliponaxis=False,
+                text=[nf(v) for v in values], textposition="outside",
+                textfont=dict(family=PLOTLY_MONO, size=12.5, color=t["text_secondary"]),
+                customdata=customdata, showlegend=False,
+                hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+            ))
+            plotly_layout(fig, height=300, barmode="overlay", bargap=0.34,
+                          # Margen izquierdo reducido (150→95): pega las etiquetas al borde de la tarjeta
+                          # en vez de dejarlas centradas con aire de sobra. Al ser el ancho de la tarjeta
+                          # fijo, ese espacio liberado pasa directo al área de barras — se agrandan solas,
+                          # de forma proporcional, sin tocar la tarjeta que las contiene.
+                          xaxis=dict(title=dict(text=S("qc_xaxis"), font=dict(size=13)),
+                                     showgrid=True, gridcolor=GRID, range=[0, max(values) * 1.3], fixedrange=True),
+                          # showgrid=False como en el embudo de Gobernanza: la rejilla del eje de
+                          # categorías cruza el centro de cada fila y tacha la cifra del extremo.
+                          yaxis=dict(showgrid=False, tickfont=dict(family=PLOTLY_MONO, size=13, color=t["text"]),
+                                     fixedrange=True),
+                          margin=dict(l=95, r=70, t=20, b=40))
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-        st.markdown(f'<div class="clinical-note">{S("bl_zz_note")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="clinical-note" style="margin-top:16px;">{S("bl_zz_caveat")}</div>',
+        with col2:
+            st.markdown(f'<div class="section-title">{S("qc_train_title")}</div>', unsafe_allow_html=True)
+            # Lista vertical de KPIs (mismo patrón .kpi-row que Esfera de Bloch / Predictor en Vivo) en vez
+            # de tarjetas en grilla: más compacta en una columna estrecha y de un vistazo. Incluye los dos
+            # datos que antes solo estaban en la nota de texto (instancias del test y tiempo de inferencia).
+            # Los tres valores con cifra pasan por nf()/mil(): "21,1 min" y "1.567" iban escritos a mano y
+            # se quedaban con el separador español al cambiar de idioma.
+            tstats = zip(S("qc_tstats"),
+                         ["500", f"{nf(21.1, 1)} min", mil(1567), f"{nf(144.5, 1)} min", "[425, 70]"])
+            kpi_rows = "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span><span class="kpi-value">{v}</span></div>' for l, v in tstats)
+            st.markdown(f'<div class="info-card">{kpi_rows}</div>', unsafe_allow_html=True)
+
+        # La nota va DEBAJO de la fila (ancho completo), no dentro de col2: así la tarjeta de KPIs es el
+        # único elemento de esa columna y puede estirarse limpio hasta igualar la altura de la gráfica —
+        # si la nota se quedara dentro de col2, empujaría esa columna más abajo que la de la gráfica.
+        st.markdown(f"""
+        <div class="clinical-note" style="margin-top:16px;">
+        {S("qc_note")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Diagrama del circuito a ancho completo (fuera de col1/col2: con 8 qubits y las 4 secciones de
+        # entrelazamiento apiladas, comprimirlo a la mitad de la página dejaría las etiquetas P(...) ilegibles.
+        _circuit_path = FIGURES_DIR / "Circuito Cuantico 8qb.png"
+        if _circuit_path.exists():
+            st.markdown(f'<div class="section-title" style="margin-top:20px;">{S("qc_circuit_title")}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-sub">{S("qc_circuit_sub")}</div>', unsafe_allow_html=True)
+            _circuit_b64 = _b64_image_autocrop(str(_circuit_path))
+            st.markdown(f"""
+            <div class="fig-card" style="padding:14px; max-width:900px; margin:0 auto;">
+                <img src="data:image/png;base64,{_circuit_b64}" style="width:100%; display:block; border-radius:6px;">
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PESTAÑA B — ESFERA DE BLOCH
+    # ═══════════════════════════════════════════════════════════════════════
+    # Lo que era la página 5. Entra con section-title/section-sub y NO con header(): header()
+    # abre un contenedor con clave page_enter_<índice de la página>, y llamarlo dos veces en la
+    # misma pasada choca por clave duplicada. Sus dos textos son los que ya tenía —bl_title es
+    # además la fila con la que se sigue llegando aquí desde el buscador (ver SEARCH_PREFIX)—;
+    # el antetítulo bl_eyebrow se retira, porque un antetítulo nombra la categoría de una
+    # PÁGINA y esto ya no lo es.
+    #
+    # Las tres secciones de dentro (la esfera de un qubit, el entrelazamiento de tres y el
+    # ZZFeatureMap real de ocho) van juntas en esta pestaña y no repartidas: la tercera usa
+    # var_code y val del selector de la primera, a propósito y explicado ahí abajo.
+    with tab_bloch:
+        st.markdown(f'<div class="section-title">{S("bl_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("bl_subtitle")}</div>', unsafe_allow_html=True)
+
+        # Qué es una esfera de Bloch, antes de enseñar una. El subtítulo dice qué se está viendo
+        # (la codificación), pero da por sabido el soporte donde se dibuja; a quien llega desde el
+        # lado clínico la figura le queda en una bola con una flecha. Va en .clinical-note, el mismo
+        # recurso con el que el Predictor en Vivo aclara qué estima su formulario: nota de entrada,
+        # una sola vez, antes de los controles.
+        st.markdown(f"""
+        <div class="clinical-note" style="margin-bottom:16px;">
+        {S("bl_what_note")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Contenedor con clave (genera .st-key-bloch_row) para poder estirar la gráfica 3D hasta el alto
+        # de la columna izquierda y que ambas tarjetas cierren alineadas abajo — ver CSS .st-key-bloch_row.
+        bloch_row = st.container(key="bloch_row")
+        col1, col2 = bloch_row.columns([1, 1.3])
+        with col1:
+            # LOS DOS CONTROLES LLEVAN CLAVE, y no es cosmética: sin ella, la IDENTIDAD del widget
+            # para Streamlit es su rótulo, y los dos rótulos cambian con la bandera. El resultado
+            # medido era que pulsar un idioma devolvía el selector a LBXGH y el deslizador a su
+            # valor por defecto —quien estuviera mirando la glucosa a 6,9 aparecía en HbA1c a 5,7—,
+            # mientras que los ocho deslizadores del Predictor en Vivo, que sí tienen clave desde
+            # siempre, conservaban el suyo. Era la misma incoherencia que tabs_i18n arregló para las
+            # pestañas, en la única página donde quedaba.
+            #
+            # La del selector es FIJA porque lo que guarda es el CÓDIGO NHANES ("LBXGH"), que no se
+            # traduce. La del deslizador lleva el código DENTRO porque su rango, su paso y su unidad
+            # son propios de cada variable: con una clave común, el valor guardado para la glucosa
+            # (100 mg/dL) reaparecería al saltar a HbA1c, cuyo eje llega a 15.
+            #
+            # Eso NO convierte la clave en una memoria por variable, y conviene no confundirlo
+            # (comprobado en el navegador): mientras hay otra variable elegida, el deslizador de
+            # esta no se dibuja, así que Streamlit poda su estado por «stale» —el mismo mecanismo
+            # que se explica largo en tabs_i18n— y al volver arranca de nuevo en su valor por
+            # defecto. Que es justo lo que se quiere de un cambio de variable. Lo que la clave
+            # arregla es lo otro: los reruns en los que la variable NO cambia (bandera, tema,
+            # colapsar la barra), donde antes el rótulo traducido hacía que el widget se diera por
+            # nuevo y se perdiera la posición.
+            var_code = st.selectbox(S("bl_var"), list(QSVM_FEATURES.keys()),
+                                     format_func=lambda c: f"{c} — {q_label(c)}", key="bl_var")
+            v = QSVM_FEATURES[var_code]
+            lo, hi = v["range"]
+            val = st.slider(S("bl_value").format(unidad=q_unit(var_code)),
+                            float(lo), float(hi), float(v["default"]),
+                            step=v["step"], format=v["fmt"], key=f"bl_val_{var_code}")
+
+            x_norm = (val - lo) / (hi - lo)
+            # θ ∈ [0, π], NO [0, 2π]. La parametrización estándar de la esfera de Bloch es
+            # |ψ⟩ = cos(θ/2)|0⟩ + e^{iφ}·sin(θ/2)|1⟩ con θ acotado a [0, π]: recorrer 2π daba una
+            # vuelta completa y hacía la representación doblemente degenerada — el mínimo y el
+            # máximo de cada variable caían en el MISMO estado (HbA1c 4,0 % y 15,0 % daban ambos
+            # P(|0⟩) = 100 %) — y además volvía α = cos(θ/2) negativo en toda la mitad superior
+            # del rango, mostrado sin explicación en la tarjeta de amplitudes.
+            theta = x_norm * np.pi
+            alpha = np.cos(theta / 2)
+            beta = np.sin(theta / 2)
+            p0, p1 = alpha**2, beta**2
+
+            st.markdown(f"""
+            <div class="info-card">
+                <div class="kpi-row"><span class="kpi-label">{S("bl_xnorm")}</span><span class="kpi-value">{nf(x_norm, 3)}</span></div>
+                <div class="kpi-row"><span class="kpi-label">{S("bl_theta")}</span><span class="kpi-value">{nf(theta, 3)} {S("bl_rad")}</span></div>
+                <div class="kpi-row"><span class="kpi-label">{S("bl_alpha")}</span><span class="kpi-value">{nf(alpha, 3)}</span></div>
+                <div class="kpi-row"><span class="kpi-label">{S("bl_beta")}</span><span class="kpi-value">{nf(beta, 3)}</span></div>
+                <div class="kpi-row"><span class="kpi-label">P(|0⟩)</span><span class="kpi-value">{pct(p0)}</span></div>
+                <div class="kpi-row"><span class="kpi-label">P(|1⟩)</span><span class="kpi-value">{pct(p1)}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            # Superficie esférica sombreada + círculos máximos: la misma base que la Q-sphere
+            # de más abajo, definida una sola vez en esfera_base().
+            fig = esfera_base()
+            # Ejes cartesianos
+            for ax_x, ax_y, ax_z in [([-1.06,1.06],[0,0],[0,0]), ([0,0],[-1.06,1.06],[0,0]), ([0,0],[0,0],[-1.10,1.10])]:
+                fig.add_trace(go.Scatter3d(x=ax_x, y=ax_y, z=ax_z, mode="lines",
+                                            line=dict(color=t["border_strong"], width=1.5), showlegend=False, hoverinfo="skip"))
+            # Vector de estado |ψ⟩ (φ = 0 → contenido en el plano XZ), en el acento cuántico
+            px, py, pz = np.sin(theta), 0.0, np.cos(theta)
+            fig.add_trace(go.Scatter3d(x=[0, px], y=[0, py], z=[0, pz], mode="lines",
+                                        line=dict(color=C_QUANTUM, width=7), showlegend=False, hoverinfo="skip"))
+            # Punta de flecha (cono) apuntando hacia afuera a lo largo del vector
+            fig.add_trace(go.Cone(x=[px], y=[py], z=[pz], u=[px], v=[py], w=[pz],
+                                  sizemode="absolute", sizeref=0.18, anchor="tip", showscale=False,
+                                  colorscale=[[0, C_QUANTUM], [1, C_QUANTUM]], hoverinfo="skip"))
+            # Proyección vertical al plano ecuatorial (pista de profundidad sutil)
+            fig.add_trace(go.Scatter3d(x=[px, px], y=[py, py], z=[pz, 0], mode="lines", opacity=0.42,
+                                        line=dict(color=C_QUANTUM, width=2, dash="dot"), showlegend=False, hoverinfo="skip"))
+            # Punto del estado: anillo del color de la superficie alrededor del marcador, para que
+            # se despegue de la esfera cuando el vector queda por delante de ella.
+            fig.add_trace(go.Scatter3d(x=[px], y=[py], z=[pz], mode="markers",
+                                        marker=dict(size=7, color=C_QUANTUM,
+                                                    line=dict(color=t["surface"], width=2)), showlegend=False,
+                                        hovertemplate=f"|ψ⟩ ({var_code})<extra></extra>"))
+            # Etiquetas de los polos
+            fig.add_trace(go.Scatter3d(x=[0,0], y=[0,0], z=[1.08,-1.08], mode="text", text=["|0⟩","|1⟩"],
+                                        textfont=dict(family=PLOTLY_MONO, size=14, color=t["text_secondary"]),
+                                        showlegend=False, hoverinfo="skip"))
+            # ── Arco de θ, como en los diagramas canónicos de la esfera de Bloch ──────────
+            # θ ES el valor clínico una vez normalizado, así que dibujarlo cierra el circuito entre
+            # la cifra de la tarjeta de la izquierda y la figura: se ve DE DÓNDE sale el ángulo. Va
+            # en el plano XZ porque φ=0 (ver el vector, más arriba), a radio corto para no tocar ni
+            # el vector ni la superficie, y en tinta apagada porque es cota, no dato.
+            # Por debajo de ~0,05 rad no se dibuja: un arco de dos píxeles no se lee como arco, se
+            # lee como un borrón junto al eje.
+            if theta > 0.05:
+                _arc = np.linspace(0, theta, 40)
+                fig.add_trace(go.Scatter3d(x=0.32*np.sin(_arc), y=np.zeros_like(_arc), z=0.32*np.cos(_arc),
+                                            mode="lines", line=dict(color=t["text_muted"], width=2),
+                                            showlegend=False, hoverinfo="skip"))
+                fig.add_trace(go.Scatter3d(x=[0.44*np.sin(theta/2)], y=[0.0], z=[0.44*np.cos(theta/2)],
+                                            mode="text", text=["θ"],
+                                            textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_muted"]),
+                                            showlegend=False, hoverinfo="skip"))
+            # ── Valor de la variable, EN el punto ────────────────────────────────────────
+            # Sin esto la esfera enseña una posición pero no dice de qué, y hay que mirar al
+            # selector de al lado para saber qué representa la flecha. Dos líneas y no una: el
+            # rótulo más largo ("Glucosa en ayunas = 100 mg/dL") pide unos 200 px y se saldría de
+            # la tarjeta; partido por el "=" la línea más ancha baja a la mitad larga.
+            # Siempre a la IZQUIERDA: el vector vive en el semiplano x≥0 (φ=0 y sen θ≥0 en [0,π]),
+            # así que en pantalla sale del centro hacia arriba-izquierda y ese lado queda libre en
+            # todo el recorrido.
+            # Y arriba o abajo SEGÚN EL HEMISFERIO, que no es un adorno: en los extremos del
+            # deslizador el punto aterriza justo en un polo, y ahí |0⟩ y |1⟩ ya ocupan sitio —el de
+            # arriba por encima, el de abajo por debajo—. Alejándose del ecuador se esquivan los
+            # dos: con la variable al mínimo la etiqueta cae bajo el polo norte, y al máximo sube
+            # sobre el polo sur. Sin esta regla, al llevar el deslizador al tope la etiqueta tapaba
+            # |1⟩ por completo (comprobado exportando la figura).
+            _dec = 1 if v["step"] < 1 else 0
+            fig.add_trace(go.Scatter3d(
+                x=[px], y=[py], z=[pz], mode="text",
+                text=[f"{q_label(var_code)}<br>{nf(val, _dec)} {q_unit(var_code)}"],
+                textposition="bottom left" if pz >= 0 else "top left",
+                textfont=dict(family=PLOTLY_MONO, size=12, color=C_QUANTUM),
+                showlegend=False, hoverinfo="skip"))
+            # Alto FIJO en píxeles (sin autosize): tamaño idéntico en cada rerun y en cualquier navegador
+            # (Firefox incluido). 486 px ≈ alto natural de la columna izquierda (selectbox + slider +
+            # tarjeta de métricas), para que el fondo de esta tarjeta quede alineado con el de aquella.
+            # Sube/baja este valor para agrandar/reducir la esfera.
+            fig.update_layout(
+                height=486, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
+                scene=dict(
+                    # Rangos apretados (±1.08 en vez de ±1.4): la esfera de radio 1 llena ~93% del cubo en
+                    # vez de ~71% → ~30% más grande DENTRO de la misma tarjeta, sin cambiar su tamaño en px.
+                    # z un poco más holgado (±1.12) para dejar aire a las etiquetas |0⟩/|1⟩.
+                    xaxis=dict(visible=False, range=[-1.08, 1.08]),
+                    yaxis=dict(visible=False, range=[-1.08, 1.08]),
+                    zaxis=dict(visible=False, range=[-1.12, 1.12]),
+                    aspectmode="cube", dragmode="orbit",
+                    camera=dict(eye=dict(x=1.45, y=1.45, z=0.75)),
+                ),
+            )
+            # key estable: sin ella Streamlit remonta el iframe de Plotly en cada rerun y la esfera
+            # parpadea/encoge; con key reutiliza el mismo componente y solo actualiza los datos.
+            st.plotly_chart(fig, width="stretch", key="bloch_sphere",
+                            config={"displayModeBar": False, "responsive": True})
+
+        st.markdown(f"""
+        <div class="clinical-note">
+        {S("bl_note")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ═══════════════════════════════════════════════════════════════════
+        # ENTRELAZAMIENTO DE TRES QUBITS
+        # ═══════════════════════════════════════════════════════════════════
+        # POR QUÉ AQUÍ Y NO AL FINAL DE CIRCUITO CUÁNTICO. La nota de arriba (bl_note) cierra la
+        # página diciendo que el entrelazamiento "solo es representable en el espacio conjunto":
+        # esta sección es esa frase hecha figura. El argumento entero —que un estado entrelazado
+        # NO cabe en una esfera de Bloch por qubit— solo se entiende habiendo visto antes la
+        # esfera de un qubit, y esa esfera está justo encima; en Circuito Cuántico la sección
+        # habría llegado sin ese precedente, entre las especificaciones del ZZFeatureMap y las
+        # cifras de entrenamiento, que es una página de fichas y no de didáctica.
+        #
+        # POR QUÉ TRES Y NO DOS, que es donde estaba la sección antes. Con dos qubits el recorrido
+        # termina en el estado de Bell y las tres cifras locales caen a su extremo; con tres, el
+        # GHZ da EXACTAMENTE esas mismas tres cifras —el titular no se mueve—, pero aparece una
+        # cuarta que dos qubits no pueden enseñar: la concurrencia del par q₀q₁, que sube a 1 en el
+        # paso 2 y vuelve a 0 en el 3. Ver ent_local(): el tercer CNOT crea entrelazamiento global
+        # DESHACIENDO el del par, y eso es lo que hay que saber para leer la matriz de información
+        # mutua por parejas del ZZFeatureMap de ocho qubits que viene justo debajo.
+        #
+        # El paso ES el estado. Lo único que persiste entre reruns es el entero `ent_paso`; el
+        # vector se recalcula desde |000⟩ en cada pasada (ver ent_statevector). Los botones van con
+        # on_click y no con `if st.button(...)`: el callback corre ANTES de que el script se
+        # reejecute, así que el circuito, la Q-sphere y las métricas se pintan ya con el paso
+        # nuevo. Con la forma `if` haría falta un st.rerun() explícito para no ir un paso por
+        # detrás — el mismo motivo por el que el toggle de la sidebar sí lo lleva.
+        st.session_state.setdefault("ent_paso", 0)
+        st.session_state.setdefault("ent_counts", None)
+
+        def _ent_paso(destino):
+            """Mueve el circuito al paso `destino` y tira las mediciones anteriores.
+
+            Lo segundo importa tanto como lo primero: un histograma de |00⟩+|11⟩ bajo un circuito
+            que ya no tiene el CNOT sería una figura que miente. Al cambiar de paso, la muestra
+            vuelve a estar vacía y hay que volver a pedirla.
+            """
+            st.session_state.ent_paso = destino
+            st.session_state.ent_counts = None
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("bl_ent_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("bl_ent_sub")}</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="clinical-note" style="margin-bottom:16px;">
+        {S("bl_ent_intro")}
+        </div>
+        """, unsafe_allow_html=True)
+
+        paso = st.session_state.ent_paso
+        psi = ent_statevector(paso)
+        local = ent_local(psi)
+
+        # Botonera: cada puerta se habilita SOLO en su turno. Un circuito no admite aplicar el
+        # CNOT antes que la Hadamard —saldría un estado producto sin entrelazar y la sección
+        # perdería el hilo—, y el segundo CNOT antes del primero rompería la cadena que construye
+        # el GHZ, así que la secuencia la impone el propio control en vez de un aviso a posteriori.
+        # El de reiniciar siempre está vivo: se puede rehacer el recorrido entero.
+        b1, b2, b3, b4 = st.columns([1.15, 1.5, 1.5, 1])
+        for _col, _clave, _rotulo, _destino in (
+                (b1, "ent_h", "bl_ent_btn_h", 1),
+                (b2, "ent_cnot1", "bl_ent_btn_cnot1", 2),
+                (b3, "ent_cnot2", "bl_ent_btn_cnot2", 3)):
+            with _col:
+                st.button(S(_rotulo), key=_clave, width="stretch",
+                          disabled=paso != _destino - 1, on_click=_ent_paso, args=(_destino,))
+        with b4:
+            st.button(S("bl_ent_btn_reset"), key="ent_reset", width="stretch",
+                      disabled=paso == 0, on_click=_ent_paso, args=(0,))
+
+        # Las tres frases del paso actual, en la misma tarjeta de prosa que usa "Cómo funciona"
+        # del Circuito Cuántico. Van FUERA de las columnas y a ancho completo: es el texto que
+        # explica las dos figuras de debajo, no el pie de ninguna de las dos.
+        st.markdown(f'<div class="info-card" style="margin-top:12px;">'
+                    f'<p class="qc-prose">{S("bl_ent_step_note")[paso]}</p></div>',
                     unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        ent_row = st.container(key="ent_row")
+        col1, col2 = ent_row.columns([1, 1.15])
+        with col1:
+            st.markdown(f'<div class="section-title">{S("bl_ent_circuit_title")}</div>', unsafe_allow_html=True)
+            # fig-vector y no .fig-card a secas: este circuito se dibuja con la paleta activa, así
+            # que necesita la superficie del tema debajo y no el blanco fijo de las láminas raster
+            # —ver el bloque .fig-card.fig-vector de la hoja de estilos, donde está el porqué—.
+            st.markdown(f'<div class="fig-card fig-vector" style="padding:18px 14px;">'
+                        f'{ent_circuito_svg(paso, st.session_state.ent_counts is not None)}</div>',
+                        unsafe_allow_html=True)
+            # Las cuatro cifras de ent_local(), que son el argumento cuantitativo de la sección.
+            # Mismo patrón .kpi-row que la tarjeta de amplitudes de arriba, a propósito: se leen
+            # como su continuación —allí el estado de UN qubit, aquí lo que queda de él dentro
+            # del trío—. La longitud del vector va la primera porque es la que se puede contrastar
+            # con la figura de esta misma página: 1 = hay flecha que dibujar, 0 = no la hay. La
+            # concurrencia va la última porque es la que solo se entiende con las otras tres ya
+            # leídas: dice que lo que hay entrelazado es el conjunto y no las parejas.
+            _kpi_lab = S("bl_ent_kpi")
+            _kpi_val = [nf(local["r"], 3), nf(local["pureza"], 3),
+                        f'{nf(local["entropia"], 3)} {S("bl_ent_bits")}',
+                        nf(local["concurrencia"], 3)]
+            st.markdown(
+                '<div class="info-card" style="margin-top:14px;">'
+                + "".join(f'<div class="kpi-row"><span class="kpi-label">{l}</span>'
+                          f'<span class="kpi-value">{v}</span></div>'
+                          for l, v in zip(_kpi_lab, _kpi_val))
+                + "</div>", unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f'<div class="section-title">{S("bl_ent_qsphere_title")}</div>', unsafe_allow_html=True)
+            # key estable por el mismo motivo que en la esfera de arriba: sin ella Streamlit
+            # remonta el iframe en cada rerun y la figura parpadea. Aquí además el rerun ocurre
+            # en cada pulsación, así que se notaría el triple.
+            st.plotly_chart(ent_qsphere_fig(psi), width="stretch", key="ent_qsphere",
+                            config={"displayModeBar": False, "responsive": True})
+
+        # ── Medición ────────────────────────────────────────────────────────
+        # La Q-sphere enseña el estado; esto enseña lo que se MIDE, que es lo único observable y
+        # la prueba empírica del entrelazamiento: 000 y 111 a partes iguales, y las otras SEIS
+        # combinaciones nunca. Se habilita desde el primer paso y no solo en el GHZ, porque el
+        # contraste es parte de la lección — tras la Hadamard sola salen 000 y 100, o sea q0 al
+        # azar y los otros dos fijos en 0; cada CNOT que se añade ata un qubit más al primero.
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="section-title">{S("bl_ent_meas_title")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-sub">{S("bl_ent_meas_sub")}</div>', unsafe_allow_html=True)
+
+        m1, m2 = st.columns([2.2, 1])
+        with m1:
+            # Con clave por lo mismo que los dos controles de arriba: su rótulo se traduce, así que
+            # sin ella cambiar de bandera devolvía el número de disparos a 1.000 dejando en pantalla
+            # el histograma de la tanda anterior —que sí sobrevive, porque vive en una clave nuestra—.
+            # O sea, el control decía 1.000 y la figura de al lado seguía contando 5.000.
+            shots = st.slider(S("bl_ent_meas_n"), 100, 10000, 1000, step=100, key="ent_shots")
+        with m2:
+            # El aire de arriba alinea el botón con el carril del deslizador de al lado: el
+            # slider gasta su primera línea en el rótulo y sin esto el botón subía por encima.
+            st.markdown('<div style="height:30px;"></div>', unsafe_allow_html=True)
+            if st.button(S("bl_ent_meas_btn"), key="ent_medir", width="stretch"):
+                # Muestreo multinomial sobre |ψ|². Es EXACTAMENTE lo que hace un simulador ideal
+                # sin ruido: cada disparo es un sorteo independiente con las probabilidades de
+                # Born, y el simulador no añade nada más cuando no se le pide modelo de ruido.
+                # Sin semilla fija a propósito: dos tandas seguidas dan cifras distintas, que es
+                # justo lo que se quiere enseñar —la proporción es estable, el recuento exacto
+                # no— y con semilla fija parecería un resultado calculado en vez de muestreado.
+                rng = np.random.default_rng()
+                st.session_state.ent_counts = rng.multinomial(shots, psi ** 2).tolist()
+
+        counts = st.session_state.ent_counts
+        if counts is None:
+            # Hueco explícito en vez de una figura vacía: una gráfica con ocho barras a cero se
+            # lee como un resultado ("no sale nada"), que es lo contrario de "aún no has medido".
+            st.markdown(f'<div class="info-card" style="text-align:center; color:{t["text_muted"]}; '
+                        f'padding:34px 18px;">{S("bl_ent_meas_empty")}</div>', unsafe_allow_html=True)
+        else:
+            total = sum(counts)
+            fig = go.Figure()
+            # Los ocho resultados posibles SIEMPRE en el eje, incluidos los que salen a cero: que
+            # las seis combinaciones mixtas aparezcan etiquetadas y vacías es el dato. Si se
+            # filtraran las barras nulas, la figura enseñaría dos resultados equiprobables y no
+            # habría forma de ver que faltan otros seis — y con tres qubits ese vacío pesa más
+            # que con dos: seis de ocho, no dos de cuatro.
+            fig.add_trace(go.Bar(
+                x=[f"|{b}⟩" for b in ENT_BASE], y=counts,
+                marker_color=[C_QUANTUM if c else hex_to_rgba(t["text"], 0.10) for c in counts],
+                text=[mil(c) for c in counts], textposition="outside",
+                textfont=dict(family=PLOTLY_MONO, size=13, color=t["text_secondary"]),
+                customdata=[[pct(c / total)] for c in counts], showlegend=False, cliponaxis=False,
+                hovertemplate="<b>%{x}</b><br>%{y} " + S("bl_ent_hover_shots") + "<br>%{customdata[0]}<extra></extra>",
+            ))
+            plotly_layout(fig, height=320,
+                          xaxis=dict(showgrid=False, fixedrange=True,
+                                     tickfont=dict(family=PLOTLY_MONO, size=15, color=t["text"])),
+                          yaxis=dict(title=dict(text=S("bl_ent_meas_yaxis"), font=dict(size=13)),
+                                     showgrid=True, gridcolor=GRID, fixedrange=True,
+                                     range=[0, max(counts) * 1.18]),
+                          margin=dict(l=60, r=20, t=26, b=40))
+            st.plotly_chart(fig, width="stretch", key="ent_hist", config={"displayModeBar": False})
+            st.markdown(f'<div class="clinical-note">{S("bl_ent_meas_note")[paso]}</div>',
+                        unsafe_allow_html=True)
+
+        # Nota de honestidad metodológica, en la misma línea que bl_note: la sección de arriba
+        # dice qué NO reproduce la esfera del ZZFeatureMap, y esta dice con qué está calculado lo
+        # que se acaba de ver. En un TFM eso no es un pie de página, es parte del resultado.
+        st.markdown(f'<div class="clinical-note" style="margin-top:16px;">{S("bl_ent_impl_note")}</div>',
+                    unsafe_allow_html=True)
+
+        # ═══════════════════════════════════════════════════════════════════
+        # EL ZZFEATUREMAP REAL (8 qubits)
+        # ═══════════════════════════════════════════════════════════════════
+        # Tercer escalón de la página: un qubit → dos → los ocho del modelo. Cada uno usa el
+        # vocabulario del anterior, y ese encadenamiento es lo que hace legible este último — |r|
+        # es LA MISMA cifra que la sección de 2 qubits acaba de explicar con el estado de Bell.
+        # Sin ese precedente, estas ocho barras serían ocho números entre 0 y 1 sin significado.
+        #
+        # NO LLEVA CONTROLES PROPIOS: usa el selector y el deslizador del principio de la página.
+        # Añadir un segundo par para las mismas ocho variables habría dejado dos controles que
+        # dicen lo mismo. Y así el gesto de la página es uno solo: mueves una variable clínica y
+        # ves su efecto a las tres escalas, la esfera de arriba y las dos figuras de aquí.
+        # Además tiene premio: con entrelazamiento lineal, mover UNA variable solo altera su
+        # qubit y sus vecinos inmediatos (verificado barriendo HbA1c por su rango completo: q0,
+        # q1 y q2 se mueven; de q3 a q7 no cambian ni un decimal). El cono de luz del circuito se
+        # ve arrastrando el deslizador.
+        #
+        # La sección entera es opcional: si falta scaler_correcto.json no hay forma de escalar las
+        # features como las escaló el pipeline, y se omite en silencio en vez de inventar una
+        # normalización distinta — mismo criterio que el diagrama del circuito de 8 qubits, que
+        # solo se pinta si su PNG está en disco.
+        _esc = _load_scaler_and_medians()
+        if _esc is not None and all(f in _esc["features"] for f in QSVM_FEATURES):
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(f'<div class="section-title">{S("bl_zz_title")}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-sub">{S("bl_zz_sub")}</div>', unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="clinical-note" style="margin-bottom:16px;">
+            {S("bl_zz_intro")}
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Las 8 features en su valor de referencia, salvo la que el lector tiene elegida
+            # arriba. var_code y val vienen del selector y el deslizador de la esfera: `with`
+            # no abre ámbito en Python, así que siguen vivos aquí.
+            _perfil = {c: float(f["default"]) for c, f in QSVM_FEATURES.items()}
+            _perfil[var_code] = float(val)
+            _codigos = list(QSVM_FEATURES.keys())
+            r_len, MI = zz_metricas(tuple(_perfil[c] for c in _codigos))
+
+            st.markdown(
+                f'<div class="section-sub" style="margin-top:-6px;">'
+                f'{S("bl_zz_current").format(var=q_label(var_code), val=nf(val, 1 if v["step"] < 1 else 0), unidad=q_unit(var_code))}'
+                f'</div>', unsafe_allow_html=True)
+
+            zz_row = st.container(key="zz_row")
+            zc1, zc2 = zz_row.columns([1, 1.15])
+            with zc1:
+                st.markdown(f'<div class="section-title">{S("bl_zz_r_title")}</div>', unsafe_allow_html=True)
+                # Barras horizontales con el mismo tratamiento que el ranking RF del Circuito
+                # Cuántico: la lista es la misma y leerlas igual ayuda a cruzarlas. Se invierte
+                # el orden porque Plotly apila el eje de categorías de abajo arriba y así el
+                # primer qubit queda arriba, como en el diagrama del circuito.
+                _orden = list(reversed(_codigos))
+                _vals = [float(r_len[_codigos.index(c)]) for c in _orden]
+                fig = go.Figure()
+                # La variable que el lector está moviendo va en el acento de marca y el resto en
+                # el cuántico: sin eso, al arrastrar el deslizador se ve cambiar una barra sin
+                # saber cuál se estaba tocando.
+                fig.add_trace(go.Bar(
+                    x=_vals, y=_orden, orientation="h", cliponaxis=False,
+                    marker_color=[C_PRIMARY if c == var_code else C_QUANTUM for c in _orden],
+                    text=[nf(x, 3) for x in _vals], textposition="outside",
+                    textfont=dict(family=PLOTLY_MONO, size=12.5, color=t["text_secondary"]),
+                    customdata=[[q_label(c)] for c in _orden], showlegend=False,
+                    hovertemplate="<b>%{customdata[0]}</b><br>|r| = %{x:.3f}<extra></extra>"))
+                plotly_layout(fig, height=340,
+                              xaxis=dict(title=dict(text=S("bl_zz_r_xaxis"), font=dict(size=13)),
+                                         range=[0, 1.16], showgrid=True, gridcolor=GRID, fixedrange=True),
+                              yaxis=dict(showgrid=False, fixedrange=True,
+                                         tickfont=dict(family=PLOTLY_MONO, size=12, color=t["text"])),
+                              margin=dict(l=88, r=54, t=20, b=42))
+                st.plotly_chart(fig, width="stretch", key="zz_r", config={"displayModeBar": False})
+
+            with zc2:
+                st.markdown(f'<div class="section-title">{S("bl_zz_mi_title")}</div>', unsafe_allow_html=True)
+                # Diagonal en blanco: I(i:i) no es cero, es la entropía del propio qubit, y
+                # pintarla en la misma escala que los pares sería comparar dos magnitudes
+                # distintas. Con NaN, Plotly deja la celda al color del fondo.
+                _z = MI.copy().astype(float)
+                np.fill_diagonal(_z, np.nan)
+                _txt = [["" if i == j else nf(_z[i, j], 2) for j in range(ZZ_N)] for i in range(ZZ_N)]
+                fig = go.Figure(go.Heatmap(
+                    z=_z, x=_codigos, y=_codigos,
+                    # Escala FIJA de 0 al tope teórico (2 bits). Adaptarla al máximo de cada
+                    # render habría hecho que el mismo color significara cosas distintas según
+                    # dónde estuviera el deslizador, que en un control en vivo es lo peor
+                    # posible. El extremo inferior es la superficie de la tarjeta, así que un
+                    # par sin correlación se ve literalmente vacío.
+                    zmin=0, zmax=ZZ_MI_MAX,
+                    colorscale=[[0.0, t["surface_alt"]], [0.25, RAMP[0]], [0.5, RAMP[1]],
+                                [0.75, RAMP[2]], [1.0, RAMP[3]]],
+                    text=_txt, texttemplate="%{text}", xgap=2, ygap=2,
+                    textfont=dict(family=PLOTLY_MONO, size=11, color=t["text"]),
+                    hovertemplate="<b>%{y} · %{x}</b><br>%{z:.3f} " + S("bl_ent_bits") + "<extra></extra>",
+                    colorbar=dict(title=dict(text=S("bl_zz_mi_cbar"), font=dict(size=12)),
+                                  thickness=10, outlinewidth=0, len=0.86,
+                                  tickfont=dict(family=PLOTLY_MONO, size=11)),
+                ))
+                plotly_layout(fig, height=340,
+                              xaxis=dict(showgrid=False, fixedrange=True, side="top",
+                                         tickfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"])),
+                              # autorange invertido: la primera variable arriba, para que la
+                              # diagonal caiga de arriba-izquierda a abajo-derecha como se lee
+                              # cualquier matriz, y no al revés.
+                              yaxis=dict(showgrid=False, fixedrange=True, autorange="reversed",
+                                         tickfont=dict(family=PLOTLY_MONO, size=10.5, color=t["text_secondary"])),
+                              margin=dict(l=76, r=10, t=54, b=10))
+                st.plotly_chart(fig, width="stretch", key="zz_mi", config={"displayModeBar": False})
+
+            st.markdown(f'<div class="clinical-note">{S("bl_zz_note")}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="clinical-note" style="margin-top:16px;">{S("bl_zz_caveat")}</div>',
+                        unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAGINA 6 — LIVE PREDICTOR

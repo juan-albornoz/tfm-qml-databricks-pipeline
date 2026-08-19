@@ -46,11 +46,17 @@ PAGES = [
     ("results",    "bar-chart"),
     ("shap",       "diagram-3"),
     ("circuit",    "cpu"),
-    ("bloch",      "globe"),
     ("predictor",  "sliders"),
 ]
 PAGE_KEYS = [k for k, _ in PAGES]
 PAGE_ICONS = [i for _, i in PAGES]
+
+# Claves de página RETIRADAS y dónde vive hoy su contenido: (página, grupo de pestañas,
+# posición). "bloch" era una entrada del menú y sus enlaces —?page=bloch— se compartieron
+# como tales, así que se traducen a su destino actual en vez de caer al Resumen, que es lo
+# que hace el saneo con cualquier ?page= que no reconoce. Sin esto, un enlace que alguien
+# guardó cuando la Esfera de Bloch era página propia llevaría a la portada sin explicación.
+PAGES_RETIRADAS = {"bloch": ("circuit", "qc_tabs", 1)}
 
 # ─────────────────────────────────────────────────────────────────────────
 # BANDERAS
@@ -165,7 +171,7 @@ STR = {
     "es": {
         # ── Navegación y barra lateral ──
         "nav": ["Resumen", "Gobernanza", "Resultados", "Análisis SHAP",
-                "Circuito Cuántico", "Esfera de Bloch", "Predictor en Vivo"],
+                "Circuito Cuántico", "Predictor en Vivo"],
         # Nombre accesible del botón de colapso, no un tooltip: viaja dentro del rótulo y se
         # recorta por CSS (ver .st-key-toggle_sidebar en app.py). No se ve en pantalla.
         "sidebar_expand": "Expandir la barra lateral",
@@ -644,6 +650,13 @@ STR = {
         "qc_title": "Circuito Cuántico",
         "qc_subtitle": ("Configuración del ZZFeatureMap y FidelityQuantumKernel implementados en Qiskit sobre "
                         "Databricks CE."),
+        # Las DOS PESTAÑAS de la página. La Esfera de Bloch era una entrada de primer nivel del
+        # menú y ahora vive aquí dentro, así que el rótulo de su pestaña es EL MISMO que tenía
+        # en el menú —ya traducido y revisado en los cinco idiomas—: quien conociera la app la
+        # sigue encontrando por el nombre por el que la conocía. Van por tabs_i18n y no por
+        # st.tabs pelado, como las de Gobernanza y Análisis SHAP, porque los dos rótulos
+        # cambian con la bandera y sin eso la pestaña abierta se perdía al traducir.
+        "qc_tabs": ["Circuito ZZFeatureMap", "Esfera de Bloch"],
         "qc_specs": ["Qubits (feature_dimension)", "Repeticiones (reps)", "Entanglement", "Versión de Qiskit"],
         "qc_how_title": "Cómo funciona",
         "qc_how_p1": ("El <b>ZZFeatureMap</b> codifica cada una de las 8 variables clínicas como un ángulo de "
@@ -668,8 +681,12 @@ STR = {
         "qc_circuit_sub": ("ZZFeatureMap con reps=2: codificación (H + P) seguida de dos rondas de entrelazamiento "
                            "lineal entre qubits adyacentes."),
 
-        # ── Página 6 · Esfera de Bloch ──
-        "bl_eyebrow": "Codificación cuántica",
+        # ── Página 5 · Circuito Cuántico → pestaña Esfera de Bloch ──
+        # AQUÍ VIVÍA bl_eyebrow ("Codificación cuántica") y se ha retirado: un antetítulo nombra
+        # la categoría de una PÁGINA, y la Esfera de Bloch pasó a ser una pestaña de Circuito
+        # Cuántico —que ya trae el suyo, qc_eyebrow—. bl_title y bl_subtitle sí se conservan:
+        # entran como section-title/section-sub de la pestaña, y bl_title es además la fila con
+        # la que el buscador sigue llevando hasta aquí por su nombre.
         "bl_title": "Esfera de Bloch",
         "bl_subtitle": "Cómo el ZZFeatureMap codifica el valor de una variable clínica como estado cuántico |ψ⟩.",
         # Nota de entrada de la página, en el mismo formato que lp_what_note: quien llega aquí
@@ -705,7 +722,7 @@ STR = {
                     "P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) solo es representable en el espacio conjunto de "
                     "los 8 qubits — ver Circuito Cuántico."),
 
-        # ── Página 6 · Esfera de Bloch → sección de entrelazamiento ──
+        # ── Página 5 · pestaña Esfera de Bloch → sección de entrelazamiento ──
         # Continúa exactamente donde acaba bl_note: esa nota cierra diciendo que el
         # entrelazamiento solo se representa en el espacio conjunto, y esta sección es esa
         # frase convertida en figura. De ahí que el subtítulo la enuncie como un límite del
@@ -800,7 +817,7 @@ STR = {
                              "con q₀ a la izquierda; Qiskit numera al revés y escribiría «001» donde el primer "
                              "paso de aquí escribe «100»."),
 
-        # ── Página 6 · Esfera de Bloch → el ZZFeatureMap real (8 qubits) ──
+        # ── Página 5 · pestaña Esfera de Bloch → el ZZFeatureMap real (8 qubits) ──
         # Tercer y último escalón de la página. Aquí se deja el ejemplo de libro y se mide el
         # circuito del TFM, así que el tono sube medio punto: sigue siendo divulgativo, pero
         # ya puede dar por sabido lo que enseñan las dos secciones de arriba.
@@ -842,7 +859,7 @@ STR = {
                          "presente antes de leer estas figuras como si midieran gravedad clínica: miden "
                          "geometría del circuito, no riesgo."),
 
-        # ── Página 7 · Predictor en Vivo ──
+        # ── Página 6 · Predictor en Vivo ──
         "lp_eyebrow": "Inferencia interactiva",
         "lp_title": "Predictor en Vivo",
         "lp_subtitle": ("Probabilidad de que un perfil clínico corresponda a una persona ya diagnosticada de "
@@ -942,7 +959,7 @@ STR = {
     "en": {
         # ── Navigation and sidebar ──
         "nav": ["Overview", "Governance", "Results", "SHAP Analysis",
-                "Quantum Circuit", "Bloch Sphere", "Live Predictor"],
+                "Quantum Circuit", "Live Predictor"],
         "sidebar_expand": "Expand the sidebar",
         "sidebar_collapse": "Collapse the sidebar",
         "search_label": "Search",
@@ -1397,6 +1414,7 @@ STR = {
         "qc_title": "Quantum Circuit",
         "qc_subtitle": ("Configuration of the ZZFeatureMap and FidelityQuantumKernel implemented in Qiskit on "
                         "Databricks CE."),
+        "qc_tabs": ["ZZFeatureMap circuit", "Bloch Sphere"],
         "qc_specs": ["Qubits (feature_dimension)", "Repetitions (reps)", "Entanglement", "Qiskit version"],
         "qc_how_title": "How it works",
         "qc_how_p1": ("The <b>ZZFeatureMap</b> encodes each of the 8 clinical variables as a phase angle (P gate) "
@@ -1421,8 +1439,7 @@ STR = {
         "qc_circuit_sub": ("ZZFeatureMap with reps=2: encoding (H + P) followed by two rounds of linear "
                            "entanglement between adjacent qubits."),
 
-        # ── Page 6 · Bloch Sphere ──
-        "bl_eyebrow": "Quantum encoding",
+        # ── Page 5 · Quantum Circuit → Bloch Sphere tab ──
         "bl_title": "Bloch Sphere",
         "bl_subtitle": "How the ZZFeatureMap encodes the value of a clinical variable as a quantum state |ψ⟩.",
         "bl_what_note": ("<b>What the Bloch sphere is.</b> A classical bit can only be 0 or 1. "
@@ -1454,7 +1471,7 @@ STR = {
                     "P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) is only representable in the joint space of the "
                     "8 qubits—see Quantum Circuit."),
 
-        # ── Page 6 · Bloch Sphere → entanglement section ──
+        # ── Page 5 · Bloch Sphere tab → entanglement section ──
         "bl_ent_title": "Entanglement: three qubits, a single state",
         "bl_ent_sub": ("Where the sphere above stops working. Apply the three gates and watch what happens "
                        "to each qubit's local state—and to the pair left behind."),
@@ -1536,7 +1553,7 @@ STR = {
                              "with q₀ on the left; Qiskit numbers the other way and would write “001” where "
                              "the first step here writes “100”."),
 
-        # ── Page 6 · Bloch Sphere → the real ZZFeatureMap (8 qubits) ──
+        # ── Page 5 · Bloch Sphere tab → the real ZZFeatureMap (8 qubits) ──
         "bl_zz_title": "The real ZZFeatureMap: where entanglement actually happens",
         "bl_zz_sub": ("The same figures, now over the 8 qubits of the TFM's QSVM. Move the slider at the "
                       "top of the page and watch which qubits react."),
@@ -1575,7 +1592,7 @@ STR = {
                          "figures as if they measured clinical severity: they measure circuit geometry, "
                          "not risk."),
 
-        # ── Page 7 · Live Predictor ──
+        # ── Page 6 · Live Predictor ──
         "lp_eyebrow": "Interactive inference",
         "lp_title": "Live Predictor",
         "lp_subtitle": ("Probability that a clinical profile corresponds to a person already diagnosed with "
@@ -1676,7 +1693,7 @@ STR = {
     "de": {
         # ── Navigation und Seitenleiste ──
         "nav": ["Übersicht", "Governance", "Ergebnisse", "SHAP-Analyse",
-                "Quantenschaltkreis", "Bloch-Kugel", "Live-Prädiktor"],
+                "Quantenschaltkreis", "Live-Prädiktor"],
         "sidebar_expand": "Seitenleiste ausklappen",
         "sidebar_collapse": "Seitenleiste einklappen",
         "search_label": "Suchen",
@@ -2150,6 +2167,7 @@ STR = {
         "qc_title": "Quantenschaltkreis",
         "qc_subtitle": ("Konfiguration der ZZFeatureMap und des FidelityQuantumKernel, implementiert in "
                         "Qiskit auf Databricks CE."),
+        "qc_tabs": ["ZZFeatureMap-Schaltkreis", "Bloch-Kugel"],
         "qc_specs": ["Qubits (feature_dimension)", "Wiederholungen (reps)", "Entanglement", "Qiskit-Version"],
         "qc_how_title": "So funktioniert es",
         "qc_how_p1": ("Die <b>ZZFeatureMap</b> kodiert jede der 8 klinischen Variablen als Phasenwinkel "
@@ -2175,8 +2193,7 @@ STR = {
         "qc_circuit_sub": ("ZZFeatureMap mit reps=2: Kodierung (H + P), gefolgt von zwei Runden linearer "
                            "Verschränkung zwischen benachbarten Qubits."),
 
-        # ── Seite 6 · Bloch-Kugel ──
-        "bl_eyebrow": "Quantenkodierung",
+        # ── Seite 5 · Quantenschaltkreis → Tab Bloch-Kugel ──
         "bl_title": "Bloch-Kugel",
         "bl_subtitle": "Wie die ZZFeatureMap den Wert einer klinischen Variablen als Quantenzustand |ψ⟩ kodiert.",
         "bl_what_note": ("<b>Was die Bloch-Kugel ist.</b> Ein klassisches Bit kann nur 0 oder 1 "
@@ -2210,7 +2227,7 @@ STR = {
                     "Verschränkung (Gatter P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) ist nur im "
                     "gemeinsamen Raum der 8 Qubits darstellbar — siehe Quantenschaltkreis."),
 
-        # ── Seite 6 · Bloch-Kugel → Abschnitt Verschränkung ──
+        # ── Seite 5 · Tab Bloch-Kugel → Abschnitt Verschränkung ──
         "bl_ent_title": "Verschränkung: drei Qubits, ein einziger Zustand",
         "bl_ent_sub": ("Die Grenze der Kugel von oben. Wende die drei Gatter an und sieh, was mit dem "
                        "lokalen Zustand jedes Qubits geschieht — und mit dem des Paares, das übrig bleibt."),
@@ -2297,7 +2314,7 @@ STR = {
                              "|q₀q₁q₂⟩ mit q₀ links; Qiskit nummeriert umgekehrt und schriebe „001“, wo der "
                              "erste Schritt hier „100“ schreibt."),
 
-        # ── Seite 6 · Bloch-Kugel → die echte ZZFeatureMap (8 Qubits) ──
+        # ── Seite 5 · Tab Bloch-Kugel → die echte ZZFeatureMap (8 Qubits) ──
         "bl_zz_title": "Die echte ZZFeatureMap: wo die Verschränkung stattfindet",
         "bl_zz_sub": ("Dieselben Zahlen, nun über die 8 Qubits der QSVM dieser Masterarbeit. Bewege den "
                       "Schieberegler am Seitenanfang und sieh, welche Qubits reagieren."),
@@ -2340,7 +2357,7 @@ STR = {
                          "den klinischen Schweregrad: sie messen die Geometrie des Schaltkreises, nicht "
                          "das Risiko."),
 
-        # ── Seite 7 · Live-Prädiktor ──
+        # ── Seite 6 · Live-Prädiktor ──
         "lp_eyebrow": "Interaktive Inferenz",
         "lp_title": "Live-Prädiktor",
         "lp_subtitle": ("Wahrscheinlichkeit, dass ein klinisches Profil zu einer bereits mit Diabetes "
@@ -2448,7 +2465,7 @@ STR = {
     "fr": {
         # ── Navigation et barre latérale ──
         "nav": ["Aperçu", "Gouvernance", "Résultats", "Analyse SHAP",
-                "Circuit quantique", "Sphère de Bloch", "Prédicteur en direct"],
+                "Circuit quantique", "Prédicteur en direct"],
         "sidebar_expand": "Déplier la barre latérale",
         "sidebar_collapse": "Replier la barre latérale",
         "search_label": "Rechercher",
@@ -2925,6 +2942,7 @@ STR = {
         "qc_title": "Circuit quantique",
         "qc_subtitle": ("Configuration de la ZZFeatureMap et du FidelityQuantumKernel implémentés sous "
                         "Qiskit sur Databricks CE."),
+        "qc_tabs": ["Circuit ZZFeatureMap", "Sphère de Bloch"],
         "qc_specs": ["Qubits (feature_dimension)", "Répétitions (reps)", "Intrication", "Version de Qiskit"],
         "qc_how_title": "Comment ça marche",
         "qc_how_p1": ("La <b>ZZFeatureMap</b> encode chacune des 8 variables cliniques comme un angle de "
@@ -2950,8 +2968,7 @@ STR = {
         "qc_circuit_sub": ("ZZFeatureMap avec reps=2 : encodage (H + P) suivi de deux tours d'intrication "
                            "linéaire entre qubits adjacents."),
 
-        # ── Page 6 · Sphère de Bloch ──
-        "bl_eyebrow": "Encodage quantique",
+        # ── Page 5 · Circuit quantique → onglet Sphère de Bloch ──
         "bl_title": "Sphère de Bloch",
         "bl_subtitle": "Comment la ZZFeatureMap encode la valeur d'une variable clinique comme état quantique |ψ⟩.",
         "bl_what_note": ("<b>Ce qu'est la sphère de Bloch.</b> Un bit classique ne peut valoir "
@@ -2985,7 +3002,7 @@ STR = {
                     "L'intrication (portes P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) n'est représentable "
                     "que dans l'espace conjoint des 8 qubits — voir Circuit quantique."),
 
-        # ── Page 6 · Sphère de Bloch → section intrication ──
+        # ── Page 5 · onglet Sphère de Bloch → section intrication ──
         "bl_ent_title": "Intrication : trois qubits, un seul état",
         "bl_ent_sub": ("La limite de la sphère ci-dessus. Appliquez les trois portes et regardez ce "
                        "qu'il advient de l'état local de chaque qubit — et de celui de la paire laissée "
@@ -3073,7 +3090,7 @@ STR = {
                              "gauche ; Qiskit numérote à l'envers et écrirait « 001 » là où la première "
                              "étape écrit ici « 100 »."),
 
-        # ── Page 6 · Sphère de Bloch → la vraie ZZFeatureMap (8 qubits) ──
+        # ── Page 5 · onglet Sphère de Bloch → la vraie ZZFeatureMap (8 qubits) ──
         "bl_zz_title": "La vraie ZZFeatureMap : où se produit l'intrication",
         "bl_zz_sub": ("Les mêmes chiffres, maintenant sur les 8 qubits du QSVM du mémoire. Déplacez "
                       "le curseur en haut de la page et regardez quels qubits réagissent."),
@@ -3115,7 +3132,7 @@ STR = {
                          "garder à l'esprit avant de lire ces figures comme si elles mesuraient une "
                          "gravité clinique : elles mesurent la géométrie du circuit, pas le risque."),
 
-        # ── Page 7 · Prédicteur en direct ──
+        # ── Page 6 · Prédicteur en direct ──
         "lp_eyebrow": "Inférence interactive",
         "lp_title": "Prédicteur en direct",
         "lp_subtitle": ("Probabilité qu'un profil clinique corresponde à une personne déjà "
@@ -3217,7 +3234,7 @@ STR = {
     "it": {
         # ── Navigazione e barra laterale ──
         "nav": ["Panoramica", "Governance", "Risultati", "Analisi SHAP",
-                "Circuito quantistico", "Sfera di Bloch", "Predittore in diretta"],
+                "Circuito quantistico", "Predittore in diretta"],
         "sidebar_expand": "Espandi la barra laterale",
         "sidebar_collapse": "Comprimi la barra laterale",
         "search_label": "Cerca",
@@ -3693,6 +3710,7 @@ STR = {
         "qc_title": "Circuito quantistico",
         "qc_subtitle": ("Configurazione della ZZFeatureMap e del FidelityQuantumKernel implementati in "
                         "Qiskit su Databricks CE."),
+        "qc_tabs": ["Circuito ZZFeatureMap", "Sfera di Bloch"],
         "qc_specs": ["Qubit (feature_dimension)", "Ripetizioni (reps)", "Entanglement", "Versione di Qiskit"],
         "qc_how_title": "Come funziona",
         "qc_how_p1": ("La <b>ZZFeatureMap</b> codifica ciascuna delle 8 variabili cliniche come un "
@@ -3719,8 +3737,7 @@ STR = {
         "qc_circuit_sub": ("ZZFeatureMap con reps=2: codifica (H + P) seguita da due giri di "
                            "entanglement lineare fra qubit adiacenti."),
 
-        # ── Pagina 6 · Sfera di Bloch ──
-        "bl_eyebrow": "Codifica quantistica",
+        # ── Pagina 5 · Circuito quantistico → scheda Sfera di Bloch ──
         "bl_title": "Sfera di Bloch",
         "bl_subtitle": "Come la ZZFeatureMap codifica il valore di una variabile clinica come stato quantistico |ψ⟩.",
         "bl_what_note": ("<b>Che cos'è la sfera di Bloch.</b> Un bit classico può valere solo 0 "
@@ -3753,7 +3770,7 @@ STR = {
                     "L'entanglement (porte P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) è rappresentabile "
                     "solo nello spazio congiunto degli 8 qubit — vedi Circuito quantistico."),
 
-        # ── Pagina 6 · Sfera di Bloch → sezione entanglement ──
+        # ── Pagina 5 · scheda Sfera di Bloch → sezione entanglement ──
         "bl_ent_title": "Entanglement: tre qubit, un solo stato",
         "bl_ent_sub": ("Il limite della sfera qui sopra. Applica le tre porte e guarda che cosa "
                        "succede allo stato locale di ciascun qubit — e a quello della coppia che resta "
@@ -3840,7 +3857,7 @@ STR = {
                              "q₀ a sinistra; Qiskit numera al contrario e scriverebbe «001» dove il "
                              "primo passo qui scrive «100»."),
 
-        # ── Pagina 6 · Sfera di Bloch → la vera ZZFeatureMap (8 qubit) ──
+        # ── Pagina 5 · scheda Sfera di Bloch → la vera ZZFeatureMap (8 qubit) ──
         "bl_zz_title": "La vera ZZFeatureMap: dove avviene l'entanglement",
         "bl_zz_sub": ("Le stesse cifre, ora sugli 8 qubit della QSVM della tesi. Muovi il cursore "
                       "all'inizio della pagina e guarda quali qubit reagiscono."),
@@ -3880,7 +3897,7 @@ STR = {
                          "conviene tenerla presente prima di leggere queste figure come se misurassero "
                          "la gravità clinica: misurano la geometria del circuito, non il rischio."),
 
-        # ── Pagina 7 · Predittore in diretta ──
+        # ── Pagina 6 · Predittore in diretta ──
         "lp_eyebrow": "Inferenza interattiva",
         "lp_title": "Predittore in diretta",
         "lp_subtitle": ("Probabilità che un profilo clinico corrisponda a una persona già "
@@ -3973,14 +3990,34 @@ STR = {
 # habría sido una segunda fuente de verdad que se desincroniza en cuanto se añade,
 # se renombra o se traduce una sección — el fallo clásico de los buscadores caseros.
 # Así el índice se traduce solo y crece solo.
+
+# Prefijo de clave → página a la que van sus secciones. Ojo a "bl", que es el único que NO
+# nombra una página: la Esfera de Bloch dejó de ser entrada del menú y hoy es una pestaña de
+# Circuito Cuántico, así que sus siete secciones (entrelazamiento, Q-sphere, medición, el
+# ZZFeatureMap real…) tienen que apuntar ahí. Y no es cosmético: lo que se guarda aquí lo
+# resuelve app.py con PAGE_KEYS.index(), de modo que un valor que no sea una página REVIENTA
+# la lista de resultados en cuanto una de esas secciones coincide con lo buscado.
 SEARCH_PREFIX = {
     "ov": "overview", "gov": "governance", "res": "results",
-    "sh": "shap", "qc": "circuit", "bl": "bloch", "lp": "predictor",
+    "sh": "shap", "qc": "circuit", "bl": "circuit", "lp": "predictor",
 }
 # El "_title" de cada página es el titular de la página entera, no una sección suya:
 # ya entra en el índice como fila de página (con el rótulo del menú), así que aquí se
 # excluye para no duplicar la entrada.
-_SEARCH_PAGE_TITLES = {f"{p}_title" for p in SEARCH_PREFIX}
+#
+# Por eso este conjunto NO se puede seguir derivando de SEARCH_PREFIX: desde que "bl" apunta a
+# circuit hay DOS prefijos para una misma página, y solo uno de los dos —"qc"— da su titular.
+# bl_title se queda fuera a propósito y sí genera fila de sección: es como se sigue llegando a
+# «Esfera de Bloch» escribiendo su nombre, ahora que ya no hay un ítem del menú con ese rótulo.
+_PREFIJO_TITULAR = ("ov", "gov", "res", "sh", "qc", "lp")
+_SEARCH_PAGE_TITLES = {f"{p}_title" for p in _PREFIJO_TITULAR}
+
+# Prefijos cuyas secciones no viven en la página a secas, sino DENTRO de una pestaña de esa
+# página: (grupo de pestañas, posición). Va en la fila del buscador para que el salto abra la
+# pestaña donde de verdad está la sección — sin esto, quien busca "Q-sphere" aterriza en
+# Circuito Cuántico pero mirando el ranking del Random Forest, y tiene que adivinar que lo
+# que buscaba está detrás de la otra pestaña.
+_PREFIJO_PESTANA = {"bl": ("qc_tabs", 1)}
 
 # Términos que un lector buscaría pero que no aparecen literalmente en ningún rótulo:
 # nombres propios de tecnología, siglas y sinónimos. No generan fila propia — se suman
@@ -4013,18 +4050,15 @@ SEARCH_ALIAS = {
     "circuit":    ["Qiskit", "ZZFeatureMap", "qubit", "kernel cuantico", "quantum kernel",
                    "quantenkernel", "noyau quantique", "kernel quantistico", "circuito",
                    "circuit", "schaltkreis", "puerta", "gate", "gatter", "porte",
-                   "entrelazamiento", "entanglement", "verschrankung", "intrication",
-                   "IBM"],
-    "bloch":      ["Bloch", "esfera", "sphere", "kugel", "sfera", "estado", "state",
-                   "zustand", "etat", "stato", "amplitud", "amplitude", "ampiezza",
-                   "entrelazamiento", "entanglement", "verschrankung", "intrication",
-                   "Bell", "Q-sphere", "qsphere", "CNOT", "Hadamard", "medicion",
-                   "measurement", "messung", "mesure", "misura", "superposicion",
-                   "superposition", "sovrapposizione", "ZZFeatureMap", "informacion mutua",
-                   "mutual information", "wechselseitige information",
+                   "entrelazamiento", "entanglement", "verschrankung", "intrication", "IBM",
+                   "Bloch", "esfera", "sphere", "kugel", "sfera", "estado", "state", "zustand",
+                   "etat", "stato", "amplitud", "amplitude", "ampiezza", "Bell", "Q-sphere",
+                   "qsphere", "CNOT", "Hadamard", "medicion", "measurement", "messung",
+                   "mesure", "misura", "superposicion", "superposition", "sovrapposizione",
+                   "informacion mutua", "mutual information", "wechselseitige information",
                    "information mutuelle", "informazione mutua", "matriz densidad",
-                   "density matrix", "dichtematrix", "8 qubits", "cono de luz",
-                   "light cone", "lichtkegel", "cone de lumiere", "cono di luce"],
+                   "density matrix", "dichtematrix", "8 qubits", "cono de luz", "light cone",
+                   "lichtkegel", "cone de lumiere", "cono di luce"],
     "predictor":  ["ONNX", "inferencia", "inference", "inferenz", "inferenza", "umbral",
                    "threshold", "schwelle", "seuil", "soglia", "slider", "schieberegler",
                    "curseur", "cursore", "prediccion", "prediction", "vorhersage",
@@ -4073,7 +4107,8 @@ def search_index(lang):
         if pagina is None:
             continue
         rotulo = txt(clave)
-        filas.append({"page": pagina, "label": rotulo, "kind": 1, "hay": _plano(rotulo)})
+        filas.append({"page": pagina, "label": rotulo, "kind": 1, "hay": _plano(rotulo),
+                      "tab": _PREFIJO_PESTANA.get(clave.split("_")[0])})
 
     # Las ocho variables clínicas: se busca tanto por rótulo ("HbA1c") como por su
     # código NHANES ("LBXGH"), que es como aparecen en los informes del TFM.
