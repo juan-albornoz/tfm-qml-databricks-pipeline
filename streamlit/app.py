@@ -1850,14 +1850,11 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
 .gov-rule {{ font-size:12.5px; color:{t['text_secondary']}; line-height:1.5; }}
 .gov-state {{ font-family:{FONT_MONO}; font-size:11.5px; font-weight:600; letter-spacing:0.11em;
     text-transform:uppercase; white-space:nowrap; }}
-/* Cabecera de dimensión dentro de la suite */
-.gov-dim {{
-    font-family:{FONT_MONO}; font-size:12px; font-weight:600; letter-spacing:0.14em;
-    text-transform:uppercase; color:{t['text_muted']}; margin:16px 0 2px;
-    display:flex; align-items:center; gap:10px;
-}}
-.gov-dim:first-child {{ margin-top:0; }}
-.gov-dim::after {{ content:""; flex:1 1 auto; height:1px; background:{t['border']}; }}
+/* AQUÍ VIVÍA .gov-dim, la cabecera de dimensión de la suite de calidad, y se ha retirado
+   porque ya no la lleva nadie: al plegar las 15 expectativas en un expander por dimensión,
+   ese rótulo pasó a ser el título del propio widget y la clase dejó de emitirse. Comprobado
+   contra el DOM de las siete páginas: 0 coincidencias. Si algún día vuelven a listarse las
+   expectativas seguidas, la cabecera se rehace con las mismas piezas que .gov-state. */
 /* Tabla del historial Delta: cifras monoespaciadas, filas separadas por filete fino.
    Con overflow-x propio — en móvil la tabla desborda antes que el cuerpo de la página. */
 .gov-table-wrap {{ overflow-x:auto; }}
@@ -5569,7 +5566,13 @@ elif page == "results":
                                   line=dict(color=hex_to_rgba(t["text_secondary"], 0.35), width=1, dash="dot"),
                                   showlegend=False, hoverinfo="skip"))
         # Marca fina (2px) y relleno tenue: el área sugiere la magnitud del AUC sin tapar la curva.
-        fig.add_trace(go.Scatter(x=x, y=y, mode="lines", line=dict(color=m["color"], width=2, shape="spline", smoothing=0.4),
+        # SIN spline. Llevaba shape="spline", smoothing=0.4 y era el mismo error cosmético que la
+        # curva de respuesta del Predictor evita a propósito: una ROC empírica es una ESCALERA —un
+        # peldaño por instancia del test— y suavizarla dibuja una continuidad que los datos no
+        # tienen, justo debajo de un subtítulo que promete "punto a punto". Con 1.567 puntos la
+        # poligonal se ve igual de limpia y además es literal. (Señalado en
+        # INFORME_AUDITORIA_DASHBOARD.md §2.5, que quedó fuera de los grupos aplicados.)
+        fig.add_trace(go.Scatter(x=x, y=y, mode="lines", line=dict(color=m["color"], width=2),
                                   fill="tozeroy", fillcolor=hex_to_rgba(m["color"], 0.13), name=m["label"],
                                   hovertemplate="FPR %{x:.2f}<br>TPR %{y:.2f}<extra></extra>"))
         # Una sola serie por gráfica: el título la nombra y no hace falta caja de leyenda.
