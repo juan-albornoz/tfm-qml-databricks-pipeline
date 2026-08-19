@@ -1919,6 +1919,26 @@ div[data-testid="stPlotlyChart"] .gtitle {{ font-weight:400 !important; }}
     box-shadow: {FIG_CARD_SHADOW_HOVER};
     transform: translateY(-2px);
 }}
+/* ── Variante VECTOR: la tarjeta deja de ser blanca ──────────────────────────────────────
+   El blanco fijo de arriba está puesto para las LÁMINAS RASTER —el beeswarm de SHAP y el
+   circuito de 8 qubits— que traen ese fondo dentro del PNG y no se pueden recolorear. El
+   circuito de 3 qubits de la Esfera de Bloch NO es una de ellas: es un SVG que se dibuja en
+   cada pulsación con los tokens de la paleta ACTIVA (ver ent_circuito_svg, que lo dice en su
+   docstring), y sobre el blanco fijo esos tokens caían en el fondo equivocado. En tema oscuro
+   la tinta del rótulo es la niebla #F1F5F9 y daba 1,10:1 contra el blanco: los tres «q₀ |0⟩»
+   eran ilegibles —comprobado midiendo el fill sobre el DOM y en captura—. El dibujo se veía
+   solo porque los hilos y los rellenos de las puertas sí son oscuros.
+   Devolviéndole la superficie del tema, cada color aterriza en el fondo para el que se calculó
+   (rótulo 16,1:1, hilo y acento cuántico por encima de 4,5:1) y de paso la tarjeta iguala a la
+   de la Q-sphere que tiene al lado, que es su pareja en la misma fila.
+   EN TEMA CLARO NO CAMBIA NADA: allí t['surface'] ya ES #FFFFFF y FIG_CARD_SHADOW ya ES SHADOW,
+   así que estas dos reglas se resuelven en lo mismo que había. Para volver al aspecto de lámina
+   blanca en oscuro basta con quitar la clase fig-vector del marcado. */
+.fig-card.fig-vector {{
+    background:{t['surface']};
+    box-shadow: {SHADOW};
+}}
+.fig-card.fig-vector:hover {{ box-shadow: {SHADOW_HOVER}; }}
 /* Atenúa el fogonazo del blanco puro en oscuro (imperceptible en claro: filter:none). El radio
    redondea la imagen igual que el inline style, por si algún navegador lo ignorara. */
 .fig-card img {{ filter: {FIG_IMG_FILTER}; }}
@@ -4175,8 +4195,14 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
                 f'<path d="M332 {y + 9} A 18 18 0 0 1 368 {y + 9}" fill="none" '
                 f'stroke="{apagado}" stroke-width="1.6"/>'
                 f'<line x1="350" y1="{y + 9}" x2="363" y2="{y - 7}" stroke="{apagado}" stroke-width="1.6"/>')
-    return (f'<svg viewBox="0 0 460 {YS[-1] + YS[0]}" width="100%" height="auto" '
-            f'style="display:block; max-width:460px; margin:0 auto;" '
+    # SIN atributo height. Un `height="auto"` no es válido en SVG —los atributos de
+    # presentación quieren una longitud, y "auto" solo existe como valor CSS—, así que el
+    # navegador lo rechazaba y lo dejaba anotado en consola ("Expected length, 'auto'") cada
+    # vez que se pinta el circuito, o sea en cada pulsación de puerta. Omitiéndolo, el alto lo
+    # deduce el propio viewBox a partir del width del 100 %, que es exactamente lo que se
+    # quería; el `height:auto` del style queda además como respaldo explícito y ese sí es CSS.
+    return (f'<svg viewBox="0 0 460 {YS[-1] + YS[0]}" width="100%" '
+            f'style="display:block; height:auto; max-width:460px; margin:0 auto;" '
             f'role="img" aria-label="{html.escape(S("bl_ent_circuit_alt"))}">'
             + "".join(piezas) + "</svg>")
 
@@ -5865,13 +5891,34 @@ elif page == "bloch":
     bloch_row = st.container(key="bloch_row")
     col1, col2 = bloch_row.columns([1, 1.3])
     with col1:
+        # LOS DOS CONTROLES LLEVAN CLAVE, y no es cosmética: sin ella, la IDENTIDAD del widget
+        # para Streamlit es su rótulo, y los dos rótulos cambian con la bandera. El resultado
+        # medido era que pulsar un idioma devolvía el selector a LBXGH y el deslizador a su
+        # valor por defecto —quien estuviera mirando la glucosa a 6,9 aparecía en HbA1c a 5,7—,
+        # mientras que los ocho deslizadores del Predictor en Vivo, que sí tienen clave desde
+        # siempre, conservaban el suyo. Era la misma incoherencia que tabs_i18n arregló para las
+        # pestañas, en la única página donde quedaba.
+        #
+        # La del selector es FIJA porque lo que guarda es el CÓDIGO NHANES ("LBXGH"), que no se
+        # traduce. La del deslizador lleva el código DENTRO porque su rango, su paso y su unidad
+        # son propios de cada variable: con una clave común, el valor guardado para la glucosa
+        # (100 mg/dL) reaparecería al saltar a HbA1c, cuyo eje llega a 15.
+        #
+        # Eso NO convierte la clave en una memoria por variable, y conviene no confundirlo
+        # (comprobado en el navegador): mientras hay otra variable elegida, el deslizador de
+        # esta no se dibuja, así que Streamlit poda su estado por «stale» —el mismo mecanismo
+        # que se explica largo en tabs_i18n— y al volver arranca de nuevo en su valor por
+        # defecto. Que es justo lo que se quiere de un cambio de variable. Lo que la clave
+        # arregla es lo otro: los reruns en los que la variable NO cambia (bandera, tema,
+        # colapsar la barra), donde antes el rótulo traducido hacía que el widget se diera por
+        # nuevo y se perdiera la posición.
         var_code = st.selectbox(S("bl_var"), list(QSVM_FEATURES.keys()),
-                                 format_func=lambda c: f"{c} — {q_label(c)}")
+                                 format_func=lambda c: f"{c} — {q_label(c)}", key="bl_var")
         v = QSVM_FEATURES[var_code]
         lo, hi = v["range"]
         val = st.slider(S("bl_value").format(unidad=q_unit(var_code)),
                         float(lo), float(hi), float(v["default"]),
-                        step=v["step"], format=v["fmt"])
+                        step=v["step"], format=v["fmt"], key=f"bl_val_{var_code}")
 
         x_norm = (val - lo) / (hi - lo)
         # θ ∈ [0, π], NO [0, 2π]. La parametrización estándar de la esfera de Bloch es
@@ -6070,7 +6117,10 @@ elif page == "bloch":
     col1, col2 = ent_row.columns([1, 1.15])
     with col1:
         st.markdown(f'<div class="section-title">{S("bl_ent_circuit_title")}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="fig-card" style="padding:18px 14px;">'
+        # fig-vector y no .fig-card a secas: este circuito se dibuja con la paleta activa, así
+        # que necesita la superficie del tema debajo y no el blanco fijo de las láminas raster
+        # —ver el bloque .fig-card.fig-vector de la hoja de estilos, donde está el porqué—.
+        st.markdown(f'<div class="fig-card fig-vector" style="padding:18px 14px;">'
                     f'{ent_circuito_svg(paso, st.session_state.ent_counts is not None)}</div>',
                     unsafe_allow_html=True)
         # Las cuatro cifras de ent_local(), que son el argumento cuantitativo de la sección.
@@ -6111,7 +6161,11 @@ elif page == "bloch":
 
     m1, m2 = st.columns([2.2, 1])
     with m1:
-        shots = st.slider(S("bl_ent_meas_n"), 100, 10000, 1000, step=100)
+        # Con clave por lo mismo que los dos controles de arriba: su rótulo se traduce, así que
+        # sin ella cambiar de bandera devolvía el número de disparos a 1.000 dejando en pantalla
+        # el histograma de la tanda anterior —que sí sobrevive, porque vive en una clave nuestra—.
+        # O sea, el control decía 1.000 y la figura de al lado seguía contando 5.000.
+        shots = st.slider(S("bl_ent_meas_n"), 100, 10000, 1000, step=100, key="ent_shots")
     with m2:
         # El aire de arriba alinea el botón con el carril del deslizador de al lado: el
         # slider gasta su primera línea en el rótulo y sin esto el botón subía por encima.
