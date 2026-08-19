@@ -2772,11 +2772,39 @@ def _perfil_base(_features: tuple, medianas: tuple, medias: tuple) -> np.ndarray
     """Vector base de las 89 features, con las one-hot corregidas.
 
     La mediana columna a columna NO sirve para variables one-hot: si una categoría tiene
-    prevalencia < 50 % su mediana es 0, y como ninguna de las categorías de RIAGENDR,
-    RIDRETH1, RIDRETH3 o DMDEDUC2 llega al 50 %, TODAS sus columnas salían a 0. El paciente
-    de referencia resultaba imposible: sin sexo, sin etnia y sin nivel educativo. Aquí cada
-    grupo one-hot que suma 0 recibe un 1 en su MODA — que se lee de la media del scaler,
-    porque para una dummy 0/1 la media ES la prevalencia de esa categoría."""
+    prevalencia < 50 % su mediana es 0, y como ninguna de las categorías de RIDRETH1 o
+    DMDEDUC2 llega al 50 %, TODAS sus columnas salían a 0. El paciente de referencia
+    resultaba imposible: sin etnia y sin nivel educativo. Cada grupo que suma 0 recibe
+    entonces un 1 en su MODA — que se lee de la media del scaler, porque para una dummy 0/1
+    la media ES la prevalencia de esa categoría.
+
+    LO QUE HAY QUE MIRAR ANTES ES SI EL GRUPO ESTÁ COMPLETO, y es donde fallaba: no todos
+    los grupos traen una columna por categoría, así que "todo a cero" no siempre significa
+    "falta el dato". Medido sobre el propio scaler:
+
+        RIDRETH1  5 columnas · Σ prevalencias 1,000 · P(ninguna) 0,000  → completo
+        DMDEDUC2  6 columnas · Σ 1,000 · P(ninguna) 0,000               → completo
+        DMDMARTL  7 columnas · Σ 1,000 · P(ninguna) 0,000               → completo
+        RIAGENDR  1 columna  · Σ 0,485 · P(ninguna) 0,515               → INCOMPLETO
+        RIDRETH3  2 columnas · Σ 0,167 · P(ninguna) 0,833               → INCOMPLETO
+
+    RIAGENDR viene codificado dejando fuera una categoría (queda solo RIAGENDR_1.0, varón),
+    y de RIDRETH3 sobrevivieron al filtro de correlación únicamente las dos categorías que
+    RIDRETH1 no tiene —_6.0 asiático no hispano y _7.0 otro/multirracial—, porque el resto
+    eran redundantes con ella. En los dos casos el cero ES una categoría, y además LA MÁS
+    FRECUENTE: mujer (51,5 %) y "ni asiático ni otro" (83,3 %).
+
+    Rellenarlos a ciegas construía justo el paciente que este código vino a evitar: varón
+    —cuando la moda es mujer— y blanco no hispano por RIDRETH1 Y asiático no hispano por
+    RIDRETH3 a la vez, que es una combinación que no existe en el conjunto de datos.
+
+    La regla, por tanto, compara la moda explícita contra esa categoría IMPLÍCITA, cuya
+    prevalencia es 1 − Σ. Gana la más probable: en los tres grupos completos, P(ninguna) es
+    cero y no cambia nada respecto de antes; en los dos incompletos, el vector se queda a
+    ceros, que es la respuesta correcta. El efecto medido sobre el perfil por defecto es de
+    −0,18 pp en el SVM-RBF (2,53 % → 2,34 %) y nulo en LightGBM, que no ramifica sobre estas
+    dummies; en la zona de decisión llega a pesar más (HbA1c 6,5: SVM 29,7 % → 35,9 %).
+    """
     feats = list(_features)
     x = np.array(medianas, dtype=np.float64)
     medias = np.array(medias, dtype=np.float64)
@@ -2787,8 +2815,13 @@ def _perfil_base(_features: tuple, medianas: tuple, medias: tuple) -> np.ndarray
             grupos.setdefault(f.rsplit("_", 1)[0], []).append(f)
     for cols in grupos.values():
         idx = [feats.index(c) for c in cols]
-        if x[idx].sum() == 0:                       # grupo one-hot sin categoría activa
-            x[max(idx, key=lambda i: medias[i])] = 1.0
+        if x[idx].sum() != 0:                       # el grupo ya tiene su categoría activa
+            continue
+        p_col = medias[idx]                         # prevalencia de cada categoría explícita
+        p_ninguna = 1.0 - float(p_col.sum())        # ...y la de la implícita, "todas a cero"
+        j = int(np.argmax(p_col))
+        if p_col[j] > p_ninguna:
+            x[idx[j]] = 1.0
     return x
 
 
