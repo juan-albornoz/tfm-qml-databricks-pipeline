@@ -23,17 +23,19 @@ from typing import TypedDict
 from urllib.parse import quote_plus
 
 import numpy as np
-# La app no usa pandas, pero Streamlit lo importa por su cuenta y muy adentro
-# (option_menu -> create_instance -> is_dataframe_like -> determine_data_format).
-# Hecho ahi, en el hilo ScriptRunner, el modulo Cython pandas._libs.tslib revienta
-# con "SystemError: __pyx_defaults returned a result with an exception set".
-# Importarlo aqui arriba lo carga antes, y despues ya es un acierto en sys.modules.
+# La app no usa pandas, pero Streamlit lo importa por su cuenta y muy adentro. Hecho ahi, en
+# el hilo ScriptRunner, el modulo Cython pandas._libs.tslib revienta con "SystemError:
+# __pyx_defaults returned a result with an exception set". Importarlo aqui arriba lo carga
+# antes, y despues ya es un acierto en sys.modules.
+# El camino con el que se diagnostico —option_menu -> create_instance -> is_dataframe_like—
+# ya no existe (el menu es de botones nativos desde que el arbol de secciones se fusiono con
+# el), pero la linea se queda: lo que revienta es la importacion perezosa DESDE ese hilo, no
+# quien la dispara, y precargarla cuesta lo que cuesta importar pandas una vez.
 import pandas  # noqa: F401
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components   # solo para fijar <html lang>; ver más abajo
 from PIL import Image
-from streamlit_option_menu import option_menu
 
 try:
     import onnxruntime as ort
@@ -430,6 +432,71 @@ def tabs_i18n(catalogo, key):
         del st.session_state[key]
     return st.tabs(rotulos, key=key, default=rotulos[pos],
                    on_change=_recuerda_tab, args=(catalogo, key))
+
+def _navegar(pagina, tab=None, seccion=None):
+    """Lleva a una página, a su pestaña y —si se pide— a una sección concreta.
+
+    Es el ÚNICO camino de navegación programada de la app: lo usan el buscador y el árbol de
+    secciones de la barra lateral. Estaba escrito dentro del primero, y sacarlo aquí no es
+    ordenar por ordenar: los dos tienen que abrir la pestaña de destino exactamente igual, y
+    de las tres líneas que hacen eso, dos son contraintuitivas y se copiarían mal.
+
+    Escribir `page` basta para que el menú lo obedezca, y eso es nuevo: mientras el menú fue un
+    option_menu había que empujarle además el índice a mano (`menu_force_index` -> su
+    `manual_select`), porque vivía en un iframe con estado propio y no leía session_state. Al
+    pasar a botones nativos, la página activa es la que dice session_state y no hay segunda
+    copia del estado que sincronizar.
+
+    `tab` es (grupo, posición) y se abre por la misma vía que usa tabs_i18n para sobrevivir a
+    un cambio de idioma: se guarda la posición en su clave propia y se BORRA el estado del
+    widget, de modo que en la pasada siguiente manda el `default=rotulos[pos]` de tabs_i18n.
+    Escribir la posición sin borrar el estado no basta —Streamlit ignora `default` cuando el
+    widget ya tiene valor— y el salto se quedaría en la pestaña que estuviera abierta.
+
+    `seccion` es el RÓTULO del título al que bajar, no su clave: quien lo consume es el
+    navegador, que lo busca entre los .section-title del documento. Viaja en session_state
+    porque el destino no existe todavía —esta función corre como callback, o sea ANTES de que
+    la página de destino se dibuje—, y lo recoge el bloque de navegación en la pasada
+    siguiente, ya con el contenido puesto.
+
+    Y de paso despliega la rama de la página de destino, venga el salto de donde venga: llegar a
+    una página con su índice plegado obligaría a un clic más para ver dónde has caído. Vale
+    también para el buscador, que es la otra puerta de entrada.
+
+    `nav_cerrar` es el aviso para el teléfono, donde la barra no es una columna sino un panel
+    SUPERPUESTO: sin él, navegar dejaba el panel abierto encima de la página recién abierta y
+    había que cerrarlo a mano para ver a dónde habías ido —y en un salto a una sección, el
+    recorrido hasta el título ocurría detrás del panel—. Se pone siempre y lo filtra quien puede
+    medir la ventana, que es el navegador; en escritorio se ignora.
+    """
+    st.session_state.page = pagina
+    st.session_state.nav_open = pagina
+    st.session_state.nav_cerrar = True
+    if tab is not None:
+        grupo, pos = tab
+        st.session_state[_POS_TAB.format(grupo)] = pos
+        st.session_state.pop(grupo, None)
+    if seccion:
+        st.session_state.nav_scroll = seccion
+
+
+def _navegar_pagina(pagina):
+    """Lo que hace la fila de PÁGINA al pulsarla: ir allí y desplegar su rama; si ya estaba
+    desplegada, plegarla.
+
+    Es una envoltura de _navegar y no un parámetro suyo porque el plegado es exclusivo de este
+    gesto: pulsar una sección, buscar o seguir un enlace interno siempre tienen que DEJAR la
+    rama abierta —van a un destino de dentro—, y solo el clic repetido sobre la raíz significa
+    «ya he visto esto, ciérralo».
+
+    Plegar no deja la barra en un estado raro: la fila de la página sigue marcada como activa
+    —eso lo dice `page`, no `nav_open`— y lo único que desaparece es su lista de secciones.
+    """
+    plegar = st.session_state.nav_open == pagina
+    _navegar(pagina)
+    if plegar:
+        st.session_state.nav_open = None
+
 
 def _flag_uri(lang):
     """SVG de bandera como data-URI en base64, listo para background-image.
@@ -853,6 +920,21 @@ def _flecha_mask(*trazos: str) -> str:
 FLECHA_EXPANDIR = _flecha_mask("M3 5v14", "M21 12H7", "m15 18 6-6-6-6")
 FLECHA_COLAPSAR = _flecha_mask("m9 6-6 6 6 6", "M3 12h14", "M21 19V5")
 FLECHA_TOGGLE = FLECHA_EXPANDIR if narrow else FLECHA_COLAPSAR
+# La flecha del botón «volver arriba», sobre el mismo lienzo de 24×24 y con el mismo trazo que
+# las del toggle: asta y punta, no un chevron suelto. Vale aquí el motivo anotado ahí arriba —un
+# chevron dice «hacia allá» y este dice hasta dónde—, y pesa incluso más, porque el destino no es
+# «un poco más arriba» sino el principio de la página, se pulse donde se pulse.
+FLECHA_ARRIBA = _flecha_mask("M12 19V5", "m5 12 7-7 7 7")
+# Los signos del árbol de secciones: «+» en la rama plegada y «−» en la desplegada. Van como
+# máscara y no como los caracteres «+» y «−» por lo mismo que las flechas —currentColor gratis,
+# sin depender de que la fuente traiga el glifo— y por una razón más que aquí pesa: los dos se
+# dibujan sobre el MISMO lienzo de 24×24, así que ocupan exactamente igual y la fila no se
+# reajusta al cambiar de estado. Con dos caracteres de una fuente proporcional, el rótulo daría
+# un salto de un par de píxeles cada vez que se despliega.
+# Comparten además el trazo del resto del cromo (2 px, extremos redondeados), que es lo que hace
+# que se lean como parte del mismo juego de mandos y no como texto suelto al final de la fila.
+SIGNO_MAS = _flecha_mask("M12 5v14", "M5 12h14")
+SIGNO_MENOS = _flecha_mask("M5 12h14")
 # El disco del toggle va en el tema CONTRARIO al de la app: claro sobre la barra oscura y oscuro
 # sobre la barra clara. Es el único control que se sale a propósito de la escala de superficies de
 # T(): con sidebar_bg de fondo se mimetizaba con la barra sobre cuyo borde se apoya, y es el gesto
@@ -1099,8 +1181,17 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 }}
 /* Cápsula-interruptor de tema: fija al fondo del viewport (ancho = ancho actual de la sidebar),
    así queda siempre visible sin depender del scroll interno, colapsada o no. */
+/* La cápsula va anclada abajo, justo encima del pie, y con FONDO PROPIO. El fondo no se ve
+   nunca —es el mismo de la barra— y sin embargo hace falta: desde que el árbol de secciones
+   puede desplazarse por detrás, sus filas asomaban alrededor de la cápsula, y la franja que
+   ocupa se comía el clic de la que le tocara debajo. Con la banda opaca, lo que pasa por ahí
+   queda tapado en vez de medio visible y medio pulsable.
+   El anclaje baja de 64 a 54 px y los 10 que faltan los pone el relleno: la cápsula se queda
+   exactamente donde estaba —54 + 10 = 64— y la banda, en cambio, cubre también el hueco que
+   quedaba entre ella y el pie. */
 .st-key-theme_toggle {{
-    position:fixed !important; bottom:64px; left:0; width:{SIDEBAR_WIDTH};
+    position:fixed !important; bottom:54px; left:0; width:{SIDEBAR_WIDTH};
+    padding:10px 0 !important; background-color:{t['sidebar_bg']};
     display:flex !important; justify-content:center; z-index:999;
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
@@ -1273,6 +1364,54 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     font-family:{FONT_MONO}; font-variant-numeric:tabular-nums;
     letter-spacing:0.04em;
 }}
+/* ── Botón «volver arriba» ────────────────────────────────────────────────────
+   UNO SOLO, fijo en la esquina inferior derecha, y no uno insertado dentro de cada pestaña:
+   solo hay una página y un panel visibles a la vez, así que un elemento por panel serían siete
+   copias del mismo control de las que seis estarían siempre ocultas —y siete sitios donde se
+   desincroniza—. El destino es el mismo en todas partes, el principio de la página, así que un
+   botón por panel no compraría nada. Al ser fijo tampoco empuja el contenido ni se cuelga del
+   final del último bloque de cada panel.
+
+   Como el reloj: el nodo lo crea el script en el documento padre y su aspecto vive AQUÍ, para
+   que siga al tema junto al resto de la hoja en vez de llevar los colores incrustados en el JS.
+
+   La esquina estaba libre. Los elementos fijos que ya había viven todos arriba —reloj y
+   banderas, z 1001— o a la izquierda —toggle de la barra z 1000, cápsula de tema z 999—, así
+   que este entra en 1000 sin cruzarse con ninguno. Los 26 px de margen dejan además el disco
+   por dentro de la barra de scroll de stMain, que corre pegada a ese mismo borde. */
+#tfm-arriba {{
+    position:fixed; right:26px; bottom:26px;
+    width:36px; height:36px; padding:0;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%; border:1px solid {t['border']};
+    background-color:{t['surface']}; color:{t['text_secondary']};
+    box-shadow:{SHADOW};
+    cursor:pointer; z-index:1000;
+    /* Oculto de partida: en la primera pantalla no hay nada a lo que volver, y la portada es
+       una lámina a sangre en la que este disco sería lo único puesto por encima. */
+    opacity:0; transform:translateY(6px); pointer-events:none;
+    transition: opacity 0.22s ease, transform 0.22s ease,
+                color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}}
+/* La clase la pone y la quita el script según el scroll. pointer-events vuelve a auto SOLO
+   cuando se ve: un disco invisible pero pulsable en esa esquina se comería los clics de lo que
+   tiene debajo, que es justo donde caen las leyendas de varias gráficas. */
+#tfm-arriba.visible {{ opacity:1; transform:translateY(0); pointer-events:auto; }}
+#tfm-arriba:hover {{
+    color:{C_PRIMARY}; border-color:{C_PRIMARY};
+    box-shadow:{SHADOW_HOVER}; transform:translateY(-2px);
+}}
+#tfm-arriba:focus-visible {{ outline:2px solid {C_PRIMARY}; outline-offset:2px; }}
+/* La flecha va en máscara y no en carácter por lo mismo que la del toggle: al ser currentColor
+   entra sola en la transición a C_PRIMARY del hover, y no depende de que la fuente traiga el
+   glifo. Un pseudoelemento además no entra en el árbol de accesibilidad, que es lo que se
+   quiere de un dibujo cuando el nombre del botón ya lo pone el aria-label. */
+#tfm-arriba::before {{
+    content:""; display:block; width:17px; height:17px;
+    background-color:currentColor;
+    -webkit-mask:{FLECHA_ARRIBA} center / contain no-repeat;
+    mask:{FLECHA_ARRIBA} center / contain no-repeat;
+}}
 /* Tira de tecnologías (Resumen).
    LA PASTILLA ES CLARA EN LOS DOS TEMAS a propósito, y no es un descuido: la mitad de estas
    marcas son monocromas oscuras —el logotipo de GitHub es #11110F y el de Qiskit #010101, y
@@ -1378,8 +1517,11 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
 .st-key-reloj, .st-key-reloj div[data-testid="stIFrame"],
 .st-key-reloj div[data-testid="stElementContainer"],
 .st-key-contador_js, .st-key-contador_js div[data-testid="stIFrame"],
-.st-key-contador_js div[data-testid="stElementContainer"] {{ display:contents !important; }}
-.st-key-lang_attr iframe, .st-key-reloj iframe, .st-key-contador_js iframe {{
+.st-key-contador_js div[data-testid="stElementContainer"],
+.st-key-nav_js, .st-key-nav_js div[data-testid="stIFrame"],
+.st-key-nav_js div[data-testid="stElementContainer"] {{ display:contents !important; }}
+.st-key-lang_attr iframe, .st-key-reloj iframe, .st-key-contador_js iframe,
+.st-key-nav_js iframe {{
     position:fixed !important; width:0 !important; height:0 !important;
     border:0 !important; opacity:0 !important; pointer-events:none !important;
 }}
@@ -1403,29 +1545,35 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
    más pequeña, en mono y con la caja abierta por el espaciado. */
 .sidebar-footer .footer-uni {{ font-family:{FONT_MONO}; font-size:12px; font-weight:400; letter-spacing:0.06em;
     color:{t['text_secondary']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
-/* El option_menu vive en un iframe con fondo propio: igualarlo al de la sidebar (sin caja/sombra
-   propia — ya tiene el mismo fondo, así que se funde visualmente con el resto de la sidebar) */
-section[data-testid="stSidebar"] iframe {{ background-color:{t['sidebar_bg']} !important; }}
-/* ── Ancho del iframe del menú ────────────────────────────────────────────────
-   Streamlit dimensiona el iframe de un componente a partir del ancho de su bloque
-   contenedor y se lo clava como atributo `width`. Con la barra colapsada ese cálculo
-   daba 23 px (medido por CDP) dentro de una barra de 84: el iframe lleva overflow:clip,
-   así que el icono —18 px que empiezan en x=18— se cortaba en x=23. Eso, y no un
-   line-height, era el recorte: por la DERECHA, no por abajo.
-   Se corrige en los dos escalones: se le devuelve al contenido de la barra el ancho
-   completo (su relleno lateral de 20 px se reparte ya en cada bloque) y se obliga al
-   iframe a ocuparlo. Solo en modo colapsado — en modo ancho el cálculo de Streamlit es
-   correcto y no hay nada que forzar. */
+/* ── Suelo de la barra lateral ─────────────────────────────────────────────────
+   Abajo del todo hay DOS piezas ancladas con position:fixed —la cápsula de tema (bottom:64px)
+   y el pie (bottom:0)— que entre las dos cubren los ~112 px inferiores y FLOTAN sobre lo que
+   pase por debajo. Mientras el contenido de la barra terminaba muy por encima no se notaba;
+   con el árbol de secciones sí, y no como un defecto visual sino como uno de comportamiento:
+   sus últimas filas se metían debajo del pie y dejaban de poder pulsarse —elementFromPoint
+   sobre ellas devolvía el pie—, aunque a la vista estuvieran ahí. Un control que se ve y no
+   responde es peor que uno que no se ve.
+   El relleno inferior le da al contenido sitio donde acabar por encima de las dos. Va en los
+   dos anchos de escritorio, no solo en el ancho: una barra que puede desplazarse nunca debería
+   terminar debajo de su propio pie.
+   En el teléfono NO, y por eso lo deshace la media query de ≤768: allí las dos piezas vuelven
+   al flujo del panel y ya no flotan sobre nada, así que estos 118 px serían una franja muerta
+   al final de la lista. */
+section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {{
+    padding-bottom:118px !important;
+}}
+/* ── Ancho del contenido de la barra colapsada ────────────────────────────────
+   Se le devuelve el ancho completo: su relleno lateral de 20 px se reparte ya en cada
+   bloque, y en 84 px esos 40 px eran casi la mitad de la barra. Lo que se ve al quitarlo es
+   que la fila del menú llega de canto a canto, que es lo que hace legible su filete de
+   página activa; con el relleno puesto, el filete quedaba flotando a 20 px del borde.
+   Solo en modo colapsado — en modo ancho el reparto de Streamlit es el correcto.
+   (Esto nació como parche del iframe del option_menu, que Streamlit dimensionaba a 23 px
+   dentro de la barra de 84 y recortaba el icono por la derecha. El iframe ya no está; el
+   ancho completo sigue haciendo falta por lo de arriba.) */
 {'''section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {
     padding-left:0 !important; padding-right:0 !important;
-}
-section[data-testid="stSidebar"] iframe[data-testid="stCustomComponentV1"] {
-    width:100% !important; min-width:100% !important; max-width:100% !important;
 }''' if narrow else ''}
-section[data-testid="stSidebar"] div[data-testid="stIFrame"],
-section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
-    background-color:{t['sidebar_bg']} !important;
-}}
 /* ── Reparto del aire alrededor del buscador ──────────────────────────────────
    Entre el filete que cierra el logo y la primera fila del menú hay tres cosas: el hueco de
    arriba, la pastilla (38px) y el hueco de abajo. Medido sobre captura, ese reparto era 29/17:
@@ -1438,9 +1586,7 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
    separación que la que hay dentro del grupo de arriba. Lo gobiernan tres números, y hay que
    moverlos a la vez o el reparto se desequilibra: el margin-bottom del bloque del logo (en
    SIDEBAR, más abajo), el margin-top de .st-key-nav_search y este de aquí. */
-section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe) {{
-    margin-top:22px !important;
-}}
+.st-key-nav_tree {{ margin-top:22px !important; }}
 /* ── Buscador de la sidebar ──────────────────────────────────────────────────
    Pastilla en relieve (ver NEU_* arriba): terminaciones ovaladas, sin borde, y el contorno
    dibujado solo por las dos sombras. Reposo = extruida; foco = hundida. El radio va en
@@ -1457,7 +1603,7 @@ section[data-testid="stSidebar"] div[data-testid="element-container"]:has(iframe
    (la etiqueta real viaja en el tooltip), así que se anula su hueco. */
 /* ── Eje de la lupa colapsada ──────────────────────────────────────────────
    El botón se quedaba unos 19 px a la izquierda de la columna de iconos del menú, y es el
-   mismo efecto secundario que arriba obligó a forzar el ancho del iframe: al quitarle a la
+   mismo efecto secundario que se explica ahí arriba: al quitarle a la
    barra su relleno lateral de 20 px, el contenedor del botón conserva el ancho que tenía CON
    él —84 − 2×20 = 44— pero ya sin el desplazamiento que lo colocaba. Resultado: el botón se
    centra dentro de esos 44 px pegados al borde, no dentro de los 84 de la barra. Se le
@@ -1617,17 +1763,197 @@ a.search-src:hover {{ color:{C_PRIMARY}; }}
 /* La flecha va en CADA destino y no una vez en la fila: los tres abren pestaña nueva, y una
    sola flecha al final se leería como propiedad del último. */
 a.search-src .search-web-ext {{ font-size:10.5px; opacity:0.75; margin-left:2px; }}
-/* El menú (option_menu) remonta el iframe entero al colapsar/descolapsar (key distinta para narrow
-   vs. ancho — necesario para que reaplique sus estilos, ver comentario junto a esa key), así que el
-   texto no puede "encogerse" con una transición: aparece/desaparece de golpe con el nuevo iframe. Un
-   fundido suave en el propio iframe disimula ese salto, en vez de eliminarlo — reutiliza el mismo
-   keyframe pageFadeIn que ya usan las páginas al navegar.
-   Ya no va dentro de @media (prefers-reduced-motion: no-preference), por la misma decisión
-   anotada en la entrada escalonada del contenido: en el equipo desde el que se trabaja este panel
-   la preferencia está siempre activa y el fundido no se veía nunca en escritorio. Aquí el
-   keyframe no lleva retardo ni `backwards`, así que quitarle la condición no puede dejar el menú
-   invisible: si la animación no corriera, el iframe se ve igual, solo que sin fundido. */
-section[data-testid="stSidebar"] iframe {{ animation: pageFadeIn 0.3s ease-out; }}
+
+/* ── Menú y árbol de secciones ────────────────────────────────────────────────
+   La navegación entera de la barra: seis filas de página y, colgando de cada una, sus
+   pestañas y sus secciones. Son la MISMA lista y por eso están en el mismo bloque; el
+   porqué de que el menú dejara de ser un streamlit-option-menu está donde se pinta.
+
+   Cada rama se despliega al PULSAR su fila de página, y solo entonces: pasar el ratón por
+   encima no mueve nada. Aquí abajo están las dos listas plegadas —max-height:0—; la que se abre
+   la marca la barra lateral en cada pasada, que es quien sabe cuál es.
+
+   max-height y no height:auto porque auto no se puede animar; el tope va holgado (620px, la
+   rama más larga son 14 filas) porque max-height solo tiene que ser MAYOR que el contenido:
+   lo que se ve es el alto real, y pasarse solo hace que la apertura empiece un pelín antes.
+
+   La jerarquía se lee por TIPOGRAFÍA y no por sangrado: la fila de página lleva icono y va en
+   sans a 13,5 px; la de pestaña, en monoespaciada versalita como todo rótulo de agrupación del
+   panel; la de sección, en sans pequeña y apagada. Con las tres al mismo tamaño, un árbol de
+   catorce filas se lee como una lista de catorce destinos iguales.
+   (El margen superior que lo separa del buscador NO está aquí, sino en el bloque "Reparto del
+   aire alrededor del buscador": es uno de los tres números que gobiernan ese hueco.) */
+.st-key-nav_tree {{ gap:0 !important; }}
+/* Los selectores van por SUBCADENA de clase ([class*=…]) y no por clase exacta: la clave de
+   cada fila lleva dentro la página o la sección a la que apunta —.st-key-navp_governance,
+   .st-key-navs_bl_zz_title—, que es lo que permite que el callback sepa a dónde ir sin
+   registrar nada aparte. La familia se distingue por el prefijo: navb_ rama, navp_ página,
+   navt_ pestaña, navs_ sección. */
+div[class*="st-key-navb_"] {{ gap:0 !important; }}
+div[class*="st-key-navb_"] div[data-testid="stButton"] {{ display:block !important; width:100% !important; }}
+/* Se anula la botonera que la barra lateral impone a todos sus botones: aquí son filas de una
+   lista, no botones. Mismo criterio y mismas anulaciones que en los resultados del buscador. */
+div[class*="st-key-navb_"] button {{
+    width:100% !important; min-height:0 !important; margin:0 !important;
+    text-align:left !important; justify-content:flex-start !important;
+    background:transparent !important; border:none !important;
+    border-left:2px solid transparent !important; border-radius:0 8px 8px 0 !important;
+    transition: background-color 0.13s ease, border-color 0.13s ease !important;
+}}
+/* Entre el <button> y el <p> Streamlit mete DOS envoltorios —un <div> y dentro un <span>—, y
+   los dos son flex con justify-content:center. El párrafo se queda del ancho de su texto y
+   sale centrado: las filas cortas centradas y las largas alineadas, que es exactamente lo que
+   delata que aquello no es una lista. Hay que estirar y alinear los dos; con uno solo el otro
+   vuelve a centrar. Se apuntan por posición (> div > span) y no por su clase, que es un hash
+   de emotion que cambia con cada versión de Streamlit.
+   El icono queda FUERA del estirado (de ahí el :not): es hermano del rótulo dentro del mismo
+   flex, y estirado al 100% empujaría el texto fuera de la fila. Y el min-width:0 es lo que
+   deja funcionar los puntos suspensivos de más abajo: sin él, un elemento flex no baja del
+   ancho de su contenido y el rótulo largo desborda en vez de recortarse. */
+div[class*="st-key-navb_"] button > div,
+div[class*="st-key-navb_"] button > div > span:not([data-testid="stIconMaterial"]),
+div[class*="st-key-navb_"] button div[data-testid="stMarkdownContainer"] {{
+    width:100% !important; min-width:0 !important; justify-content:flex-start !important;
+}}
+/* El icono de la página: la única pieza de ancho fijo de la fila. Va en el acento de marca y
+   no en el color del rótulo —C_PRIMARY es lo que la paleta reserva al cromo de navegación—, y
+   es además lo ÚNICO que queda con la barra colapsada. Contraste sobre sidebar_bg: 9,33:1 en
+   oscuro y 4,08:1 en claro, por encima del 3:1 que WCAG 1.4.11 pide a un elemento gráfico.
+   El color del ítem activo (C_DARK) lo pone la barra lateral, que es quien sabe cuál es. */
+div[class*="st-key-navb_"] button span[data-testid="stIconMaterial"] {{
+    flex:0 0 auto !important; width:auto !important; margin:0 !important;
+    font-size:15px !important; color:{C_PRIMARY} !important;
+    transition: color 0.13s ease !important;
+}}
+div[class*="st-key-navb_"] button p {{
+    width:100% !important;
+    display:block !important; text-align:left !important; line-height:1.3 !important;
+    /* Un rótulo largo se recorta con puntos suspensivos, igual que en el buscador: la lista
+       tiene que conservar el mismo alto por fila para leerse como lista. */
+    white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important;
+    transition: color 0.13s ease !important;
+}}
+div[class*="st-key-navb_"] button:hover {{ background:{t['sidebar_active']} !important; }}
+div[class*="st-key-navb_"] button:hover p {{ color:{t['text']} !important; }}
+div[class*="st-key-navb_"] button:focus-visible {{
+    outline:2px solid {C_PRIMARY} !important; outline-offset:-2px !important;
+}}
+/* Fila de PÁGINA: la raíz de la rama y, a la vez, el ítem del menú. Las medidas son las que
+   tenía el option_menu —13,5 px, 10 de relleno, 3 de margen y la esquina derecha a 9— para que
+   el cambio de componente no se note como un cambio de diseño. El hueco entre el icono y el
+   rótulo va en `gap` sobre los dos posibles contenedores: Streamlit ha movido el icono de
+   nivel entre versiones, y así la fila se compone igual esté donde esté. */
+div[class*="st-key-navp_"] button {{
+    padding:10px 10px !important; margin:3px 0 !important;
+    border-radius:0 9px 9px 0 !important; gap:10px !important;
+}}
+div[class*="st-key-navp_"] button > div {{ gap:10px !important; }}
+div[class*="st-key-navp_"] button p {{
+    font-size:13.5px !important; font-weight:400 !important; color:{t['text_secondary']} !important;
+}}
+/* El signo del final de la fila: dice en qué estado está su rama y, por tanto, qué hace el
+   clic. De partida «+» —plegada—; el «−» lo pone la barra lateral en la única fila que esté
+   desplegada, cambiando SOLO la imagen de la máscara, para que el hueco, el color y la
+   transición sean los mismos en los dos estados.
+   Va en el ::after del <button> y no dentro del <p>: el párrafo se recorta con puntos
+   suspensivos, así que un signo metido ahí sería lo primero en desaparecer con un rótulo largo
+   —justo al revés de lo que hace falta—. Como hermano suyo en el mismo flex, el signo tiene su
+   sitio reservado y es el rótulo el que cede.
+   El margin-left:auto lo pega al canto derecho aunque un día el rótulo deje de estirarse. */
+div[class*="st-key-navp_"] button::after {{
+    content:""; flex:0 0 auto; margin-left:auto;
+    width:13px; height:13px;
+    background-color:{t['text_muted']};
+    -webkit-mask:{SIGNO_MAS} center / contain no-repeat;
+    mask:{SIGNO_MAS} center / contain no-repeat;
+    transition: background-color 0.13s ease;
+}}
+div[class*="st-key-navp_"] button:hover::after {{ background-color:{t['text_secondary']}; }}
+/* Fila de PESTAÑA: se lee como encabezado del grupo, no como destino más —aunque lo sea—, así
+   que va en monoespaciada versalita, el mismo recurso con el que el panel marca todo lo que es
+   rótulo de agrupación.
+   La versalita sola no bastaba: con el mismo color y el mismo eje que sus secciones, la rama se
+   leía como una lista seguida y no como grupos. La separan tres cosas, y ninguna añade cromo
+   nuevo al árbol:
+     · va MENOS sangrada que sus secciones —se arrima al filete— en vez de compartir su eje, que
+       es lo que convierte a las de abajo en hijas suyas y no en vecinas;
+     · sube un escalón de contraste, a text_secondary sobre el text_muted de las secciones: el
+       rótulo del grupo tiene que pesar más que sus destinos aunque sea el más pequeño de los dos;
+     · se despega de lo que tiene encima con 7 px de aire, que es lo que de verdad agrupa —el
+       hueco de arriba pertenece al grupo que empieza, no al que termina—.
+   Se movió la PESTAÑA y no las secciones a propósito: tres de las seis páginas no tienen
+   pestañas y sus secciones cuelgan directamente de la página. Sangrarlas más habría abierto en
+   ellas un nivel intermedio vacío, que es justo la jerarquía falsa que el árbol evita. */
+div[class*="st-key-navt_"] button {{
+    padding:6px 8px 5px 8px !important; margin-top:7px !important;
+}}
+div[class*="st-key-navt_"] button p {{
+    font-family:{FONT_MONO}; font-size:10.5px !important; font-weight:500 !important;
+    letter-spacing:0.09em; text-transform:uppercase; color:{t['text_secondary']} !important;
+}}
+/* Fila de SECCIÓN: la hoja del árbol. */
+div[class*="st-key-navs_"] button {{ padding:5px 8px 5px 13px !important; }}
+div[class*="st-key-navs_"] button p {{
+    font-size:12px !important; font-weight:400 !important; color:{t['text_muted']} !important;
+}}
+{'''/* Modo colapsado: la fila se reduce a su icono, centrado en los 84 px. El rótulo NO se borra
+   —es el nombre accesible del botón— sino que sale del flujo con el recorte de 1 px de siempre
+   (el mismo patrón, y por los mismos motivos, que la cursiva del toggle de la barra), de modo
+   que no arrastra el icono hacia la izquierda ni deja hueco a su derecha. El `help` del botón
+   añade el globito con ese mismo nombre: con solo seis dibujos en columna, hace falta poder
+   preguntar cuál es cuál.
+   El objetivo del tooltip es un envoltorio más entre el bloque y el botón, y si se ajusta al
+   contenido rompe la cadena de anchos: se le da el mismo trato que en la lupa colapsada. */
+div[class*="st-key-navp_"] div[data-testid="stTooltipHoverTarget"] {
+    display:block !important; width:100% !important;
+}
+div[class*="st-key-navp_"] button {
+    padding:11px 0 !important; justify-content:center !important; gap:0 !important;
+}
+div[class*="st-key-navp_"] button > div,
+div[class*="st-key-navp_"] button div[data-testid="stMarkdownContainer"] {
+    width:auto !important; justify-content:center !important; gap:0 !important;
+}
+div[class*="st-key-navp_"] button p {
+    position:absolute !important;
+    width:1px !important; height:1px !important;
+    margin:-1px !important; padding:0 !important;
+    overflow:hidden !important; clip-path:inset(50%) !important; white-space:nowrap !important;
+}
+div[class*="st-key-navp_"] button span[data-testid="stIconMaterial"] { font-size:18px !important; }
+/* Sin rama que plegar no hay nada que anunciar, y en 84 px el signo le comería el sitio al
+   icono, que es lo único que queda. */
+div[class*="st-key-navp_"] button::after { content:none !important; }''' if narrow else ''}
+/* ── El árbol cuando se apunta con el dedo ────────────────────────────────────
+   Se pregunta por el PUNTERO y no por el ancho, que es lo que de verdad cambia aquí: una
+   tableta de 1024 px se maneja con el dedo igual que un teléfono de 390, y un portátil de 1280
+   con ratón no necesita nada de esto. `pointer: coarse` responde exactamente a eso —cuál es el
+   puntero PRINCIPAL—, de modo que un portátil con pantalla táctil Y ratón se queda en la rama
+   fina, que es la correcta para él.
+   Lo que cambia es solo el ALTO de las filas. Con ratón, una fila de sección de 26 px es
+   cómoda; con el dedo es una diana pequeña, y además van en columna apretada, que es el caso
+   en el que un fallo de puntería no te deja donde querías sino en la fila de al lado. Subidas a
+   34, y las de página a 42, quedan en el orden de magnitud que piden las guías táctiles sin
+   estirar el árbol: la rama más larga pasa de 376 a 484 px, todavía holgada bajo el tope de 620
+   con el que se abre.
+   No se toca ni el sangrado ni el color: la jerarquía que separa pestaña de sección es la misma
+   se apunte con lo que se apunte. */
+@media (pointer: coarse) {{
+    div[class*="st-key-navp_"] button {{ padding:12px 10px !important; }}
+    div[class*="st-key-navt_"] button {{ padding:9px 8px 8px 8px !important; }}
+    div[class*="st-key-navs_"] button {{ padding:9px 8px 9px 13px !important; }}
+}}
+/* La lista que cuelga de cada página. El filete de la izquierda es lo que dibuja la jerarquía:
+   sin él, unas filas sangradas se leen como filas sangradas y no como hijas de la de arriba. */
+div[class*="st-key-navk_"] {{
+    gap:0 !important; overflow:hidden !important;
+    max-height:0; opacity:0;
+    margin-left:11px !important; border-left:1px solid {t['border']};
+    transition: max-height 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.2s ease;
+}}
+/* Falta la regla que ABRE una de estas listas, y falta a propósito: cuál está desplegada y
+   cuál es la página activa son estado, y esta hoja se escribe antes de que la barra lateral lo
+   resuelva. Se emiten allí, en cada pasada, junto al código que pinta la lista. */
 /* ═══════════════ CABECERA DE PÁGINA ═══════════════
    Registro editorial de publicación científica: antetítulo en versalitas monoespaciadas
    (etiqueta de sección), titular en serif de pantalla, subtítulo en sans, y un filete
@@ -1820,7 +2146,7 @@ section[data-testid="stMain"] {{ scrollbar-gutter: stable; }}
     text-transform:uppercase; margin-bottom:5px;
 }}
 /* Enlace de navegación a Gobernanza desde el bloque Medallón. Es un st.button porque hace
-   falta ejecutar código (empujar el índice al option_menu), pero NO debe leerse como botón:
+   falta ejecutar código (escribir la página en session_state), pero NO debe leerse como botón:
    compite con las tarjetas y rompe el registro editorial de la página. Se despoja del chrome
    y queda como enlace de texto en color de marca, alineado con el filete de las tarjetas. */
 .st-key-ir_gobernanza button {{
@@ -2416,6 +2742,12 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
     .sidebar-footer {{
         position:static !important; width:100% !important; margin-top:10px; border-top:none;
     }}
+    /* Y con ellas de vuelta en el flujo, el suelo de 118 px que la barra reserva en escritorio
+       deja de tener a quién esquivar: sobre el final de la lista ya no flota nada. Se queda en
+       un respiro corto, el mismo que separa cualquier bloque del canto. */
+    section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {{
+        padding-bottom:16px !important;
+    }}
     /* El desplegable de idioma SÍ sigue fijo en móvil (no es de la sidebar, es del lienzo),
        pero se arrima al borde y encoge un punto. El botón nativo de abrir la sidebar ocupa
        la esquina superior IZQUIERDA, así que no hay colisión posible. Aquí solo cambian las
@@ -2432,6 +2764,10 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
        en escritorio (RELOJ_RIGHT_M), con diez píxeles de aire en vez de doce. */
     #tfm-reloj {{ top:10px; right:{RELOJ_RIGHT_M}px; height:16px; font-size:11px; }}
     #tfm-reloj .r-fecha, #tfm-reloj .r-sep {{ display:none; }}
+    /* El disco de «volver arriba» encoge y se arrima al canto: en un teléfono los 36 px de
+       escritorio tapan una franja de contenido que allí es la mitad de ancha. */
+    #tfm-arriba {{ right:14px; bottom:14px; width:32px; height:32px; }}
+    #tfm-arriba::before {{ width:15px; height:15px; }}
     /* Contenido: menos padding lateral y sin el tope de ancho */
     div[data-testid="stMainBlockContainer"], section.main > div.block-container {{
         max-width:100% !important; padding-top:2.5rem !important;
@@ -3129,6 +3465,14 @@ with st.sidebar:
             st.session_state.page = (_page_url if _page_url in i18n.PAGE_KEYS
                                      else i18n.PAGE_KEYS[0])
 
+    # Qué rama del árbol está desplegada. Arranca en la página activa —el índice tiene que decir
+    # dónde estás desde el primer dibujo, y esa rama es además la única cuyas secciones están de
+    # verdad a un scroll de distancia— y a partir de ahí la mueve el clic. Es estado PROPIO y no
+    # se deduce de `page` porque puede no haber ninguna abierta: plegar la de la página en la que
+    # estás es un estado legítimo.
+    if "nav_open" not in st.session_state:
+        st.session_state.nav_open = st.session_state.page
+
     # Sin tooltip, pero con nombre accesible. El globito con "Expandir"/"Colapsar" repetía en
     # palabras lo que la flecha ya dice —apunta siempre al lado al que se moverá la barra—,
     # así que se va; lo que no puede irse es el nombre del botón, porque un <button> sin más
@@ -3147,12 +3491,10 @@ with st.sidebar:
     if narrow:
         if st.button(f"*{S('sidebar_expand')}*", key="toggle_sidebar"):
             st.session_state.sidebar_narrow = False
-            st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
     else:
         if st.button(f"*{S('sidebar_collapse')}*", key="toggle_sidebar"):
             st.session_state.sidebar_narrow = True
-            st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
 
     # ── BUSCADOR ────────────────────────────────────────────────────────────
@@ -3169,11 +3511,10 @@ with st.sidebar:
     if narrow:
         if st.button(" ", key="search_expand", icon=":material/search:", help=S("search_expand")):
             st.session_state.sidebar_narrow = False
-            st.session_state.menu_force_index = i18n.PAGE_KEYS.index(st.session_state.page)
             st.rerun()
     else:
         def _ir_a_resultado(_pagina, _tab=None):
-            """Navega a la página del resultado —y a su pestaña— y vacía la caja.
+            """Navega al resultado (ver _navegar) y además vacía la caja de búsqueda.
 
             Va como CALLBACK y no como código tras el `if st.button(...)`: el valor de un
             widget solo puede tocarse desde un callback (fuera lanza StreamlitAPIException),
@@ -3181,19 +3522,9 @@ with st.sidebar:
             hacia abajo después de haber navegado.
 
             `_tab` llega solo en las secciones que viven DENTRO de una pestaña (hoy las de la
-            Esfera de Bloch, en Circuito Cuántico) y es (grupo, posición). Se abre esa pestaña
-            por la misma vía que usa tabs_i18n para sobrevivir a un cambio de idioma: se guarda
-            la posición en su clave propia y se BORRA el estado del widget, de modo que en la
-            pasada siguiente manda el `default=rotulos[pos]` de tabs_i18n. Escribir la posición
-            sin borrar el estado no bastaba —Streamlit ignora `default` cuando el widget ya
-            tiene valor—, y el salto se quedaba en la pestaña que estuviera abierta.
+            Esfera de Bloch, en Circuito Cuántico) y es (grupo, posición).
             """
-            st.session_state.page = _pagina
-            st.session_state.menu_force_index = i18n.PAGE_KEYS.index(_pagina)
-            if _tab is not None:
-                _grupo, _pos = _tab
-                st.session_state[_POS_TAB.format(_grupo)] = _pos
-                st.session_state.pop(_grupo, None)
+            _navegar(_pagina, _tab)
             st.session_state.nav_search = ""
 
         _q = (st.text_input(S("search_label"), key="nav_search", placeholder=S("search_ph"),
@@ -3226,93 +3557,137 @@ with st.sidebar:
                     f'<div class="search-web">{html.escape(S("search_web").format(q=_q))}</div>'
                     f'<div class="search-srcs">{_fuentes}</div>', unsafe_allow_html=True)
 
-    # streamlit-option-menu renderiza dentro de un iframe: el CSS del documento principal
-    # (st.markdown) no puede alcanzar sus elementos internos. Por eso el modo narrow se logra
-    # aquí, vía el dict "styles" que sí viaja al componente, en vez de con CSS externo.
-    # Ítem activo con filete izquierdo en color de marca (patrón de navegación de producto:
-    # el indicador vive en el borde y no depende solo del relleno, que en tema claro es muy
-    # tenue). El resto conserva su color de texto secundario y un fondo neutro al hover.
-    nav_link_style = {"font-family": "'IBM Plex Sans', system-ui, sans-serif",
-                       "font-size": "13.5px", "text-align": "left", "margin": "3px 0", "padding": "10px 10px",
-                       "border-radius": "0 9px 9px 0", "color": t["text_secondary"], "font-weight": "400",
-                       "border-left": "2px solid transparent", "transition": "all 0.14s ease",
-                       "--hover-color": t["sidebar_active"]}
-    nav_link_selected_style = {"background-color": t["sidebar_active"], "color": t["text"], "font-weight": "600",
-                                "border-left": f"2px solid {C_PRIMARY}", "border-radius": "0 9px 9px 0"}
-    # El icono va en el acento de marca, no en el color del rótulo. C_PRIMARY es justo lo que
-    # la paleta reserva al cromo de navegación (ver su bloque más arriba), y el icono es además
-    # lo ÚNICO que queda visible con la barra colapsada, donde el rótulo se apaga a font-size:0.
-    # El rótulo no se toca —sigue en text_secondary—: así el color distingue glifo de texto en
-    # vez de repetirlos, y la jerarquía del ítem la siguen marcando peso, fondo y filete.
-    # Contraste sobre sidebar_bg: 9,33:1 en oscuro y 4,08:1 en claro, por encima del 3:1 que
-    # WCAG 1.4.11 pide a un elemento gráfico de interfaz.
-    icon_style = {"font-size": "15px", "color": C_PRIMARY}
-    if narrow:
-        # El componente pinta cada ítem como <a class="nav-link"><i class="icon bi-…"></i> Rótulo</a>,
-        # y el rótulo es un NODO DE TEXTO SUELTO, sin envoltorio propio. Como el dict "styles" solo
-        # llega al <a> y al <i>, la única forma de ocultar el texto es font-size:0 en el <a> — y ahí
-        # estaba el recorte de los iconos: con font-size 0 la caja de línea del <a> mide 0, el glifo
-        # se dibuja desde una línea base sin altura y se cortaba por la mitad inferior (se veía el
-        # tejado de la casa sin paredes, el escudo sin punta).
-        #
-        # La solución es sacar el glifo del flujo de línea: el <a> pasa a ser flex y el <i> a caja
-        # de bloque con ALTURA PROPIA, así su tamaño ya no depende de un line-height heredado que
-        # vale cero. El font-size:0 sigue borrando el rótulo, que es lo que se quería.
-        _centrado = {"font-size": "0px", "line-height": "0", "padding": "11px 0",
-                     "display": "flex", "align-items": "center", "justify-content": "center"}
-        nav_link_style.update(_centrado)
-        nav_link_selected_style.update(_centrado)
-        icon_style.update({"font-size": "18px", "line-height": "1", "height": "22px", "width": "100%",
-                           "margin": "0", "display": "flex", "align-items": "center",
-                           "justify-content": "center"})
+    # ── MENÚ Y ÁRBOL DE SECCIONES ───────────────────────────────
+    # La navegación entera de la app en UNA sola lista: las seis páginas y, colgando de cada
+    # una, sus pestañas y sus secciones. Al pasar el ratón por una página se abre su rama; al
+    # pulsar cualquier fila se va allí. La apertura es CSS puro (ver el bloque "Menú y árbol de
+    # secciones" de la hoja de estilos); aquí solo están la estructura y el destino de cada fila.
+    #
+    # EL MENÚ FUE UN streamlit-option-menu, y ahora son botones nativos. El cambio no es de
+    # gusto: ese componente se pinta en un iframe de altura fija y su API es una lista PLANA, así
+    # que no había manera de colgarle las secciones —una rama abierta ahí dentro se recorta y,
+    # sobre todo, no puede empujar a los ítems de debajo— ni de alcanzarlo con el CSS del
+    # documento. Mientras fueron dos piezas, los seis nombres de página salían dos veces en la
+    # barra: una como menú y otra como raíz del índice.
+    #
+    # Lo que se fue con el componente, que era todo deuda del iframe:
+    #   · menu_force_index / manual_select: una SEGUNDA copia de "qué página está activa" que
+    #     había que empujarle a mano desde cada sitio que navegaba, porque el componente no leía
+    #     session_state. Y con su propia trampa —era un disparo de un solo uso que, reenviado en
+    #     cada pasada, competía con el clic del usuario y dejaba el menú oscilando—.
+    #   · la key con el tema, el idioma y el modo dentro (main_menu_dark_False_es): el componente
+    #     solo leía su dict `styles` al montarse, así que cada cambio de esos tres obligaba a un
+    #     remount completo para que se reaplicara.
+    #   · el fundido que disimulaba ese remount, y las reglas sueltas de fondo, ancho y hover del
+    #     iframe. El aspecto del menú vive ahora en la hoja de estilos, junto al del resto.
+    #
+    # Cada fila es un st.button y no un enlace: navegar aquí es escribir en session_state (la
+    # página, la posición de la pestaña, el destino del scroll), o sea trabajo del servidor. Un
+    # <a href="?page=…"> recargaría la aplicación entera y perdería la sesión.
+    #
+    # Y `page` se lee de session_state ANTES de pintar, en vez de salir de lo que devolvía el
+    # componente: los callbacks corren al principio de la pasada que dispara el clic, así que
+    # cuando esto se ejecuta el estado ya es el de la página de destino. Esa es también la razón
+    # de que la lista pueda marcar su fila activa sin preguntarle nada a nadie.
+    page = st.session_state.page
 
-    # manual_select fuerza al componente a saltar a un indice concreto, pero es un disparo "de un
-    # solo uso": si se reenvia en cada rerun (incluido el propio rerun que dispara un clic del
-    # usuario en el menu) compite con ese clic y el menu queda oscilando sin parar entre la pestaña
-    # vieja y la nueva hasta que se refresca la pagina. Por eso solo se rellena explicitamente justo
-    # antes de un st.rerun() disparado por OTRO widget (toggle de sidebar, toggle de tema) y se
-    # consume aqui con pop() para que en el resto de reruns (incluidos los clics normales) viaje
-    # como None y no interfiera.
-    _forced_index = st.session_state.pop("menu_force_index", None)
-    _seleccion = option_menu(
-        menu_title=None,
-        options=_MENU_OPTIONS,
-        icons=i18n.PAGE_ICONS,
-        default_index=i18n.PAGE_KEYS.index(st.session_state.page),
-        manual_select=_forced_index,
-        # La key incluye el tema Y el modo narrow a proposito: option_menu vive en un iframe con
-        # estado JS propio (Vue) que solo LEE el dict "styles" al montarse — en reruns posteriores con
-        # la MISMA key, los cambios en "styles" (colores de tema, o el font-size:0 del modo narrow) no
-        # se reaplican de verdad. Con key fija, alternar sidebar_narrow dejaba el menu con el texto
-        # aun visible (a tamaño completo) junto al icono, porque el componente seguia usando los
-        # estilos con los que se monto la primera vez. Cambiar la key en cada toggle (tema Y narrow)
-        # fuerza un remount completo, que si levanta los estilos frescos. default_index/manual_select
-        # ya se encargan de que ese remount respete la pestaña activa.
-        # El IDIOMA entra en la key por el mismo motivo, y aqui es aun mas necesario: no cambian
-        # solo los estilos, cambia la lista "options" entera. Sin remount, el componente seguiria
-        # mostrando los siete rotulos del idioma con el que se monto.
-        key=f"main_menu_{st.session_state.theme}_{narrow}_{LANG}",
-        styles={
-            # "0!important" y no "0": el componente pone estos estilos EN LÍNEA sobre un div que
-            # además lleva la clase Bootstrap `p-3`, y `.p-3` declara `padding:1rem!important`,
-            # que gana a un estilo en línea normal. El resultado es que el menú ha llevado
-            # siempre 16 px de relleno a cada lado sin que se notara… hasta colapsar la barra:
-            # con 84 px, esos 32 px se comían el ancho entero y el icono se salía del iframe.
-            # Un !important en línea sí gana a un !important de clase.
-            "container": {"padding": "0!important", "background-color": t["sidebar_bg"],
-                          "border-radius": "0"},
-            "icon": icon_style,
-            "nav-link": nav_link_style,
-            "nav-link-selected": nav_link_selected_style,
-        },
-    )
-    # option_menu devuelve el ROTULO pulsado, que es lo unico que el componente conoce. Aqui se
-    # traduce de vuelta a la clave por posicion —los dos listados salen del mismo i18n.PAGES y
-    # comparten orden— y a partir de este punto en toda la app "page" es la clave, nunca el texto.
-    page = i18n.PAGE_KEYS[_MENU_OPTIONS.index(_seleccion)]
-    st.session_state.page = page
-    # La URL se pone al día con la página activa, y se hace AQUÍ —justo después de resolver la
-    # selección— y no en cada sitio que navega (el menú, el buscador, los enlaces internos):
+    # Las reglas que dependen del ESTADO de la barra —cuál es la página activa y cuál es la rama
+    # desplegada—. Van en un <style> propio, aquí, y no en la hoja de arriba, porque aquella se
+    # escribe antes de que ese estado se resuelva.
+    #
+    # La rama abierta la decide el CLIC, no el ratón por encima. Con :hover el despliegue era
+    # CSS puro y no costaba una pasada de servidor, pero abría y cerraba ramas al cruzar la barra
+    # camino de otra cosa: el índice se movía solo mientras leías, y la lista de debajo saltaba
+    # con él. Al clic solo cambia cuando se le pide; el precio es llevar la cuenta a mano
+    # (`nav_open`), porque el estado ya no lo guarda el puntero.
+    #
+    # Sigue habiendo UNA sola rama abierta a la vez, y por el mismo motivo que con el hover: con
+    # dos, la lista se iba a 949 px en una pantalla de portátil —más que la ventana entera— y la
+    # mitad de abajo quedaba fuera de alcance.
+    _abierta = st.session_state.nav_open
+    # Se arma fuera del f-string para no tener que escapar las llaves del CSS dentro de otra
+    # interpolación. Vacío cuando no hay ninguna desplegada, que es un estado posible: la regla
+    # simplemente no se emite y todas las ramas se quedan en el max-height:0 de la hoja general.
+    _css_rama = ""
+    if _abierta:
+        _css_rama = (
+            f'.st-key-navb_{_abierta} div[class*="st-key-navk_"] '
+            f'{{ max-height:620px !important; opacity:1 !important; }}\n    '
+            # Solo la imagen de la máscara: el tamaño, el color y la transición ya están puestos
+            # en la hoja general y no tienen por qué repetirse (ni poder desincronizarse).
+            f'.st-key-navb_{_abierta} div[class*="st-key-navp_"] button::after '
+            f'{{ -webkit-mask-image:{SIGNO_MENOS} !important; mask-image:{SIGNO_MENOS} !important; }}'
+        )
+    st.markdown(f"""
+    <style>
+    /* La fila de la página activa, marcada con el mismo filete de marca que llevaba el ítem
+       seleccionado del menú. El icono sube a C_DARK: como los seis van en C_PRIMARY, ese color
+       ya no distingue al elegido, y C_DARK se separa en la dirección correcta en cada tema
+       —más brillante en oscuro (#FFCE75), más profundo en claro (#664600)—. Contraste sobre el
+       fondo del ítem activo: 10,57:1 y 6,27:1. */
+    .st-key-navb_{page} div[class*="st-key-navp_"] button {{
+        border-left-color:{C_PRIMARY} !important; background:{t['sidebar_active']} !important;
+    }}
+    .st-key-navb_{page} div[class*="st-key-navp_"] button p {{
+        color:{t['text']} !important; font-weight:600 !important;
+    }}
+    .st-key-navb_{page} div[class*="st-key-navp_"] button span[data-testid="stIconMaterial"] {{
+        color:{C_DARK} !important;
+    }}
+    /* Y su signo sube con el rótulo, para que la fila entera se lea como un bloque y no como un
+       nombre encendido con un adorno apagado al lado. */
+    .st-key-navb_{page} div[class*="st-key-navp_"] button::after {{
+        background-color:{t['text_secondary']} !important;
+    }}
+    /* La rama desplegada. Es UNA clase más que el max-height:0 de la hoja general, así que gana
+       sin necesitar el !important; lo lleva igualmente porque la de la hoja también lo lleva. */
+    {_css_rama}
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container(key="nav_tree"):
+        for _pag in i18n.nav_tree(LANG):
+            _pk = _pag["page"]
+            # El icono es un Material Symbol y se declara en i18n.PAGES junto a la clave de la
+            # página. Es la misma familia que ya usa el buscador colapsado, que es su vecino de
+            # barra, y la que Streamlit trae de serie: no hay que servir ni mantener un SVG.
+            _icono = f":material/{_pag['icon']}:"
+            # El contenedor de la rama es el ancestro común de la fila de página y de su lista,
+            # y por tanto lo que hace de zona de hover. Sin él no habría manera de que la lista
+            # siguiera abierta mientras el ratón está sobre ella.
+            with st.container(key=f"navb_{_pk}"):
+                if narrow:
+                    # En 84 px no cabe el rótulo, y mucho menos una rama de 14 filas: queda el
+                    # icono, igual que en el buscador. El nombre viaja dentro de todos modos, en
+                    # cursiva, y el CSS lo recorta sin borrarlo del árbol de accesibilidad
+                    # —mismo patrón que el toggle de la barra, donde está razonado—; el `help`
+                    # pone además el globito, de modo que puntero y lector de pantalla coinciden.
+                    st.button(f"*{_pag['label']}*", key=f"navp_{_pk}", icon=_icono,
+                              width="stretch", help=_pag["label"],
+                              on_click=_navegar, args=(_pk,))   # sin rama que plegar
+                    continue
+                st.button(_pag["label"], key=f"navp_{_pk}", icon=_icono, width="stretch",
+                          on_click=_navegar_pagina, args=(_pk,))
+                with st.container(key=f"navk_{_pk}"):
+                    for _rama in _pag["ramas"]:
+                        # Las páginas sin pestañas devuelven una rama sin rótulo: sus secciones
+                        # cuelgan directamente de la página, sin inventarse un nivel que en la
+                        # página no existe.
+                        if _rama["label"] is not None:
+                            st.button(_rama["label"], key=f"navt_{_pk}_{_rama['tab'][1]}",
+                                      width="stretch", on_click=_navegar,
+                                      args=(_pk, _rama["tab"]))
+                        for _sec in _rama["secciones"]:
+                            # La clave lleva dentro la clave de la sección, que es única en todo
+                            # el catálogo; el destino que viaja al callback es su RÓTULO, porque
+                            # quien lo busca es el navegador entre los .section-title del
+                            # documento.
+                            st.button(_sec["label"], key=f"navs_{_sec['key']}",
+                                      width="stretch", on_click=_navegar,
+                                      args=(_pk, _rama["tab"], _sec["label"]))
+
+    # La URL se pone al día con la página activa, y se hace AQUÍ —en el único punto por el que
+    # pasa toda la navegación— y no en cada sitio que navega (el menú, el buscador, los enlaces internos):
     # todos esos caminos terminan pasando por esta línea, así que un único punto de escritura
     # basta. Escribir una query param NO relanza el script, solo actualiza la barra de
     # direcciones, de modo que esto no se pelea con el rerun del propio clic.
@@ -3334,25 +3709,8 @@ with st.sidebar:
     # escalonada (ver el bloque más abajo): al cambiar de página cambia el nombre y las
     # animaciones reinician; dentro de la misma página el nombre no cambia y no se repiten.
     _page_idx_anim = i18n.PAGE_KEYS.index(page)
-    # Refuerzo del hover (streamlit-option-menu no expone :hover directo en icon/color de texto)
     st.markdown(f"""
     <style>
-    nav[role="navigation"] a.nav-link:hover:not(.active) {{
-        background-color:{t['sidebar_active']} !important;
-        color:{t['text']} !important;
-    }}
-    nav[role="navigation"] a.nav-link:hover:not(.active) span {{
-        color:{t['text']} !important;
-    }}
-    /* El icono activo sube al acento pareja: como ahora los siete van en C_PRIMARY, ese color
-       ya no distingue al seleccionado. C_DARK se separa en la dirección correcta en cada tema
-       —más brillante en oscuro (#FFCE75), más profundo en claro (#664600)—, así que el ítem
-       activo gana peso en ambos. Contraste sobre el fondo del ítem activo: 10,57:1 y 6,27:1.
-       El !important sigue haciendo falta: nav-link-selected pinta color sobre el <a> y, sin
-       forzar, esa cascada se lleva por delante el color en línea del <i>. */
-    nav[role="navigation"] a.nav-link.active i {{
-        color:{C_DARK} !important;
-    }}
     /* ═══════════════ ENTRADA ESCALONADA DEL CONTENIDO ═══════════════
        El contenido no aparece de golpe: sube unos píxeles y se revela en cascada corta,
        cabecera primero y bloques de datos después. Es lo que hace que una página se lea
@@ -3414,6 +3772,7 @@ with st.sidebar:
     }}
     </style>
     """, unsafe_allow_html=True)
+
 
     if st.button(" ", key="theme_toggle",
                  help=S("theme_to_dark") if st.session_state.theme == "light" else S("theme_to_light")):
@@ -3602,6 +3961,260 @@ with st.container(key="reloj"):
         height=0, width=0,
     )
 
+# ── NAVEGACIÓN DENTRO DE LA PÁGINA ───────────────────────────────────────────
+# Las dos piezas que mueven el scroll sin recargar nada: el disco de «volver arriba» y el salto
+# a la sección que se ha pulsado en el árbol de la barra lateral. Van juntas porque comparten lo
+# único que tiene miga —el recorrido suave y el contenedor que de verdad hace scroll—, y
+# separarlas obligaría a repetir las dos cosas en dos sitios.
+#
+# Misma vía que el reloj y que el atributo lang: el iframe de components.html se sirve por
+# srcdoc, comparte origen y puede escribir en el documento padre. El aspecto vive en la hoja de
+# estilos (#tfm-arriba) y aquí solo está el comportamiento.
+#
+# NINGUNA de las dos es un st.button, y no por capricho: un botón de Streamlit dispara un rerun
+# del script entero para hacer algo que ocurre por completo en el navegador. Serían dos segundos
+# de recarga, y la página volviendo a montarse, para mover una barra de scroll.
+# El destino del salto se consume con pop() y no se lee: es un disparo de un solo uso. Dejado
+# en session_state, la página volvería a saltar a la misma sección en cada rerun posterior —o
+# sea cada vez que se moviera un slider— sin que nadie lo hubiera pedido.
+_nav_scroll = st.session_state.pop("nav_scroll", None)
+# Mismo trato de disparo único que el destino del scroll, y por el mismo motivo: dejado puesto,
+# el panel se cerraría solo en cada rerun posterior —cada slider, cada pestaña— sin que nadie lo
+# haya pedido.
+_nav_cerrar = st.session_state.pop("nav_cerrar", False)
+
+with st.container(key="nav_js"):
+    components.html(
+        f"""<script>
+(function () {{
+  var W = window.parent, doc = W.document;
+
+  // ── DÓNDE CORRE ESTE CÓDIGO, Y POR QUÉ NO AQUÍ ──────────────────────────────
+  // Nada de lo de abajo se ejecuta dentro de este iframe: se inyecta como <script> en el
+  // DOCUMENTO PADRE y corre allí. Parece un rodeo y es justo lo contrario — sin él, la mitad
+  // de esto no funciona.
+  //
+  // El motivo es que Streamlit REEMPLAZA el iframe de un componente cada vez que su contenido
+  // cambia, y con él se lleva por delante todo lo que vivía en su contexto de JavaScript:
+  // funciones, closures, callbacks de requestAnimationFrame y de setTimeout ya programados. No
+  // dan error, simplemente dejan de correr. Y no es un caso raro: navegar a otra página dispara
+  // DOS pasadas —la del clic y la que devuelve el menú al recibir su manual_select—, o sea que
+  // el iframe se renueva un segundo después de cada salto. El recorrido hasta la sección se
+  // quedaba congelado a mitad de camino, con la página parada donde le pillara.
+  //
+  // Inyectado en el padre, el código vive donde viven el botón y el contenedor que hace scroll,
+  // y ya no depende de que su iframe siga existiendo. La función se pasa a texto con toString(),
+  // así que se sigue escribiendo y leyendo como una función normal en vez de como una cadena; lo
+  // único que hay que respetar es que NO puede tomar nada de este ámbito — todo lo que necesita
+  // del servidor entra por CFG.
+  function comportamiento(CFG) {{
+    var W = window, doc = document;   // aquí ya SON los del documento padre
+
+    // El nodo se crea UNA vez y se reutiliza: cuelga de <body>, fuera del árbol que Streamlit
+    // reconstruye, así que sobrevive a los reruns y a los cambios de página. Lo único que se
+    // reescribe en cada pasada es el rótulo, que es lo que le hace seguir al idioma.
+    var btn = doc.getElementById("tfm-arriba");
+    var nuevo = !btn;
+    if (nuevo) {{
+      btn = doc.createElement("button");
+      btn.id = "tfm-arriba";
+      btn.type = "button";
+      doc.body.appendChild(btn);
+    }}
+    // El nombre accesible va en aria-label: el dibujo es un ::before, y un <button> cuyo único
+    // contenido es un adorno no se anuncia como nada. El title pone además el globito del ratón,
+    // con el mismo texto, para que puntero y lector de pantalla digan lo mismo.
+    var ROTULO = CFG.rotulo;
+    btn.setAttribute("aria-label", ROTULO);
+    btn.title = ROTULO;
+
+    // Quien hace scroll es section[data-testid="stMain"] y no la ventana (en W.scrollY no pasa
+    // nada nunca; mismo motivo que se explica en scrollbar-gutter). Se REBUSCA en cada uso en vez
+    // de guardarlo: Streamlit lo reconstruye al cambiar de página y una referencia guardada al
+    // arrancar quedaría apuntando a un huérfano — la misma lección que el el(sel) del parallax.
+    function contenedor() {{ return doc.querySelector('section[data-testid="stMain"]'); }}
+
+    // ── A dónde sube ──
+    // SIEMPRE al principio de la página, con pestañas o sin ellas.
+    //
+    // La primera versión afinaba: en una página con pestañas paraba en la tira de rótulos, para
+    // dejar a la vista en qué pestaña estabas. El resultado es que el mismo botón hacía dos cosas
+    // distintas según dónde se pulsara —en Resultados subía del todo y en Gobernanza se quedaba a
+    // media altura—, y un control que no aterriza siempre en el mismo sitio obliga a mirar dónde
+    // has caído. Un destino único no hay que comprobarlo.
+    //
+    // Y no se pierde nada por el camino: el titular de la página está arriba del todo, y la tira
+    // de pestañas queda igualmente en pantalla, unos 280 px por debajo del borde.
+
+    // ── La subida ──
+    // A mano con requestAnimationFrame y no con scrollTo({{behavior:"smooth"}}), que sería la vía
+    // corta: el desplazamiento suave NATIVO lo cancelan Chrome y Firefox cuando el sistema pide
+    // reducir movimiento, y ahí el botón daría un corte seco en vez de un recorrido. Es la misma
+    // decisión ya tomada para el parallax de portada (ver la nota junto a .ov-anim): esto no es
+    // un adorno que se pueda perder, es lo que deja ver CUÁNTO se ha subido y desde dónde — sin
+    // el recorrido, aterrizar arriba del todo se confunde con haber cambiado de página.
+    function abortar() {{
+      if (W.__tfmArribaAnim) {{ W.cancelAnimationFrame(W.__tfmArribaAnim); W.__tfmArribaAnim = null; }}
+    }}
+    function subir(main, hasta) {{
+      var desde = main.scrollTop, delta = hasta - desde;
+      if (Math.abs(delta) < 2) {{ main.scrollTop = hasta; return; }}
+      // Duración proporcional pero acotada por los dos lados: con velocidad fija una página de
+      // 4.000 px se haría eterna, y con duración fija un salto de 300 px se ve como un tirón.
+      var dur = Math.min(620, Math.max(240, Math.abs(delta) * 0.45));
+      var t0 = null;
+      abortar();
+      function paso(t) {{
+        if (t0 === null) {{ t0 = t; }}
+        var k = Math.min(1, (t - t0) / dur);
+        // easeOutCubic: sale rápido y frena al llegar, que es como se lee un recorrido CON
+        // destino. Una rampa lineal parece un ascensor.
+        main.scrollTop = desde + delta * (1 - Math.pow(1 - k, 3));
+        W.__tfmArribaAnim = k < 1 ? W.requestAnimationFrame(paso) : null;
+      }}
+      W.__tfmArribaAnim = W.requestAnimationFrame(paso);
+    }}
+
+    // ── Cuándo se ve ──
+    // A partir de tres cuartos de pantalla de recorrido. Antes de eso el principio sigue a la
+    // vista y el botón no ahorraría nada; y se mide contra el ALTO DEL CONTENEDOR y no contra un
+    // número fijo de píxeles, para que el criterio sea el mismo en un portátil y en un teléfono.
+    // De rebote, en una página que no llega a esa altura el botón no aparece nunca, que es lo
+    // correcto: no hay a dónde volver.
+    var UMBRAL = 0.75;
+    function repinta() {{
+      var main = contenedor();
+      if (!main) {{ return; }}
+      btn.classList.toggle("visible", main.scrollTop > main.clientHeight * UMBRAL);
+    }}
+
+    if (nuevo) {{
+      btn.addEventListener("click", function () {{
+        var main = contenedor();
+        if (main) {{ subir(main, 0); }}
+      }});
+      // Si durante el recorrido se toca la rueda o la pantalla, manda quien la toca: seguir
+      // arrastrando el scroll contra el gesto del usuario es de lo más molesto que puede hacer
+      // un control como este.
+      //
+      // Y no basta con parar la animación en curso: el salto a una sección se pasa varios
+      // segundos VIGILANDO que el destino siga en su sitio (ver más abajo), así que también hay
+      // que darlo por abandonado. Sin esto, apartarse a mirar otra cosa mientras la página
+      // termina de dibujarse acababa con el panel devolviéndote a la sección de un tirón.
+      var rendirse = function () {{ abortar(); W.__tfmSaltoVivo = false; }};
+      doc.addEventListener("wheel", rendirse, {{ passive: true }});
+      doc.addEventListener("touchstart", rendirse, {{ passive: true }});
+      // El oyente de scroll va sobre el DOCUMENTO y en fase de CAPTURA, no sobre stMain: los
+      // eventos de scroll no burbujean pero sí se capturan, y el documento no lo reconstruye
+      // nadie. Así este oyente se pone una sola vez en la vida de la página, en lugar de tener
+      // que quitarse y volver a ponerse en cada rerun sobre el stMain de turno — que es de donde
+      // salen los oyentes acumulados y los que se quedan hablándole a un huérfano.
+      var pendiente = false;
+      doc.addEventListener("scroll", function () {{
+        // rAF: el scroll dispara muchos más eventos que fotogramas tiene la pantalla, y sin esto
+        // se recalcularía el estado varias veces para pintarlo una.
+        if (pendiente) {{ return; }}
+        pendiente = true;
+        W.requestAnimationFrame(function () {{ pendiente = false; repinta(); }});
+      }}, {{ capture: true, passive: true }});
+    }}
+
+    // Se aplica ya: un rerun puede llegar con la página a media altura (mover un slider) o de
+    // vuelta arriba del todo (cambiar de página), y sin esto el botón se quedaría como estaba.
+    repinta();
+
+    // ── SALTO A UNA SECCIÓN ──────────────────────────────────────────────────────
+    // El destino lo pone _navegar() en session_state al pulsar una fila del árbol de la barra
+    // lateral, y llega aquí como el RÓTULO del título. No como un id: los .section-title se
+    // pintan sin él —son 34 st.markdown repartidos por el fichero—, y el rótulo ya es único
+    // dentro de su página, que es todo lo que hace falta para encontrarlo.
+    //
+    // Se busca DENTRO del panel de pestaña visible cuando lo hay: Streamlit renderiza las tres
+    // pestañas de Gobernanza aunque solo enseñe una, así que sin acotar se podría medir un
+    // título que está en el DOM pero en display:none — y ahí getBoundingClientRect() devuelve
+    // ceros, o sea un salto al principio de la página.
+    // ── El panel se cierra solo tras navegar, y SOLO en el teléfono ──
+    // Ahí la barra es un overlay que tapa la página entera (ver la media query de ≤768), así que
+    // dejarla abierta después de un salto es esconder justo lo que se acaba de pedir. En
+    // escritorio y en tableta la barra es una columna que no tapa nada y cerrarla sería perder
+    // el menú por las buenas: de ahí el umbral, que es el mismo de la hoja de estilos.
+    // Se comprueba aria-expanded para no pulsar el botón cuando el panel ya está cerrado —lo
+    // alternaría, abriéndolo—. Y si el botón no estuviera donde se espera, esto no hace nada:
+    // se queda como hasta ahora, con el panel abierto.
+    if (CFG.cerrar && W.innerWidth <= 768) {{
+      var barra = doc.querySelector('section[data-testid="stSidebar"]');
+      var cerrar = doc.querySelector('[data-testid="stSidebarCollapseButton"] button')
+                || doc.querySelector('[data-testid="stSidebarCollapseButton"]');
+      if (barra && cerrar && barra.getAttribute("aria-expanded") !== "false") {{ cerrar.click(); }}
+    }}
+
+    var DESTINO = CFG.destino;
+    var AIRE = 24;   // el título aterriza con aire por encima y no pegado al canto: pegado se
+                     // lee como cortado, y además el reloj de cabecera ocupa esa franja.
+    if (DESTINO) {{
+      // Colocar el título no es medir una vez y saltar: es SEGUIRLO hasta que se está quieto.
+      //
+      // Y hay dos razones distintas para ello, que se resuelven con el mismo bucle. La primera
+      // es que cuando este script corre el título todavía no existe —el componente se emite
+      // antes que el cuerpo de las páginas—, así que hay que esperarlo. La segunda es más
+      // sutil y es la que rompía la versión anterior, que medía una sola vez en cuanto lo
+      // encontraba: el título aparece antes que las gráficas que tiene ENCIMA, y cada Plotly
+      // que termina de dibujarse lo empuja unos cientos de píxeles hacia abajo. Se aterrizaba
+      // en la coordenada correcta de una página que ya no existía; con dos gráficas por medio,
+      // el destino acababa muy por debajo del borde inferior.
+      //
+      // El bucle se rinde cuando lleva DOS comprobaciones seguidas con el título en su sitio
+      // —una sola no distingue "ya está" de "aún no ha llegado la siguiente gráfica"— y, en
+      // cualquier caso, al agotar el plazo. Acotarlo es obligatorio: si el destino no llega a
+      // existir nunca (una sección condicional que hoy no se pinta), esto tiene que dejar la
+      // página quieta y callarse, no vigilar el DOM para siempre.
+      var pasadas = 0, estables = 0;
+      W.__tfmSaltoVivo = true;
+      // Se rebusca el título en CADA pasada en vez de guardarse el nodo: Streamlit reemplaza
+      // elementos entre reruns, y sobre un nodo desconectado getBoundingClientRect() devuelve
+      // ceros — o sea, un salto silencioso al principio de la página.
+      var localizar = function () {{
+        var vistos = Array.prototype.filter.call(
+          doc.querySelectorAll(".section-title"),
+          // offsetParent descarta lo que está en el DOM pero oculto: Streamlit renderiza las
+          // tres pestañas de Gobernanza aunque solo enseñe una, y un título en display:none
+          // tampoco se puede medir.
+          function (el) {{ return el.textContent.trim() === DESTINO && el.offsetParent !== null; }});
+        return vistos.length ? vistos[0] : null;
+      }};
+      var ajustar = function () {{
+        if (!W.__tfmSaltoVivo) {{ return; }}
+        var main = contenedor(), titulo = localizar();
+        if (main && titulo) {{
+          var delta = titulo.getBoundingClientRect().top - main.getBoundingClientRect().top - AIRE;
+          // La tolerancia absorbe el medio píxel de los bordes y los 12 px de la cascada de
+          // entrada (tfmEnter), que arranca el bloque desplazado y lo devuelve a su sitio.
+          //
+          // El segundo caso es el de las últimas secciones de una página: no hay contenido
+          // debajo suficiente para subirlas hasta el borde, así que la barra llega a su tope
+          // y ahí se acaba el viaje. Sin comprobarlo, el bucle se pasaba sus seis segundos
+          // pidiendo una y otra vez un destino que el navegador ya no puede dar.
+          var tope = main.scrollHeight - main.clientHeight;
+          if (Math.abs(delta) <= 3 || (delta > 0 && main.scrollTop >= tope - 1)) {{ estables++; }}
+          else {{ estables = 0; subir(main, Math.max(0, main.scrollTop + delta)); }}
+        }}
+        if (estables < 2 && ++pasadas < 24) {{ W.setTimeout(ajustar, 250); }}
+      }};
+      W.requestAnimationFrame(ajustar);
+    }}
+  }}
+
+  // El <script> se retira del DOM inmediatamente: ya se ha ejecutado al insertarlo, y dejarlo
+  // puesto solo acumularía un nodo muerto por rerun.
+  var sc = doc.createElement("script");
+  sc.textContent = "(" + comportamiento + ")(" + {json.dumps(json.dumps({"rotulo": S("scroll_top"), "destino": _nav_scroll, "cerrar": _nav_cerrar}))} + ");";
+  doc.head.appendChild(sc);
+  sc.remove();
+}})();
+</script>""",
+        height=0, width=0,
+    )
+
 def header(eyebrow, title, subtitle):
     # Streamlit reutiliza los mismos nodos del DOM entre reruns (para no perder el estado de sliders/
     # botones), así que una animación CSS "al aparecer" sobre stElementContainer nunca llegaba a
@@ -3620,6 +4233,7 @@ def header(eyebrow, title, subtitle):
             f'<div class="page-subtitle">{subtitle}</div>'
             f'<div class="page-rule"></div>',
             unsafe_allow_html=True)
+
 
 def _hex_rgb(hex_color):
     hex_color = hex_color.lstrip("#")
@@ -5073,12 +5687,11 @@ if page == "overview":
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-            # Salto a Gobernanza reutilizando el mismo mecanismo que el toggle de la sidebar:
-            # option_menu vive en un iframe y no lee session_state.page por su cuenta, así que
-            # hay que empujarle el índice con manual_select (menu_force_index se consume al leerse).
+            # Salto a Gobernanza por el mismo camino que el menú y el buscador. El st.rerun()
+            # explícito hace falta porque esto NO es un callback: _navegar escribe el estado y
+            # el resto del script ya se está ejecutando con la página vieja.
             if st.button(S("ov_goto_gov"), key="ir_gobernanza"):
-                st.session_state.page = "governance"
-                st.session_state.menu_force_index = i18n.PAGE_KEYS.index("governance")
+                _navegar("governance")
                 st.rerun()
 
         with col2:

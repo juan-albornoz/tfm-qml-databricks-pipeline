@@ -1,3 +1,13 @@
 [theme]
 showSidebarBorder = false
 primaryColor = "#BD8500"
+
+# Re-ejecuta el script solo al guardar app.py o i18n.py, en vez de limitarse a avisar de que
+# el fuente ha cambiado y esperar a que alguien pulse «Rerun». Es una comodidad de DESARROLLO
+# y no toca nada de lo que la app calcula: Streamlit ya re-ejecuta el script entero en cada
+# interacción —cada clic de pestaña, cada slider—, así que esto solo añade un disparador más
+# para esa misma pasada. Los datos siguen saliendo de los mismos ficheros y las cachés
+# (@st.cache_data / @st.cache_resource) siguen decidiendo igual qué se recalcula y qué no.
+# En un despliegue no cambia nada, porque allí el fuente no cambia mientras corre.
+[server]
+runOnSave = true

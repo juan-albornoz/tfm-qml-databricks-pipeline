@@ -40,16 +40,20 @@ DEFAULT_LANG = "es"
 # Clave estable + icono Bootstrap. El ORDEN es el del menú, y Gobernanza va en
 # segunda posición por el motivo razonado en app.py (la app se recorre en el
 # orden real de ejecución del pipeline). El rótulo visible sale de STR[lang]["nav"].
+# El icono es el nombre de un Material Symbol, que es la familia que Streamlit trae de serie y
+# la que consume st.button vía `icon=":material/…:"`. Antes eran nombres de Bootstrap Icons,
+# porque los pedía streamlit-option-menu; al pasar el menú a botones nativos (ver el bloque
+# "Menú y árbol de secciones" de app.py) el que manda es el catálogo de Streamlit. Los nombres
+# se validan al pintarse: uno que no exista lanza StreamlitAPIException, no falla en silencio.
 PAGES = [
-    ("overview",   "house"),
-    ("governance", "shield-check"),
-    ("results",    "bar-chart"),
-    ("shap",       "diagram-3"),
-    ("circuit",    "cpu"),
-    ("predictor",  "sliders"),
+    ("overview",   "home"),
+    ("governance", "verified_user"),   # escudo con marca de verificación
+    ("results",    "bar_chart"),
+    ("shap",       "account_tree"),    # jerarquía de nodos
+    ("circuit",    "memory"),          # el chip
+    ("predictor",  "tune"),            # los deslizadores
 ]
 PAGE_KEYS = [k for k, _ in PAGES]
-PAGE_ICONS = [i for _, i in PAGES]
 
 # Claves de página RETIRADAS y dónde vive hoy su contenido: (página, grupo de pestañas,
 # posición). "bloch" era una entrada del menú y sus enlaces —?page=bloch— se compartieron
@@ -179,6 +183,7 @@ STR = {
         "search_label": "Buscar",
         "search_ph": "Buscar en el panel o en la web…",
         "search_expand": "Buscar — despliega la barra",
+        "scroll_top": "Volver arriba",
         "search_in": "en {p}",
         "search_none": "Sin coincidencias en el panel.",
         # Rótulo de la fila de fuentes académicas, no un enlace: los pulsables son los nombres
@@ -965,6 +970,7 @@ STR = {
         "search_label": "Search",
         "search_ph": "Search the dashboard or the web…",
         "search_expand": "Search — expands the sidebar",
+        "scroll_top": "Back to top",
         "search_in": "in {p}",
         "search_none": "No matches in the dashboard.",
         "search_web": "Search “{q}” in:",
@@ -1699,6 +1705,7 @@ STR = {
         "search_label": "Suchen",
         "search_ph": "Im Dashboard oder im Web suchen…",
         "search_expand": "Suchen — klappt die Seitenleiste aus",
+        "scroll_top": "Nach oben",
         "search_in": "in {p}",
         "search_none": "Keine Treffer im Dashboard.",
         "search_web": "„{q}“ suchen in:",
@@ -2471,6 +2478,7 @@ STR = {
         "search_label": "Rechercher",
         "search_ph": "Rechercher dans le tableau de bord ou sur le web…",
         "search_expand": "Rechercher — déplie la barre latérale",
+        "scroll_top": "Revenir en haut",
         "search_in": "dans {p}",
         "search_none": "Aucun résultat dans le tableau de bord.",
         "search_web": "Rechercher « {q} » dans :",
@@ -3240,6 +3248,7 @@ STR = {
         "search_label": "Cerca",
         "search_ph": "Cerca nella dashboard o sul web…",
         "search_expand": "Cerca — espande la barra laterale",
+        "scroll_top": "Torna su",
         "search_in": "in {p}",
         "search_none": "Nessun risultato nella dashboard.",
         "search_web": "Cerca «{q}» in:",
@@ -4142,3 +4151,135 @@ def search(consulta, lang, limite=6):
         return (pos, fila["kind"], len(fila["label"]))
 
     return sorted((f for f in search_index(lang) if q in f["hay"]), key=rango)[:limite]
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# ÍNDICE DE NAVEGACIÓN (árbol de la barra lateral)
+# ─────────────────────────────────────────────────────────────────────────
+# El árbol de la barra lateral tiene que enseñar las secciones de LAS SEIS PÁGINAS, y no solo
+# las de la que se está viendo. Eso obliga a declararlas aquí, porque en el navegador no están:
+# Streamlit renderiza únicamente la página activa, así que leer los .section-title del documento
+# —que es lo que hacía el índice cuando vivía dentro de la página— solo puede contar cinco
+# sextas partes de nada.
+#
+# Y no se puede DERIVAR del catálogo como hace el buscador. Su regla («toda clave que acaba en
+# _title es una sección») vale para buscar, donde un falso positivo de más solo añade una fila
+# a una lista de resultados, pero no para un índice: entre las claves _title hay titulares de
+# tarjeta (gov_dropped_title, gov_lin_limit_title, gov_e2e_ok_title, ov_hero_title…) que NO se
+# pintan con class="section-title" y que en el árbol serían destinos a los que no se puede
+# saltar. Tampoco vale el ORDEN del catálogo: en Resumen, "Construido sobre" está escrito antes
+# que la comparativa y en la página va después.
+#
+# Lo que se declara es la ESTRUCTURA —qué secciones, en qué pestaña y en qué orden—; los
+# RÓTULOS siguen saliendo de STR, así que el árbol se traduce solo y renombrar una sección
+# sigue siendo tocar una única línea del catálogo.
+#
+# MANTENIMIENTO: añadir una sección a una página es añadir su clave aquí, en la posición que
+# ocupa en la página. Si se olvida, la sección existe pero el árbol no la lista (no rompe
+# nada); si se escribe una clave que no está en el catálogo, _autocomprobacion() de más abajo
+# lo canta al arrancar en vez de dejar una fila en blanco.
+#
+# Cada página es una lista de RAMAS. Una rama es (grupo_de_pestañas, posición, [claves]); en
+# las páginas sin pestañas hay una sola rama con (None, None, [claves]) y el árbol se salta ese
+# nivel. El grupo y la posición son exactamente lo que tabs_i18n() necesita para abrir la
+# pestaña correcta al saltar, y los mismos dos datos que ya viaja _PREFIJO_PESTANA.
+NAV_SECTIONS = {
+    "overview": [
+        (None, None, ["ov_stats_title", "ov_medallion_title", "ov_target_title",
+                      "ov_compare_title", "ov_tech_title"]),
+    ],
+    "governance": [
+        ("gov_tabs", 0, ["gov_funnel_title", "gov_suite_title", "gov_ops_title",
+                         "gov_eff_title"]),
+        ("gov_tabs", 1, ["gov_lin_title", "gov_delta_title", "gov_chain_title",
+                         "gov_e2e_title"]),
+        ("gov_tabs", 2, ["gov_stack_title", "gov_dec_title"]),
+    ],
+    "results": [
+        (None, None, ["res_roc_title", "res_cm_title", "res_metrics_title"]),
+    ],
+    # Una sección por pestaña: el ranking de barras entra sin titular propio (lo encabeza el
+    # titular de la página) y la única sección con rótulo es la lámina del beeswarm. Ojo a que
+    # ese bloque es CONDICIONAL —shap_summary_image() no pinta nada si falta el PNG en
+    # figures/—, así que si un día se retira la figura, el destino deja de existir. El salto lo
+    # tolera: si el título no aparece en el documento, no se mueve el scroll.
+    "shap": [
+        ("sh_tabs", 0, ["sh_fig_lgbm_title"]),
+        ("sh_tabs", 1, ["sh_fig_svm_title"]),
+    ],
+    # La segunda pestaña son las ocho secciones de la Esfera de Bloch, que fue página propia
+    # hasta que se fusionó aquí (ver PAGES_RETIRADAS). De ahí que sus claves lleven prefijo
+    # "bl" y no "qc": el prefijo dice de dónde viene el texto, la rama dice dónde se pinta.
+    "circuit": [
+        ("qc_tabs", 0, ["qc_how_title", "qc_feat_title", "qc_train_title", "qc_circuit_title"]),
+        ("qc_tabs", 1, ["bl_title", "bl_ent_title", "bl_ent_circuit_title",
+                        "bl_ent_qsphere_title", "bl_ent_meas_title", "bl_zz_title",
+                        "bl_zz_r_title", "bl_zz_mi_title"]),
+    ],
+    "predictor": [
+        (None, None, ["lp_side_title", "lp_curve_title"]),
+    ],
+}
+
+
+def _autocomprobacion():
+    """Revienta al importar si una clave del árbol no está en el catálogo.
+
+    Es la red que sostiene el reparto de arriba: la estructura se escribe a mano y los rótulos
+    salen del catálogo, así que el único fallo posible es una clave mal escrita o renombrada en
+    STR sin actualizar aquí. Sin esta comprobación ese fallo no se ve en el sitio donde está —se
+    ve como una fila vacía en la barra lateral que no lleva a ninguna parte, meses después.
+
+    Se hace contra el catálogo ESPAÑOL, que es el completo, por lo mismo que search_index():
+    una sección todavía sin traducir sigue siendo una sección.
+    """
+    base = STR[DEFAULT_LANG]
+    faltan = [k for ramas in NAV_SECTIONS.values() for _, _, claves in ramas
+              for k in claves if k not in base]
+    if faltan:
+        raise KeyError(f"NAV_SECTIONS apunta a claves que no existen en STR: {faltan}")
+    sobran = [p for p in NAV_SECTIONS if p not in PAGE_KEYS]
+    if sobran:
+        raise KeyError(f"NAV_SECTIONS apunta a páginas que no existen: {sobran}")
+
+
+_autocomprobacion()
+
+
+def nav_tree(lang):
+    """El árbol completo ya traducido: páginas → pestañas → secciones.
+
+    Es lo que pinta la barra lateral entera —el menú y el índice son la misma lista—, así que
+    cada página viaja además con su `icon`: el nombre del Material Symbol declarado en PAGES,
+    sin el envoltorio `:material/…:` que solo entiende Streamlit.
+
+    Devuelve una lista de páginas en el orden del menú, y cada una con sus ramas. Cada rama
+    trae `tab`, que es (grupo, posición) o None, listo para dárselo tal cual al mismo camino de
+    navegación que usa el buscador; y cada sección trae su `label`, que es además lo que el
+    navegador buscará en el documento para saber a dónde bajar.
+
+    Las páginas sin pestañas devuelven una rama única con `tab` a None y sin rótulo: el árbol
+    cuelga sus secciones directamente de la página, sin inventarse un nivel intermedio que en
+    la página no existe.
+    """
+    cat = STR[lang]
+    base = STR[DEFAULT_LANG]
+
+    def txt(clave):
+        return cat[clave] if clave in cat else base[clave]
+
+    arbol = []
+    for (pagina, icono), rotulo in zip(PAGES, txt("nav")):
+        ramas = []
+        for grupo, pos, claves in NAV_SECTIONS.get(pagina, []):
+            # El rótulo de la pestaña sale de su propio catálogo ("gov_tabs" y compañía), que
+            # es la MISMA lista que pinta st.tabs. Así el árbol no puede acabar diciendo una
+            # cosa y la pestaña otra.
+            rotulo_tab = txt(grupo)[pos] if grupo else None
+            ramas.append({
+                "tab": (grupo, pos) if grupo else None,
+                "label": rotulo_tab,
+                "secciones": [{"key": k, "label": txt(k)} for k in claves],
+            })
+        arbol.append({"page": pagina, "icon": icono, "label": rotulo, "ramas": ramas})
+    return arbol
