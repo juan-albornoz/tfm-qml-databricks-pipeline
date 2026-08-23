@@ -207,7 +207,8 @@ STR = {
         # Título del TFM. Solo se pinta sobre la lámina de portada (ver portada_resumen en
         # app.py); el antetítulo de la página sigue siendo el corto de la línea de arriba.
         "ov_hero_title": ("Integración de Quantum Machine Learning en un pipeline DataOps: "
-                          "arquitectura Medallón sobre Databricks y comparativa con modelos clásicos"),
+                          "arquitectura Medallón sobre Databricks y comparativa con modelos clásicos "
+                          "en predicción clínica"),
         "ov_title": "Resumen",
         "ov_subtitle": ("Pipeline end-to-end sobre Databricks CE + AWS S3, con QSVM cuántico frente a dos "
                         "baselines clásicos, validado sobre datos clínicos reales del estudio NHANES (CDC)."),
@@ -989,7 +990,8 @@ STR = {
         # ── Page 1 · Overview ──
         "ov_eyebrow": "DataOps + QML Framework",
         "ov_hero_title": ("Integrating Quantum Machine Learning into a DataOps pipeline: "
-                          "Medallion architecture on Databricks and benchmark against classical models"),
+                          "Medallion architecture on Databricks and benchmark against classical models "
+                          "in clinical prediction"),
         "ov_title": "Overview",
         "ov_subtitle": ("End-to-end pipeline on Databricks CE + AWS S3, benchmarking a quantum QSVM "
                         "against two classical baselines, validated on real clinical data from the "
@@ -1724,7 +1726,8 @@ STR = {
         # ── Seite 1 · Übersicht ──
         "ov_eyebrow": "DataOps- und QML-Framework",
         "ov_hero_title": ("Integration von Quantum Machine Learning in eine DataOps-Pipeline: "
-                          "Medaillon-Architektur auf Databricks und Vergleich mit klassischen Modellen"),
+                          "Medaillon-Architektur auf Databricks und Vergleich mit klassischen Modellen "
+                          "in der klinischen Vorhersage"),
         "ov_title": "Übersicht",
         "ov_subtitle": ("End-to-End-Pipeline auf Databricks CE + AWS S3, mit einer Quanten-QSVM gegen "
                         "zwei klassische Baselines, validiert an echten klinischen Daten der "
@@ -2497,7 +2500,8 @@ STR = {
         # ── Page 1 · Aperçu ──
         "ov_eyebrow": "Framework DataOps + QML",
         "ov_hero_title": ("Intégration du Quantum Machine Learning dans un pipeline DataOps : "
-                          "architecture Médaillon sur Databricks et comparaison avec des modèles classiques"),
+                          "architecture Médaillon sur Databricks et comparaison avec des modèles classiques "
+                          "en prédiction clinique"),
         "ov_title": "Aperçu",
         "ov_subtitle": ("Pipeline de bout en bout sur Databricks CE + AWS S3, avec un QSVM quantique "
                         "face à deux baselines classiques, validé sur des données cliniques réelles "
@@ -3267,7 +3271,8 @@ STR = {
         # ── Pagina 1 · Panoramica ──
         "ov_eyebrow": "Framework DataOps + QML",
         "ov_hero_title": ("Integrazione del Quantum Machine Learning in una pipeline DataOps: "
-                          "architettura Medallion su Databricks e confronto con modelli classici"),
+                          "architettura Medallion su Databricks e confronto con modelli classici "
+                          "nella predizione clinica"),
         "ov_title": "Panoramica",
         "ov_subtitle": ("Pipeline end-to-end su Databricks CE + AWS S3, con una QSVM quantistica a "
                         "confronto con due baseline classiche, validata su dati clinici reali dello "

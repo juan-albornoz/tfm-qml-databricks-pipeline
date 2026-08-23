@@ -11,7 +11,7 @@ Universidad Europea de Valencia — Curso 2025-2026
 
 Este repositorio contiene la implementación completa del Trabajo Fin de Máster:
 
-> \*"Integración de Quantum Machine Learning en un pipeline DataOps: arquitectura Medallón sobre Databricks y comparativa con modelos clásicos"\*
+> \*"Integración de Quantum Machine Learning en un pipeline DataOps: arquitectura Medallón sobre Databricks y comparativa con modelos clásicos en predicción clínica"\*
 
 El proyecto diseña e implementa un framework DataOps end-to-end sobre **Databricks Community Edition**, con **AWS S3** como capa de almacenamiento cloud real y una **arquitectura Medallón** (Bronze → Silver → Gold) sobre **Delta Lake**. El componente diferencial es la integración de un **Quantum Support Vector Machine (QSVM)** con `ZZFeatureMap` y `FidelityQuantumKernel` (Qiskit), comparado experimentalmente contra modelos clásicos de referencia bajo condiciones controladas.
 
