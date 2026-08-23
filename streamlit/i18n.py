@@ -182,7 +182,7 @@ STR = {
         "sidebar_collapse": "Colapsar la barra lateral",
         "search_label": "Buscar",
         "search_ph": "Buscar en el panel o en la web…",
-        "search_expand": "Buscar — despliega la barra",
+        "search_expand": "Buscar: despliega la barra",
         "scroll_top": "Volver arriba",
         "search_in": "en {p}",
         "search_none": "Sin coincidencias en el panel.",
@@ -219,12 +219,58 @@ STR = {
             "<b>Databricks Community Edition</b>, con <b>AWS S3</b> como capa de almacenamiento cloud "
             "real y una arquitectura <b>Medallón</b> (Bronze → Silver → Gold) sobre Delta Lake como "
             "columna vertebral. Como caso de uso se predice diabetes tipo 2 sobre registros del estudio "
-            "<b>NHANES</b> (CDC) — el dataset no es el objeto de investigación, sino el vehículo para "
+            "<b>NHANES</b> (CDC): el dataset no es el objeto de investigación, sino el vehículo para "
             "demostrar que la arquitectura es viable, reproducible y auditable sobre datos reales a "
             "escala. El núcleo experimental es una <b>comparativa triangulada</b> entre LightGBM "
             "(baseline tabular), SVM con kernel RBF (puente estructural) y un <b>QSVM</b> con "
             "FidelityQuantumKernel en Qiskit, manteniendo idéntico el clasificador subyacente para "
-            "atribuir cualquier diferencia de rendimiento al efecto del kernel cuántico."),
+            "atribuir cualquier diferencia de rendimiento al efecto del kernel cuántico."
+            " La evaluación cierra el recorrido: cada modelo se mide con AUC-ROC, F1, accuracy y "
+            "MCC, <b>SHAP</b> señala sobre LightGBM las 20 variables que más pesan en la predicción, "
+            "y los dos modelos clásicos se serializan a <b>ONNX</b> con su portabilidad verificada. "
+            "El repositorio de GitHub publica los 7 notebooks que ejecutan ese recorrido, y esta "
+            "misma aplicación, desplegada en Streamlit Cloud, es su último eslabón: la predicción "
+            "en vivo y su lectura SHAP."),
+        "ov_arch_alt": ("Diagrama de la arquitectura del pipeline: AWS S3 alimenta Databricks "
+                        "Community Edition, donde la arquitectura Medallón (Bronze, Silver y Gold) "
+                        "desemboca en tres modelos (LightGBM, SVM con kernel RBF y QSVM con Qiskit) y "
+                        "en la evaluación con métricas, SHAP y serialización a ONNX; la salida va a "
+                        "GitHub y a Streamlit Cloud."),
+        # Rótulos del diagrama de arquitectura que abre la página (arquitectura_svg()). Las
+        # cifras NO van escritas: llegan por marcador y las pone mil(), que usa el separador
+        # de millar del idioma. Lo que no viaja aquí es la geometría ni qué caja va resaltada,
+        # que son dibujo y no texto.
+        "ov_arch_io": (
+            ("AWS S3", "NHANES raw · 27 XPT", "IAM"),
+            ("GitHub", "7 notebooks · README"),
+            ("Streamlit Cloud", "Predicción · SHAP visual"),
+        ),
+        "ov_arch_grupos": (
+            ("Arquitectura Medallón", (
+                ("Bronze · ingesta raw",
+                 "{bronze} reg · 162 col · Delta Lake ACID"),
+                ("Silver · calidad",
+                 "{silver} reg · 91 col · expectations"),
+                ("Gold · features curados",
+                 "89 features · train {train} / test {test}"),
+            )),
+            ("Modelos · ML / QML", (
+                ("LightGBM",
+                 "Baseline tabular · GOSS · EFB"),
+                ("SVM · Kernel RBF",
+                 "Puente directo a QSVM"),
+                ("QSVM · Qiskit",
+                 "ZZFeatureMap · FidelityQuantumKernel"),
+            )),
+            ("Evaluación y serialización", (
+                ("Métricas",
+                 "AUC-ROC · F1 · Accuracy · MCC"),
+                ("SHAP",
+                 "Explicabilidad LightGBM · top 20"),
+                ("Selección · ONNX",
+                 "Portabilidad verificada"),
+            )),
+        ),
         "ov_stats_title": "Estadísticas del dataset NHANES",
         "ov_stats_sub": "Integración de 3 ciclos bienales · pipeline de capas Bronze → Silver → Gold",
         "ov_stat_bronze": "Registros Bronze",
@@ -339,17 +385,17 @@ STR = {
         "gov_hover_dropped": "Descartados",
         # Emparejado por posición con los conteos de GOV_EMBUDO_N en app.py.
         "gov_embudo": [
-            ("Bronze — 3 ciclos unidos",
+            ("Bronze · 3 ciclos unidos",
              "27 ficheros XPT · join por SEQN · 162 columnas comunes a los tres ciclos"),
             ("Filtro edad ≥ 18 años", "Restricción a población adulta"),
-            ("Filtro ayuno — LBXGLU no nulo",
+            ("Filtro ayuno · LBXGLU no nulo",
              "Proxy del subgrupo en ayunas: PHAFSTMN no es consistente entre ciclos"),
             ("Filtro DIQ010 válido",
              "Descarta los códigos 7 «no sabe» y 9 «rehúsa responder», y los nulos"),
         ],
         "gov_dropped_title": "Registros descartados por filtro",
         "gov_split_label": "Partición Gold 80/20",
-        "gov_suite_title": "Suite de validación — dataframe-expectations",
+        "gov_suite_title": "Suite de validación · dataframe-expectations",
         "gov_suite_sub": ("Suite <code>{nombre}</code>, ejecutada el {fecha} sobre los {registros} registros de "
                           "Silver en {duracion} segundos. Great Expectations es incompatible con las versiones "
                           "fijadas del runtime serverless: esta es la alternativa adoptada."),
@@ -373,8 +419,8 @@ STR = {
             ("Volumen", "DataFrame", "como máximo 9.000 filas"),
         ],
         "gov_ops_title": "Operaciones de calidad por capa",
-        "gov_silver_card": "Silver — limpieza y saneamiento",
-        "gov_gold_card": "Gold — preparación para modelado",
+        "gov_silver_card": "Silver · limpieza y saneamiento",
+        "gov_gold_card": "Gold · preparación para modelado",
         "gov_silver_ops": [
             ("Variables DIQ excluidas por leakage", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
             ("Columnas sparse eliminadas", "Umbral de >80 % de valores ausentes"),
@@ -396,8 +442,8 @@ STR = {
         "gov_eff_note": ("Es el efecto colateral de la winsorización IQR × 3 de Silver, que se aplicó también a "
                          "variables categóricas codificadas numéricamente (respuestas 1/2, idioma de la entrevista, "
                          "códigos 7 y 9). Cuando más del 75 % de la muestra responde lo mismo, el recorte colapsa la "
-                         "columna a un único valor. Las más recortadas en el notebook 02 —PAQ635, PAQ650, PAQ605, "
-                         "DMDHHSZA, DMDCITZN, SIALANG— son exactamente las que aquí aparecen constantes."),
+                         "columna a un único valor. Las más recortadas en el notebook 02 (PAQ635, PAQ650, PAQ605, "
+                         "DMDHHSZA, DMDCITZN, SIALANG) son exactamente las que aquí aparecen constantes."),
         "gov_lin_title": "Trazabilidad sin MLflow",
         "gov_lin_sub": "La restricción que más condiciona la arquitectura del pipeline, y su mitigación.",
         "gov_lin_limit_title": "Limitación",
@@ -405,17 +451,17 @@ STR = {
                                "gratuito. Cualquier llamada a <code>mlflow.start_run()</code> o "
                                "<code>mlflow.log_metric()</code> produce errores de autenticación: no hay registro "
                                "de experimentos, métricas ni artefactos."),
-        "gov_lin_mit_title": "Mitigación — doble mecanismo",
-        "gov_lin_mit_body": ("<b>Transaction logs de Delta Lake</b> — cada escritura genera un registro ACID con "
+        "gov_lin_mit_title": "Mitigación · doble mecanismo",
+        "gov_lin_mit_body": ("<b>Transaction logs de Delta Lake</b>: cada escritura genera un registro ACID con "
                              "versión, marca de tiempo y métricas de operación.<br><br>"
-                             "<b>CSV de métricas por modelo</b> — cada notebook persiste sus resultados en Unity "
+                             "<b>CSV de métricas por modelo</b>: cada notebook persiste sus resultados en Unity "
                              "Catalog Volumes, y las figuras los leen de ahí en vez de llevarlos escritos a mano."),
-        "gov_delta_title": "Historial Delta — capa Gold",
+        "gov_delta_title": "Historial Delta · capa Gold",
         "gov_delta_sub": ("Seis versiones más recientes de las diez registradas. Delta purga las anteriores tras "
                           "168 h de retención, comportamiento esperado y no un fallo del pipeline."),
         "gov_delta_cols": ["Versión", "Timestamp", "Operación", "Filas", "Tamaño"],
         "gov_chain_title": "Cadena de custodia contra la fuga de información",
-        "gov_chain_sub": ("Cuatro barreras encadenadas. La tercera no descarta ninguna columna — y eso es "
+        "gov_chain_sub": ("Cuatro barreras encadenadas. La tercera no descarta ninguna columna, y eso es "
                           "exactamente lo que se quiere ver: prueba que las anteriores hicieron su trabajo."),
         "gov_leakage": [
             ("Exclusión en Silver",
@@ -426,7 +472,7 @@ STR = {
              "Gold. Resultado: 15/15 artefactos limpios."),
             ("Filtro defensivo del QSVM",
              "Segunda barrera antes de la selección por Random Forest. No descarta ninguna columna "
-             "(89 de 89 pasan) — precisamente la prueba de que la primera barrera funcionó."),
+             "(89 de 89 pasan), precisamente la prueba de que la primera barrera funcionó."),
             ("Guarda de pesos de muestreo",
              "Detiene el pipeline si aparece cualquier peso de muestreo distinto del conocido. "
              "WTINT2YR sí llega al modelado y está documentado en la decisión 10."),
@@ -435,16 +481,21 @@ STR = {
         "gov_scaler": [
             ("Ajuste", "Solo sobre train", "fit_transform en train · transform en test"),
             ("Columnas evaluadas", "66", "Con varianza > 0"),
-            ("Columnas constantes", "23", "Varianza 0 — ver decisión 08"),
+            ("Columnas constantes", "23", "Varianza 0 · ver decisión 08"),
             ("Media ≈ 0 · desv. ≈ 1", "Verificado", "Assert sobre todas las columnas con dispersión"),
         ],
         "gov_scaler_note": ("El <b>StandardScaler</b> se ajusta exclusivamente sobre <b>train</b>: "
                             "<code>fit_transform</code> en entrenamiento y <code>transform</code> en test. Si se "
                             "ajustara sobre el conjunto completo, la media y la desviación típica del test se "
                             "filtrarían al preprocesado y las métricas quedarían optimistas. La selección de las 8 "
-                            "variables del QSVM sigue la misma regla — el Random Forest se entrena solo con "
+                            "variables del QSVM sigue la misma regla: el Random Forest se entrena solo con "
                             "<code>X_train_svm_scaled</code>.<br><br>El filtro de correlación, en cambio, <b>sí</b> "
-                            "se calcula antes de particionar. Está documentado y asumido en la decisión 09."),
+                            "se calcula antes de particionar. Está documentado y asumido en la decisión 09."
+                            "<br><br>La comprobación no se declara, se ejecuta: sobre las 66 columnas con "
+                            "dispersión se exige |media| &lt; 0,01 y desviación entre 0,90 y 1,10. Los parámetros "
+                            "ajustados (<code>mean_</code> y <code>scale_</code>) viajan a "
+                            "<code>scaler_correcto.json</code>, el mismo fichero que carga el Predictor en Vivo: la "
+                            "inferencia reutiliza la escala del train y nunca la recalcula."),
         "gov_e2e_title": "Verificación end-to-end contra los modelos entrenados",
         "gov_e2e_missing": ('<b style="color:{color};">Sin verificar.</b> El conjunto de test no está en el '
                             "repositorio, así que el dashboard no puede comprobar por sí solo que su camino de "
@@ -463,8 +514,8 @@ STR = {
         "gov_e2e_fail_title": "⚠ El camino de inferencia no reproduce los modelos",
         "gov_e2e_note": ("Cada fila del <i>golden set</i> es una instancia real del test acompañada de la "
                          "probabilidad que devolvió el modelo entrenado en su notebook. El dashboard la pasa por "
-                         "su propio camino —vector crudo, escalado solo del SVM, conversión a <code>float32</code>, "
-                         "sesión ONNX y lectura del tensor de salida— y compara. Tolerancia {tol}; el ruido "
+                         "su propio camino (vector crudo, escalado solo del SVM, conversión a <code>float32</code>, "
+                         "sesión ONNX y lectura del tensor de salida) y compara. Tolerancia {tol}; el ruido "
                          "esperado por trabajar en <code>float32</code> es de orden 10⁻⁷."),
         "gov_stack_title": "Frameworks por capa",
         "gov_stack_sub": ("El primer distintivo de cada tarjeta es el framework que vertebra la capa; el resto "
@@ -495,8 +546,8 @@ STR = {
         ],
         "gov_dec_title": "Registro de decisiones",
         "gov_dec_sub": ("Las once limitaciones documentadas en TECHNICAL_NOTES, con su mitigación. Tres "
-                        "condicionan la arquitectura, seis se asumen y documentan sin corregir —porque hacerlo "
-                        "invalidaría los resultados ya obtenidos— y dos quedan resueltas sin residuo."),
+                        "condicionan la arquitectura, seis se asumen y documentan sin corregir (porque hacerlo "
+                        "invalidaría los resultados ya obtenidos) y dos quedan resueltas sin residuo."),
         "gov_dec_tags": {"critical": "Arquitectura", "warning": "Asumida", "good": "Resuelta"},
         "gov_dec_problem": "Problema · ",
         "gov_dec_solution": "Solución adoptada · ",
@@ -517,12 +568,12 @@ STR = {
              "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
              "dataframe-expectations 0.7.0 como alternativa compatible. 15 expectativas sobre Silver "
              "en tres dimensiones. Resultado 15/15, pass rate 1,0."),
-            ("QSVM — coste computacional O(n²)",
+            ("QSVM · coste computacional O(n²)",
              "Sobre las 6.264 instancias de train, la matriz de kernel exigiría ~39 millones de "
              "evaluaciones del circuito. Con 1.500 el kernel agota la memoria.",
              "Entrenamiento sobre muestra estratificada de 500 instancias (~22 min) preservando el "
              "ratio 86/14. La evaluación sí usa el test completo, para que las métricas comparen."),
-            ("QSVM — sin soporte ONNX nativo",
+            ("QSVM · sin soporte ONNX nativo",
              "El formato ONNX no admite operaciones cuánticas: ni skl2onnx ni onnxmltools pueden "
              "serializar un kernel basado en simulación de estados.",
              "Serialización con joblib. El modelo requiere el entorno Qiskit para inferencia, por lo "
@@ -542,7 +593,7 @@ STR = {
              "IQR = 0, los límites colapsan y clip() convierte la variable en constante. "
              "10 columnas quedaron colapsadas así.",
              "Se documenta sin modificar: corregirlo alteraría Silver, Gold y los tres modelos. Las "
-             "columnas constantes no sesgan —el modelo no extrae señal de ellas—, pero pierden "
+             "columnas constantes no sesgan (el modelo no extrae señal de ellas), pero pierden "
              "información. Corrección identificada como trabajo futuro."),
             ("Correlación calculada antes de particionar",
              "El filtro r > 0,90 se calcula sobre el dataset completo, así que las 16 columnas "
@@ -558,7 +609,7 @@ STR = {
              "deja al modelo apoyarse en el diseño de la encuesta."),
             ("El QSVM serializado no es recargable entre versiones",
              "El pickle arrastra el ZZFeatureMap con sus ParameterExpression. Si Qiskit cambia de "
-             "versión, la deserialización falla — y Serverless actualiza sin aviso.",
+             "versión, la deserialización falla, y Serverless actualiza sin aviso.",
              "La carga va envuelta en try/except: si falla, TRAINING_MODE pasa a True y el notebook "
              "re-entrena en lugar de abortar. Queda operativo en los tres escenarios posibles."),
         ],
@@ -580,17 +631,17 @@ STR = {
         # (decision_function no está en escala de probabilidad).
         "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
         "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
-                        "svm_rbf": "SVC.predict() — signo de decision_function",
+                        "svm_rbf": "SVC.predict() · signo de decision_function",
                         "qsvm": "decision_function > 0 (no es probabilidad)"},
-        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Reconciliadas</span> — las cuatro '
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Reconciliadas</span>: las cuatro '
                            "métricas de los tres modelos se han recalculado desde los scores por instancia y "
                            "coinciden con las publicadas."),
-        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Sin reconciliar</span> — {fallos}',
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Sin reconciliar</span>: {fallos}',
         "res_no_scores": "scores no disponibles",
         "res_threshold_note": ("<b>Los tres modelos están medidos en umbrales distintos.</b> Cada uno usa su punto "
-                               "de corte natural —LightGBM <code>predict_proba ≥ 0,50</code>; SVM-RBF el signo de "
+                               "de corte natural: LightGBM <code>predict_proba ≥ 0,50</code>; SVM-RBF el signo de "
                                "<code>decision_function</code>, que en la escala de probabilidad guardada equivale "
-                               "a ≈ 0,22; QSVM <code>decision_function &gt; 0</code>, que no es una probabilidad—. "
+                               "a ≈ 0,22; QSVM <code>decision_function &gt; 0</code>, que no es una probabilidad. "
                                "Cada matriz reproduce exactamente en su propio umbral, pero <b>solo el AUC-ROC es "
                                "comparable entre modelos</b>: es la única de las cuatro métricas independiente del "
                                "punto de corte. A modo de referencia, el SVM-RBF evaluado a 0,50 como LightGBM "
@@ -609,7 +660,7 @@ STR = {
         "res_cm_tags": {"tn": "VN", "fp": "FP", "fn": "FN", "tp": "VP"},
         "res_metrics_title": "Comparativa de métricas",
         "res_metrics_sub": ("Las cuatro métricas se aplican sobre las 1.567 instancias. Accuracy, MCC y F1-macro "
-                            "sí penalizan el desbalance de clases — pero dependen del umbral, y cada modelo usa "
+                            "sí penalizan el desbalance de clases, pero dependen del umbral, y cada modelo usa "
                             "el suyo: compara con cautela todo lo que no sea el AUC-ROC"),
         "res_metric_desc": {
             "auc": "Área bajo la curva ROC: capacidad de separar diabetes vs. no-diabetes. 0,5 = azar, 1 = perfecto.",
@@ -620,14 +671,14 @@ STR = {
         "res_qsvm_note": ("<b>Nota sobre el experimento QSVM.</b> El QSVM se entrenó sobre una muestra "
                           "estratificada de 500 instancias (coste O(n²) del kernel cuántico) y se evaluó sobre "
                           "las 1.567 del test completo. AUC-ROC = 0,5493 indica que el modelo apenas supera la "
-                          "clasificación aleatoria — Recall ≈ 0 para la clase diabetes (1 de 220), "
+                          "clasificación aleatoria: Recall ≈ 0 para la clase diabetes (1 de 220), "
                           "Accuracy = 0,8602 refleja solo la proporción de la clase mayoritaria. El MCC ≈ 0 "
                           "confirma ausencia de capacidad predictiva real."),
 
         # ── Página 4 · Análisis SHAP ──
         "sh_eyebrow": "Interpretabilidad",
         "sh_title": "Análisis SHAP",
-        "sh_subtitle": ("Importancia global de variables — TreeExplainer (LightGBM) vs. "
+        "sh_subtitle": ("Importancia global de variables: TreeExplainer (LightGBM) vs. "
                         "KernelExplainer (SVM-RBF)."),
         "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
         "sh_hint": "Pasa el cursor sobre cada barra para ver el significado de la variable. {nota}",
@@ -643,11 +694,11 @@ STR = {
                         "<b>LBXGLU</b>, <b>LBDLDL</b>, <b>RIDAGEYR</b>), lo que refuerza la validez clínica del "
                         "hallazgo al ser independiente del algoritmo, dotándolo de mayor robustez metodológica. "
                         "KernelExplainer trata el modelo como caja negra, aplicable a cualquier clasificador."),
-        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Figura 27)",
+        "sh_fig_lgbm_title": "SHAP Summary Plot · LightGBM (Figura 27)",
         "sh_fig_lgbm_cap": ("Cada punto es una instancia del test; el color indica el valor de la variable "
                             "(rojo alto, azul bajo) y la posición horizontal su impacto en la predicción. "
                             "LBXGH y RIDAGEYR dominan el modelo."),
-        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Figura 31)",
+        "sh_fig_svm_title": "SHAP Summary Plot · SVM-RBF (Figura 31)",
         "sh_fig_svm_cap": ("Cada punto es una instancia; color = valor de la variable, posición = impacto. "
                            "KernelExplainer sobre 200 instancias del test."),
 
@@ -668,11 +719,11 @@ STR = {
         "qc_how_p1": ("El <b>ZZFeatureMap</b> codifica cada una de las 8 variables clínicas como un ángulo de "
                       "fase (puerta P) en un qubit independiente, tras crear superposición con puertas Hadamard. "
                       "Su elemento distintivo es el <b>entrelazamiento</b> entre pares de qubits mediante puertas "
-                      "que dependen del producto cruzado de dos variables — correlaciones que el kernel RBF "
+                      "que dependen del producto cruzado de dos variables, correlaciones que el kernel RBF "
                       "clásico no puede representar."),
         "qc_how_p2": ("El <b>FidelityQuantumKernel</b> mide la similitud entre dos pacientes como la fidelidad "
                       "entre sus estados cuánticos: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. La implementación usa "
-                      "<code>StatevectorSampler</code>, simulando el estado exacto sin ruido — resultados "
+                      "<code>StatevectorSampler</code>, simulando el estado exacto sin ruido: resultados "
                       "deterministas y reproducibles."),
         "qc_feat_title": "8 features seleccionadas (Random Forest)",
         "qc_xaxis": "Importancia RF",
@@ -702,7 +753,7 @@ STR = {
         # que convierte la explicación en algo que se puede comprobar moviendo el control.
         "bl_what_note": ("<b>Qué es la esfera de Bloch.</b> Un bit clásico solo puede valer 0 o 1. "
                          "Un qubit admite además cualquier mezcla de los dos, y esa mezcla no cabe "
-                         "en un único número: hace falta un mapa. La esfera de Bloch es ese mapa — "
+                         "en un único número: hace falta un mapa. La esfera de Bloch es ese mapa: "
                          "cada estado posible de un qubit es un punto de la superficie de una esfera "
                          "de radio 1. El polo norte es <b>|0⟩</b> y el polo sur <b>|1⟩</b>; entre "
                          "ambos están las superposiciones, y cuanto más cerca queda la flecha de un "
@@ -721,12 +772,12 @@ STR = {
                     "θ = x_norm·π, de modo que el vector recorre el meridiano de |0⟩ a |1⟩ y P(|0⟩) varía de "
                     "100 % a 0 %: es la forma más legible de ver «un número se vuelve un estado».<br><br>"
                     "El <b>ZZFeatureMap real</b> hace algo distinto: aplica H y después P(2·x<sub>i</sub>), y una "
-                    "puerta de fase tras una Hadamard deja el estado <b>sobre el ecuador</b> —θ = π/2 fijo, "
-                    "P(|0⟩) = P(|1⟩) = 50 % siempre— codificando el dato en el ángulo <b>azimutal</b> φ, no en el "
+                    "puerta de fase tras una Hadamard deja el estado <b>sobre el ecuador</b> (θ = π/2 fijo, "
+                    "P(|0⟩) = P(|1⟩) = 50 % siempre), codificando el dato en el ángulo <b>azimutal</b> φ, no en el "
                     "polar. Tampoco normaliza a [0,1]: usa el valor escalado directamente. Por eso esta esfera "
                     "ilustra el concepto, pero no reproduce paso a paso el circuito. El entrelazamiento (puertas "
                     "P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) solo es representable en el espacio conjunto de "
-                    "los 8 qubits — ver Circuito Cuántico."),
+                    "los 8 qubits (ver Circuito Cuántico)."),
 
         # ── Página 5 · pestaña Esfera de Bloch → sección de entrelazamiento ──
         # Continúa exactamente donde acaba bl_note: esa nota cierra diciendo que el
@@ -735,9 +786,9 @@ STR = {
         # mapa que la página acaba de enseñar, y no como un tema nuevo.
         "bl_ent_title": "Entrelazamiento: tres qubits, un solo estado",
         "bl_ent_sub": ("El límite de la esfera de arriba. Aplica las tres puertas y mira qué le pasa al "
-                       "estado local de cada qubit — y al del par que se queda por el camino."),
+                       "estado local de cada qubit, y al del par que se queda por el camino."),
         "bl_ent_intro": ("<b>Dónde deja de servir la esfera de Bloch.</b> Con un qubit basta una esfera y una "
-                         "flecha. Con varios, la tentación es dibujar una esfera por qubit — y para la mayoría "
+                         "flecha. Con varios, la tentación es dibujar una esfera por qubit, y para la mayoría "
                          "de los estados funciona. Pero existe una familia de estados en los que <b>no queda "
                          "flecha que dibujar</b>: el conjunto tiene un estado perfectamente definido y ninguno "
                          "de sus miembros lo tiene por separado. Eso es el entrelazamiento, y aquí se construye "
@@ -758,20 +809,20 @@ STR = {
              "toda la probabilidad."),
             ("<b>Superposición, todavía sin entrelazar.</b> La Hadamard deja a q₀ a medio camino entre "
              "|0⟩ y |1⟩, mientras q₁ y q₂ siguen firmes en |0⟩: el estado conjunto es (|000⟩ + |100⟩)/√2. "
-             "Los tres qubits siguen siendo <b>independientes</b> — cada uno tiene su propio estado puro y "
+             "Los tres qubits siguen siendo <b>independientes</b>: cada uno tiene su propio estado puro y "
              "tres esferas de Bloch bastarían para describirlos. Fíjate en que la longitud del vector local "
              "sigue valiendo 1: hay flecha que dibujar."),
             ("<b>Un par de Bell, y un testigo.</b> El primer CNOT voltea q₁ solo cuando q₀ vale 1; aplicado "
              "sobre una superposición, eso ata los dos resultados en uno solo: (|000⟩ + |110⟩)/√2. El mapa se "
-             "rompe aquí — la longitud del vector local de q₀ acaba de caer a <b>0</b>, el qubit ya no está en "
-             "ningún punto de su esfera porque por separado <b>ya no tiene estado</b>—. Y pasa algo más, que "
+             "rompe aquí: la longitud del vector local de q₀ acaba de caer a <b>0</b>, el qubit ya no está en "
+             "ningún punto de su esfera porque por separado <b>ya no tiene estado</b>. Y pasa algo más, que "
              "solo se puede ver habiendo un tercer qubit: q₂ se ha quedado FUERA, mirando desde |0⟩, y lo que "
              "hay entrelazado es exactamente la pareja q₀q₁. Su concurrencia marca <b>1</b>, el máximo."),
             ("<b>Estado GHZ.</b> El segundo CNOT engancha a q₂ a la cadena: (|000⟩ + |111⟩)/√2. Los nodos se "
              "han ido a los polos y los dos anillos de en medio han quedado vacíos. Las tres primeras cifras "
-             "no se mueven —q₀ sigue sin estado propio—, pero la cuarta se desploma: la concurrencia del par "
+             "no se mueven (q₀ sigue sin estado propio), pero la cuarta se desploma: la concurrencia del par "
              "q₀q₁ vuelve a <b>0</b>. Entrelazar a los tres ha DESHECHO el lazo de la pareja. Los dos siguen "
-             "correlacionados —medir uno predice el otro— pero ya no entrelazados: el entrelazamiento de un "
+             "correlacionados (medir uno predice el otro), pero ya no entrelazados: el entrelazamiento de un "
              "GHZ es del conjunto entero y <b>no la suma de lazos entre parejas</b>."),
         ],
         "bl_ent_circuit_title": "Circuito",
@@ -799,7 +850,7 @@ STR = {
             ("Con los tres qubits en |0⟩ el resultado es <b>000</b> en todos los disparos. No hay nada que "
              "sortear todavía: es el comportamiento de tres bits clásicos."),
             ("Salen <b>000</b> y <b>100</b> a partes iguales: q₀ se comporta como una moneda al aire y q₁ y "
-             "q₂ valen 0 pase lo que pase. Los resultados son <b>independientes</b> — saber uno no dice "
+             "q₂ valen 0 pase lo que pase. Los resultados son <b>independientes</b>: saber uno no dice "
              "nada de los otros."),
             ("Salen <b>000</b> y <b>110</b>: q₀ y q₁ dan siempre el mismo valor, así que medir uno "
              "determina el otro, mientras q₂ sigue clavado en 0 y sin enterarse de nada. Dos de los tres "
@@ -811,13 +862,13 @@ STR = {
              "entrelazamiento visto desde el laboratorio."),
         ],
         "bl_ent_impl_note": ("<b>Cómo está calculado.</b> Las ocho amplitudes salen de álgebra lineal "
-                             "<b>exacta</b> en NumPy —las matrices de H⊗I⊗I y de los dos CNOT aplicadas a "
-                             "|000⟩—, no de una aproximación; la concurrencia del par es la fórmula de "
+                             "<b>exacta</b> en NumPy (las matrices de H⊗I⊗I y de los dos CNOT aplicadas a "
+                             "|000⟩), no de una aproximación; la concurrencia del par es la fórmula de "
                              "Wootters, que para dos qubits da el valor exacto y no una cota; y las mediciones "
                              "salen de un muestreo multinomial sobre |ψ|², que es lo que hace un simulador "
                              "ideal sin ruido. El panel <b>no carga Qiskit</b>: el "
                              "entorno que se despliega es Streamlit, NumPy, Plotly y ONNX Runtime, mientras "
-                             "que Qiskit vive en el pipeline de Databricks —donde se entrena el QSVM— y sus "
+                             "que Qiskit vive en el pipeline de Databricks (donde se entrena el QSVM) y sus "
                              "figuras llegan aquí ya renderizadas, como el circuito de 8 qubits de la página "
                              "Circuito Cuántico. La convención de la base es la de libro de texto, |q₀q₁q₂⟩ "
                              "con q₀ a la izquierda; Qiskit numera al revés y escribiría «001» donde el primer "
@@ -832,14 +883,14 @@ STR = {
                       "del principio de la página y mira qué qubits reaccionan."),
         "bl_zz_intro": ("<b>De tres qubits a los ocho del modelo.</b> Cada qubit del ZZFeatureMap lleva "
                         "<b>una variable clínica</b>: q₀ es la HbA1c, q₁ la glucosa, y así hasta el IMC. "
-                        "Con 256 amplitudes ya no hay figura del estado que se pueda mirar —ni Q-sphere ni "
-                        "histograma—, pero sí se pueden medir las <b>mismas dos magnitudes</b> de la "
+                        "Con 256 amplitudes ya no hay figura del estado que se pueda mirar (ni Q-sphere ni "
+                        "histograma), pero sí se pueden medir las <b>mismas dos magnitudes</b> de la "
                         "sección anterior: cuánto estado propio le queda a cada qubit, y cuánta información "
                         "comparte con cada uno de los demás. Eso ya no es un ejemplo de libro: es el "
                         "circuito con el que se entrenó el modelo."),
         "bl_zz_current": "Variable en juego: <b>{var} = {val} {unidad}</b>. Las otras siete, en su valor de referencia.",
         "bl_zz_r_title": "Estado propio de cada qubit",
-        "bl_zz_r_xaxis": "|r| — 1 = conserva su estado · 0 = entrelazado del todo",
+        "bl_zz_r_xaxis": "|r|: 1 = conserva su estado · 0 = entrelazado del todo",
         "bl_zz_mi_title": "Información mutua entre qubits",
         "bl_zz_mi_cbar": "bits",
         "bl_zz_note": ("<b>Cómo leer la matriz.</b> Cada celda dice cuánta información comparten dos "
@@ -852,7 +903,7 @@ STR = {
                        "sola excepción). La topología del circuito se dibuja sola.<br><br>"
                        "Y hay una segunda cosa que se ve moviendo el deslizador de arriba: al cambiar "
                        "<b>una</b> variable solo se mueven <b>su qubit y sus vecinos inmediatos</b>: los "
-                       "demás no cambian ni un decimal. Es el mismo hecho visto desde el otro lado — el "
+                       "demás no cambian ni un decimal. Es el mismo hecho visto desde el otro lado: el "
                        "cono de luz del circuito, en vivo."),
         "bl_zz_caveat": ("<b>Una advertencia de lectura, y no menor.</b> El entrelazamiento <b>no crece con "
                          "el valor clínico</b>: subiendo la HbA1c por su rango, |r| del primer qubit hace "
@@ -869,7 +920,7 @@ STR = {
         "lp_eyebrow": "Inferencia interactiva",
         "lp_title": "Predictor en Vivo",
         "lp_subtitle": ("Probabilidad de que un perfil clínico corresponda a una persona ya diagnosticada de "
-                        "diabetes — LightGBM sobre las 8 variables de mayor importancia."),
+                        "diabetes: LightGBM sobre las 8 variables de mayor importancia."),
         "lp_what_note": ("<b>Qué estima este formulario.</b> El objetivo del pipeline es "
                          "<code>TARGET = (DIQ010 == 1)</code>, la respuesta a <i>«¿un médico le ha dicho alguna "
                          "vez que tiene diabetes?»</i>. El modelo, por tanto, <b>detecta diabetes ya "
@@ -882,7 +933,7 @@ STR = {
                          "en tiempo real por el coste O(n²) del kernel cuántico: predecir las 1.567 instancias "
                          "del test costó 144,5 minutos."),
         "lp_proxy_note": ("⚠ <b>Aviso técnico y clínico.</b> Este formulario no tiene conectados los modelos "
-                          "serializados reales (<code>.onnx</code>) — coloca <code>lgbm_final.onnx</code>, "
+                          "serializados reales (<code>.onnx</code>): coloca <code>lgbm_final.onnx</code>, "
                           "<code>svm_final.onnx</code>, <code>scaler_correcto.json</code> y "
                           "<code>medianas_correctas.json</code> en <code>streamlit/models/</code>. La puntuación "
                           "mostrada abajo es un <b>sustituto transparente</b>: una combinación ponderada por "
@@ -890,7 +941,7 @@ STR = {
                           "ningún modelo entrenado</b> y no debe citarse como resultado. QSVM tampoco está "
                           "disponible en tiempo real (coste O(n²) del kernel cuántico)."),
         "lp_train_range": "Entrenamiento: {mu} ± {sd} (±3 sd → {lo} a {hi})",
-        "lp_extrapolates": "⚠ z = {z} — fuera del rango entrenado: el modelo extrapola",
+        "lp_extrapolates": "⚠ z = {z} · fuera del rango entrenado: el modelo extrapola",
         "lp_ada": "Criterio ADA: &lt; 5,7 normal · 5,7–6,4 prediabetes · ≥ 6,5 diabetes",
         "lp_who_model": "el modelo",
         "lp_who_proxy": "el sustituto",
@@ -908,13 +959,13 @@ STR = {
         "lp_gauge_caption": ("Compatibilidad con un diagnóstico existente: baja · intermedia · alta · "
                              "&nbsp;umbral de decisión = 50%"),
         "lp_side_title": "Los dos modelos, lado a lado",
-        "lp_side_sub": "Cada probabilidad se juzga con el punto de corte de su propio modelo — no son intercambiables",
+        "lp_side_sub": "Cada probabilidad se juzga con el punto de corte de su propio modelo: no son intercambiables",
         "lp_own_threshold": "Su umbral",
         "lp_would_classify": "Clasificaría como",
         "lp_positive": "positivo",
         "lp_negative": "negativo",
         "lp_disagree": ("<b>Los dos modelos discrepan {dif} en este perfil.</b> Coinciden en los extremos "
-                        "—perfiles claramente sanos o claramente diabéticos— y divergen en la banda intermedia, "
+                        "(perfiles claramente sanos o claramente diabéticos) y divergen en la banda intermedia, "
                         "que es justamente donde una estimación sería más útil. Tómalo como señal de "
                         "incertidumbre, no como que uno de los dos acierte."),
         "lp_curve_title": "Curva de respuesta",
@@ -930,9 +981,9 @@ STR = {
                          "el modelo aprende también el efecto del <b>tratamiento</b>, no solo el de la enfermedad. "
                          "Eso invierte el sentido clínico de dos variables:"
                          '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
-                         "<li><b>Colesterol LDL</b> — a más LDL, <i>menor</i> probabilidad estimada (de 43% a 18% "
+                         "<li><b>Colesterol LDL</b>: a más LDL, <i>menor</i> probabilidad estimada (de 43% a 18% "
                          "recorriendo el slider). Los diagnosticados suelen estar tratados con estatinas.</li>"
-                         "<li><b>Glucosa en ayunas</b> — la respuesta tiene forma de U: los valores muy bajos "
+                         "<li><b>Glucosa en ayunas</b>: la respuesta tiene forma de U: los valores muy bajos "
                          "elevan la estimación tanto como los altos, por las hipoglucemias de pacientes en "
                          "tratamiento.</li></ul>"
                          '<div style="margin-top:10px;">Ninguna de las dos debe leerse como un factor de riesgo '
@@ -970,7 +1021,7 @@ STR = {
         "sidebar_collapse": "Collapse the sidebar",
         "search_label": "Search",
         "search_ph": "Search the dashboard or the web…",
-        "search_expand": "Search — expands the sidebar",
+        "search_expand": "Search: expands the sidebar",
         "scroll_top": "Back to top",
         "search_in": "in {p}",
         "search_none": "No matches in the dashboard.",
@@ -1000,13 +1051,59 @@ STR = {
             "This framework designs and implements an <b>end-to-end DataOps</b> pipeline on "
             "<b>Databricks Community Edition</b>, using <b>AWS S3</b> as a real cloud storage layer and "
             "a <b>Medallion</b> architecture (Bronze → Silver → Gold) over Delta Lake as its backbone. "
-            "The use case predicts type 2 diabetes from records of the <b>NHANES</b> study (CDC)—the "
+            "The use case predicts type 2 diabetes from records of the <b>NHANES</b> study (CDC): the "
             "dataset is not the object of the research but the vehicle for showing that the architecture "
             "is viable, reproducible and auditable on real data at scale. The experimental core is a "
             "<b>triangulated comparison</b> between LightGBM (tabular baseline), an SVM with RBF kernel "
             "(structural bridge) and a <b>QSVM</b> with FidelityQuantumKernel in Qiskit, keeping the "
             "underlying classifier identical so that any difference in performance can be attributed to "
-            "the effect of the quantum kernel."),
+            "the effect of the quantum kernel."
+            " Evaluation closes the path: each model is measured with AUC-ROC, F1, accuracy and "
+            "MCC, <b>SHAP</b> points out over LightGBM the 20 variables that weigh most in the "
+            "prediction, and the two classical models are serialized to <b>ONNX</b> with their "
+            "portability verified. The GitHub repository publishes the 7 notebooks that run that "
+            "path, and this very application, deployed on Streamlit Cloud, is its last link: live "
+            "prediction and its SHAP reading."),
+        "ov_arch_alt": ("Diagram of the pipeline architecture: AWS S3 feeds Databricks Community "
+                        "Edition, where the Medallion architecture (Bronze, Silver and Gold) flows into "
+                        "three models (LightGBM, SVM with RBF kernel and QSVM with Qiskit) and into "
+                        "evaluation with metrics, SHAP and ONNX serialization; the output goes to "
+                        "GitHub and Streamlit Cloud."),
+        # Rótulos del diagrama de arquitectura que abre la página (arquitectura_svg()). Las
+        # cifras NO van escritas: llegan por marcador y las pone mil(), que usa el separador
+        # de millar del idioma. Lo que no viaja aquí es la geometría ni qué caja va resaltada,
+        # que son dibujo y no texto.
+        "ov_arch_io": (
+            ("AWS S3", "NHANES raw · 27 XPT", "IAM"),
+            ("GitHub", "7 notebooks · README"),
+            ("Streamlit Cloud", "Prediction · visual SHAP"),
+        ),
+        "ov_arch_grupos": (
+            ("Medallion architecture", (
+                ("Bronze · raw ingestion",
+                 "{bronze} rows · 162 cols · Delta Lake ACID"),
+                ("Silver · quality",
+                 "{silver} rows · 91 cols · expectations"),
+                ("Gold · curated features",
+                 "89 features · train {train} / test {test}"),
+            )),
+            ("Models · ML / QML", (
+                ("LightGBM",
+                 "Tabular baseline · GOSS · EFB"),
+                ("SVM · RBF kernel",
+                 "Direct bridge to QSVM"),
+                ("QSVM · Qiskit",
+                 "ZZFeatureMap · FidelityQuantumKernel"),
+            )),
+            ("Evaluation and serialization", (
+                ("Metrics",
+                 "AUC-ROC · F1 · Accuracy · MCC"),
+                ("SHAP",
+                 "LightGBM explainability · top 20"),
+                ("Selection · ONNX",
+                 "Verified portability"),
+            )),
+        ),
         "ov_stats_title": "NHANES dataset statistics",
         "ov_stats_sub": "Three biennial cycles integrated · Bronze → Silver → Gold layered pipeline",
         "ov_stat_bronze": "Bronze records",
@@ -1112,17 +1209,17 @@ STR = {
         "gov_hover_records": "Records",
         "gov_hover_dropped": "Dropped",
         "gov_embudo": [
-            ("Bronze — 3 cycles joined",
+            ("Bronze · 3 cycles joined",
              "27 XPT files · join on SEQN · 162 columns common to all three cycles"),
             ("Age filter ≥ 18 years", "Restriction to the adult population"),
-            ("Fasting filter — LBXGLU not null",
+            ("Fasting filter · LBXGLU not null",
              "Proxy for the fasting subgroup: PHAFSTMN is not consistent across cycles"),
             ("Valid DIQ010 filter",
              "Drops codes 7 “don't know” and 9 “refused to answer”, and the nulls"),
         ],
         "gov_dropped_title": "Records dropped per filter",
         "gov_split_label": "Gold 80/20 split",
-        "gov_suite_title": "Validation suite — dataframe-expectations",
+        "gov_suite_title": "Validation suite · dataframe-expectations",
         "gov_suite_sub": ("Suite <code>{nombre}</code>, run on {fecha} over the {registros} Silver records in "
                           "{duracion} seconds. Great Expectations is incompatible with the pinned versions of the "
                           "serverless runtime: this is the alternative adopted."),
@@ -1144,8 +1241,8 @@ STR = {
             ("Volume", "DataFrame", "at most 9,000 rows"),
         ],
         "gov_ops_title": "Quality operations by layer",
-        "gov_silver_card": "Silver — cleaning and sanitation",
-        "gov_gold_card": "Gold — preparation for modeling",
+        "gov_silver_card": "Silver · cleaning and sanitation",
+        "gov_gold_card": "Gold · preparation for modeling",
         "gov_silver_ops": [
             ("DIQ variables excluded for leakage", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
             ("Sparse columns removed", "Threshold of >80% missing values"),
@@ -1167,8 +1264,8 @@ STR = {
         "gov_eff_note": ("This is a side effect of the IQR × 3 winsorization in Silver, which was also applied to "
                          "categorical variables encoded numerically (1/2 answers, interview language, codes 7 and "
                          "9). When more than 75% of the sample gives the same answer, the clipping collapses the "
-                         "column to a single value. The most heavily clipped ones in notebook 02—PAQ635, PAQ650, "
-                         "PAQ605, DMDHHSZA, DMDCITZN, SIALANG—are exactly the ones that appear constant here."),
+                         "column to a single value. The most heavily clipped ones in notebook 02 (PAQ635, PAQ650, "
+                         "PAQ605, DMDHHSZA, DMDCITZN, SIALANG) are exactly the ones that appear constant here."),
         "gov_lin_title": "Traceability without MLflow",
         "gov_lin_sub": "The constraint that shapes the pipeline architecture the most, and its mitigation.",
         "gov_lin_limit_title": "Limitation",
@@ -1176,17 +1273,17 @@ STR = {
                                "tier. Any call to <code>mlflow.start_run()</code> or "
                                "<code>mlflow.log_metric()</code> raises authentication errors: there is no "
                                "tracking of experiments, metrics or artifacts."),
-        "gov_lin_mit_title": "Mitigation — a two-fold mechanism",
-        "gov_lin_mit_body": ("<b>Delta Lake transaction logs</b> — every write produces an ACID record with "
+        "gov_lin_mit_title": "Mitigation · a two-fold mechanism",
+        "gov_lin_mit_body": ("<b>Delta Lake transaction logs</b>: every write produces an ACID record with "
                              "version, timestamp and operation metrics.<br><br>"
-                             "<b>Per-model metrics CSV</b> — each notebook persists its results to Unity Catalog "
+                             "<b>Per-model metrics CSV</b>: each notebook persists its results to Unity Catalog "
                              "Volumes, and the figures read them from there instead of carrying them hard-coded."),
-        "gov_delta_title": "Delta history — Gold layer",
+        "gov_delta_title": "Delta history · Gold layer",
         "gov_delta_sub": ("The six most recent of the ten recorded versions. Delta purges the earlier ones after "
                           "168 h of retention: expected behavior, not a pipeline failure."),
         "gov_delta_cols": ["Version", "Timestamp", "Operation", "Rows", "Size"],
         "gov_chain_title": "Chain of custody against information leakage",
-        "gov_chain_sub": ("Four chained barriers. The third one drops no column at all—and that is exactly what "
+        "gov_chain_sub": ("Four chained barriers. The third one drops no column at all, and that is exactly what "
                           "we want to see: proof that the previous ones did their job."),
         "gov_leakage": [
             ("Exclusion in Silver",
@@ -1197,7 +1294,7 @@ STR = {
              "ones. Result: 15/15 clean artifacts."),
             ("QSVM defensive filter",
              "A second barrier before Random Forest selection. It drops no column (89 out of 89 pass)"
-             "—which is precisely the proof that the first barrier worked."),
+             ", which is precisely the proof that the first barrier worked."),
             ("Sampling-weight guard",
              "Halts the pipeline if any sampling weight other than the known one appears. WTINT2YR "
              "does reach the modeling stage and is documented in decision 10."),
@@ -1206,16 +1303,21 @@ STR = {
         "gov_scaler": [
             ("Fit", "Train only", "fit_transform on train · transform on test"),
             ("Columns evaluated", "66", "With variance > 0"),
-            ("Constant columns", "23", "Variance 0 — see decision 08"),
+            ("Constant columns", "23", "Variance 0 · see decision 08"),
             ("Mean ≈ 0 · sd ≈ 1", "Verified", "Assert over every column with dispersion"),
         ],
         "gov_scaler_note": ("The <b>StandardScaler</b> is fitted exclusively on <b>train</b>: "
                             "<code>fit_transform</code> on training and <code>transform</code> on test. Were it "
                             "fitted on the full dataset, the mean and standard deviation of the test set would "
                             "leak into preprocessing and the metrics would come out optimistic. The selection of "
-                            "the 8 QSVM variables follows the same rule—the Random Forest is trained only on "
+                            "the 8 QSVM variables follows the same rule: the Random Forest is trained only on "
                             "<code>X_train_svm_scaled</code>.<br><br>The correlation filter, by contrast, "
-                            "<b>is</b> computed before splitting. This is documented and accepted in decision 09."),
+                            "<b>is</b> computed before splitting. This is documented and accepted in decision 09."
+                            "<br><br>The check is executed, not claimed: over the 66 columns with dispersion it "
+                            "demands |mean| &lt; 0.01 and sd between 0.90 and 1.10. The fitted parameters ("
+                            "<code>mean_</code> and <code>scale_</code>) are exported to "
+                            "<code>scaler_correcto.json</code>, the file the Live Predictor loads: the train "
+                            "scale is never recomputed."),
         "gov_e2e_title": "End-to-end verification against the trained models",
         "gov_e2e_missing": ('<b style="color:{color};">Not verified.</b> The test set is not in the repository, so '
                             "the dashboard cannot check on its own that its inference path reproduces what the "
@@ -1234,8 +1336,8 @@ STR = {
         "gov_e2e_fail_title": "⚠ The inference path does not reproduce the models",
         "gov_e2e_note": ("Each row of the <i>golden set</i> is a real test instance together with the probability "
                          "returned by the model trained in its notebook. The dashboard runs it through its own "
-                         "path—raw vector, scaling for the SVM only, conversion to <code>float32</code>, ONNX "
-                         "session and reading of the output tensor—and compares. Tolerance {tol}; the noise "
+                         "path (raw vector, scaling for the SVM only, conversion to <code>float32</code>, ONNX "
+                         "session and reading of the output tensor) and compares. Tolerance {tol}; the noise "
                          "expected from working in <code>float32</code> is of order 10⁻⁷."),
         "gov_stack_title": "Frameworks by layer",
         "gov_stack_sub": ("The first badge on each card is the framework that structures the layer; the rest "
@@ -1264,16 +1366,16 @@ STR = {
         ],
         "gov_dec_title": "Decision log",
         "gov_dec_sub": ("The eleven limitations documented in TECHNICAL_NOTES, with their mitigation. Three shape "
-                        "the architecture, six are accepted and documented without correction—because correcting "
-                        "them would invalidate the results already obtained—and two are resolved with no "
+                        "the architecture, six are accepted and documented without correction (because correcting "
+                        "them would invalidate the results already obtained) and two are resolved with no "
                         "residue."),
         "gov_dec_tags": {"critical": "Architecture", "warning": "Accepted", "good": "Resolved"},
         "gov_dec_problem": "Problem · ",
         "gov_dec_solution": "Solution adopted · ",
         "gov_decisiones": [
             ("spark.conf blocked on Serverless",
-             "Configuring AWS credentials through spark.conf.set returns CONFIG_NOT_AVAILABLE—the "
-             "standard mechanism for connecting Spark to S3.",
+             "Configuring AWS credentials through spark.conf.set, the standard mechanism for "
+             "connecting Spark to S3, returns CONFIG_NOT_AVAILABLE.",
              "boto3 as an alternative client. S3 remains the source storage and Unity Catalog Volumes "
              "the processing layer."),
             ("MLflow blocked on Serverless",
@@ -1286,12 +1388,12 @@ STR = {
              "serverless runtime (pandas 1.5.3 / numpy 1.23.5).",
              "dataframe-expectations 0.7.0 as a compatible alternative. 15 expectations on Silver "
              "across three dimensions. Result 15/15, pass rate 1.0."),
-            ("QSVM — O(n²) computational cost",
+            ("QSVM · O(n²) computational cost",
              "Over the 6,264 training instances, the kernel matrix would demand ~39 million circuit "
              "evaluations. At 1,500 the kernel exhausts memory.",
              "Training on a stratified sample of 500 instances (~22 min) preserving the 86/14 ratio. "
              "Evaluation does use the full test set, so that the metrics remain comparable."),
-            ("QSVM — no native ONNX support",
+            ("QSVM · no native ONNX support",
              "The ONNX format does not admit quantum operations: neither skl2onnx nor onnxmltools can "
              "serialize a kernel based on state simulation.",
              "Serialization with joblib. The model requires the Qiskit environment for inference, so "
@@ -1311,8 +1413,8 @@ STR = {
              "IQR = 0, the bounds collapse and clip() turns the variable into a constant. 10 columns "
              "were collapsed this way.",
              "Documented without modification: fixing it would alter Silver, Gold and all three "
-             "models. Constant columns do not bias anything—the model extracts no signal from them—"
-             "but information is lost. The fix is identified as future work."),
+             "models. Constant columns do not bias anything (the model extracts no signal from "
+             "them), but information is lost. The fix is identified as future work."),
             ("Correlation computed before splitting",
              "The r > 0.90 filter is computed on the full dataset, so the 16 dropped columns are "
              "decided using the test observations as well.",
@@ -1327,7 +1429,7 @@ STR = {
              "target, but it lets the model lean on the survey design."),
             ("The serialized QSVM is not reloadable across versions",
              "The pickle drags the ZZFeatureMap along with its ParameterExpression objects. If Qiskit "
-             "changes version, deserialization fails—and Serverless updates without warning.",
+             "changes version, deserialization fails, and Serverless updates without warning.",
              "Loading is wrapped in try/except: on failure, TRAINING_MODE switches to True and the "
              "notebook retrains instead of aborting. It stays operational in all three scenarios."),
         ],
@@ -1346,15 +1448,15 @@ STR = {
         "res_threshold": "Threshold",
         "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
         "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
-                        "svm_rbf": "SVC.predict() — sign of decision_function",
+                        "svm_rbf": "SVC.predict() · sign of decision_function",
                         "qsvm": "decision_function > 0 (not a probability)"},
-        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Reconciled</span> — the four metrics '
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Reconciled</span>: the four metrics '
                            "of all three models have been recomputed from the per-instance scores and match the "
                            "published ones."),
-        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Not reconciled</span> — {fallos}',
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Not reconciled</span>: {fallos}',
         "res_no_scores": "scores not available",
         "res_threshold_note": ("<b>The three models are measured at different thresholds.</b> Each one uses its "
-                               "natural cut-off point—LightGBM <code>predict_proba ≥ 0.50</code>; SVM-RBF the "
+                               "natural cut-off point: LightGBM <code>predict_proba ≥ 0.50</code>; SVM-RBF the "
                                "sign of <code>decision_function</code>, which on the stored probability scale is "
                                "equivalent to ≈ 0.22; QSVM <code>decision_function &gt; 0</code>, which is not a "
                                "probability. Each matrix reproduces exactly at its own threshold, but <b>only "
@@ -1375,7 +1477,7 @@ STR = {
         "res_cm_tags": {"tn": "TN", "fp": "FP", "fn": "FN", "tp": "TP"},
         "res_metrics_title": "Metric comparison",
         "res_metrics_sub": ("The four metrics are computed over the 1,567 instances. Accuracy, MCC and F1-macro "
-                            "do penalize class imbalance—but they depend on the threshold, and each model uses "
+                            "do penalize class imbalance, but they depend on the threshold, and each model uses "
                             "its own: compare anything other than AUC-ROC with caution"),
         "res_metric_desc": {
             "auc": "Area under the ROC curve: ability to separate diabetes vs. non-diabetes. 0.5 = chance, 1 = perfect.",
@@ -1385,7 +1487,7 @@ STR = {
         },
         "res_qsvm_note": ("<b>Note on the QSVM experiment.</b> The QSVM was trained on a stratified sample of 500 "
                           "instances (O(n²) cost of the quantum kernel) and evaluated on the full test set of "
-                          "1,567. AUC-ROC = 0.5493 indicates that the model barely beats random classification—"
+                          "1,567. AUC-ROC = 0.5493 indicates that the model barely beats random classification: "
                           "Recall ≈ 0 for the diabetes class (1 out of 220), and Accuracy = 0.8602 reflects only "
                           "the proportion of the majority class. MCC ≈ 0 confirms the absence of any real "
                           "predictive ability."),
@@ -1393,7 +1495,7 @@ STR = {
         # ── Page 4 · SHAP Analysis ──
         "sh_eyebrow": "Interpretability",
         "sh_title": "SHAP Analysis",
-        "sh_subtitle": ("Global feature importance — TreeExplainer (LightGBM) vs. KernelExplainer (SVM-RBF)."),
+        "sh_subtitle": ("Global feature importance: TreeExplainer (LightGBM) vs. KernelExplainer (SVM-RBF)."),
         "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
         "sh_hint": "Hover over each bar to see what the variable means. {nota}",
         "sh_sample_lgbm": "Exact values (polynomial algorithm) over the 1,567 test instances.",
@@ -1409,11 +1511,11 @@ STR = {
                         "of the finding by making it independent of the algorithm and methodologically more "
                         "robust. KernelExplainer treats the model as a black box, so it applies to any "
                         "classifier."),
-        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Figure 27)",
+        "sh_fig_lgbm_title": "SHAP Summary Plot · LightGBM (Figure 27)",
         "sh_fig_lgbm_cap": ("Each point is a test instance; color indicates the value of the variable (red high, "
                             "blue low) and the horizontal position its impact on the prediction. LBXGH and "
                             "RIDAGEYR dominate the model."),
-        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Figure 31)",
+        "sh_fig_svm_title": "SHAP Summary Plot · SVM-RBF (Figure 31)",
         "sh_fig_svm_cap": ("Each point is an instance; color = value of the variable, position = impact. "
                            "KernelExplainer over 200 test instances."),
 
@@ -1428,12 +1530,12 @@ STR = {
         "qc_how_p1": ("The <b>ZZFeatureMap</b> encodes each of the 8 clinical variables as a phase angle (P gate) "
                       "on an independent qubit, after creating superposition with Hadamard gates. Its "
                       "distinguishing element is the <b>entanglement</b> between pairs of qubits through gates "
-                      "that depend on the cross product of two variables—correlations the classical RBF kernel "
+                      "that depend on the cross product of two variables, correlations the classical RBF kernel "
                       "cannot represent."),
         "qc_how_p2": ("The <b>FidelityQuantumKernel</b> measures the similarity between two patients as the "
                       "fidelity between their quantum states: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. The "
                       "implementation uses <code>StatevectorSampler</code>, simulating the exact state without "
-                      "noise—deterministic, reproducible results."),
+                      "noise: deterministic, reproducible results."),
         "qc_feat_title": "8 selected features (Random Forest)",
         "qc_xaxis": "RF importance",
         "qc_train_title": "Training and evaluation",
@@ -1452,7 +1554,7 @@ STR = {
         "bl_subtitle": "How the ZZFeatureMap encodes the value of a clinical variable as a quantum state |ψ⟩.",
         "bl_what_note": ("<b>What the Bloch sphere is.</b> A classical bit can only be 0 or 1. "
                          "A qubit also admits any mixture of the two, and that mixture does not fit "
-                         "into a single number: it needs a map. The Bloch sphere is that map — every "
+                         "into a single number: it needs a map. The Bloch sphere is that map: every "
                          "possible state of one qubit is a point on the surface of a sphere of radius "
                          "1. The north pole is <b>|0⟩</b> and the south pole <b>|1⟩</b>; the "
                          "superpositions lie in between, and the closer the arrow sits to a pole, the "
@@ -1472,19 +1574,19 @@ STR = {
                     "most legible way of seeing “a number becomes a state”.<br><br>"
                     "The <b>real ZZFeatureMap</b> does something different: it applies H and then "
                     "P(2·x<sub>i</sub>), and a phase gate after a Hadamard leaves the state <b>on the "
-                    "equator</b>—θ = π/2 fixed, P(|0⟩) = P(|1⟩) = 50% always—encoding the datum in the "
+                    "equator</b> (θ = π/2 fixed, P(|0⟩) = P(|1⟩) = 50% always), encoding the datum in the "
                     "<b>azimuthal</b> angle φ, not the polar one. Nor does it normalize to [0,1]: it uses the "
                     "scaled value directly. That is why this sphere illustrates the concept but does not "
                     "reproduce the circuit step by step. Entanglement (gates "
                     "P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) is only representable in the joint space of the "
-                    "8 qubits—see Quantum Circuit."),
+                    "8 qubits (see Quantum Circuit)."),
 
         # ── Page 5 · Bloch Sphere tab → entanglement section ──
         "bl_ent_title": "Entanglement: three qubits, a single state",
         "bl_ent_sub": ("Where the sphere above stops working. Apply the three gates and watch what happens "
-                       "to each qubit's local state—and to the pair left behind."),
+                       "to each qubit's local state, and to the pair left behind."),
         "bl_ent_intro": ("<b>Where the Bloch sphere stops working.</b> One qubit needs one sphere and one "
-                         "arrow. With several, the temptation is to draw one sphere per qubit—and for most "
+                         "arrow. With several, the temptation is to draw one sphere per qubit, and for most "
                          "states that works. But there is a family of states where <b>no arrow is left to "
                          "draw</b>: the whole has a perfectly defined state and none of its members has one "
                          "on its own. That is entanglement, and here it takes three gates to build. Apply "
@@ -1500,21 +1602,21 @@ STR = {
              "set to zero. The Q-sphere shows a single node at the north pole, holding all the probability."),
             ("<b>Superposition, not yet entangled.</b> The Hadamard leaves q₀ halfway between |0⟩ and |1⟩ "
              "while q₁ and q₂ stay firmly in |0⟩: the joint state is (|000⟩ + |100⟩)/√2. The three qubits "
-             "are still <b>independent</b>—each has its own pure state, and three Bloch spheres would "
+             "are still <b>independent</b>: each has its own pure state, and three Bloch spheres would "
              "describe them perfectly well. Note that the local vector length is still 1: there is an arrow "
              "to draw."),
             ("<b>A Bell pair, and a bystander.</b> The first CNOT flips q₁ only when q₀ is 1; applied to a "
              "superposition, that ties both outcomes into one: (|000⟩ + |110⟩)/√2. This is where the map "
-             "breaks—the local vector length of q₀ has just dropped to <b>0</b>, the qubit is no longer at "
+             "breaks: the local vector length of q₀ has just dropped to <b>0</b>, the qubit is no longer at "
              "any point of its sphere because on its own it <b>no longer has a state</b>. And something "
              "else happens, visible only because there is a third qubit: q₂ has been left OUT, watching from "
              "|0⟩, and what is entangled is exactly the pair q₀q₁. Its concurrence reads <b>1</b>, the "
              "maximum."),
             ("<b>GHZ state.</b> The second CNOT hooks q₂ onto the chain: (|000⟩ + |111⟩)/√2. The nodes have "
              "moved to the poles and the two middle rings are empty. The first three figures do not "
-             "move—q₀ still has no state of its own—but the fourth collapses: the concurrence of the pair "
+             "move (q₀ still has no state of its own), but the fourth collapses: the concurrence of the pair "
              "q₀q₁ is back to <b>0</b>. Entangling all three has UNDONE the link within the pair. The two "
-             "remain correlated—measuring one predicts the other—but no longer entangled: the entanglement "
+             "remain correlated (measuring one predicts the other), but no longer entangled: the entanglement "
              "of a GHZ belongs to the whole and is <b>not the sum of pairwise links</b>."),
         ],
         "bl_ent_circuit_title": "Circuit",
@@ -1537,7 +1639,7 @@ STR = {
             ("With all three qubits in |0⟩ the outcome is <b>000</b> on every shot. There is nothing to "
              "sample yet: this is how three classical bits behave."),
             ("<b>000</b> and <b>100</b> come out in equal parts: q₀ behaves like a coin toss while q₁ and "
-             "q₂ are 0 no matter what. The outcomes are <b>independent</b>—knowing one tells you nothing "
+             "q₂ are 0 no matter what. The outcomes are <b>independent</b>: knowing one tells you nothing "
              "about the others."),
             ("<b>000</b> and <b>110</b> come out: q₀ and q₁ always give the same value, so measuring one "
              "determines the other, while q₂ stays pinned at 0 and none the wiser. Two of the three are "
@@ -1549,14 +1651,14 @@ STR = {
              "lab."),
         ],
         "bl_ent_impl_note": ("<b>How this is computed.</b> The eight amplitudes come from <b>exact</b> linear "
-                             "algebra in NumPy—the H⊗I⊗I matrix and the two CNOTs applied to |000⟩—not from "
+                             "algebra in NumPy (the H⊗I⊗I matrix and the two CNOTs applied to |000⟩), not from "
                              "an approximation; the pair's concurrence is Wootters' formula, which for two "
                              "qubits gives the exact value rather than a bound; and the measurements come "
                              "from multinomial sampling over |ψ|², which "
                              "is what an ideal noiseless simulator does. This dashboard <b>does not load "
                              "Qiskit</b>: the deployed environment is Streamlit, NumPy, Plotly and ONNX "
-                             "Runtime, while Qiskit lives in the Databricks pipeline—where the QSVM is "
-                             "trained—and its figures arrive here already rendered, like the 8-qubit circuit "
+                             "Runtime, while Qiskit lives in the Databricks pipeline (where the QSVM is "
+                             "trained) and its figures arrive here already rendered, like the 8-qubit circuit "
                              "on the Quantum Circuit page. The basis convention is the textbook one, |q₀q₁q₂⟩ "
                              "with q₀ on the left; Qiskit numbers the other way and would write “001” where "
                              "the first step here writes “100”."),
@@ -1567,14 +1669,14 @@ STR = {
                       "top of the page and watch which qubits react."),
         "bl_zz_intro": ("<b>From three qubits to the model's eight.</b> Each qubit of the ZZFeatureMap "
                         "carries <b>one clinical variable</b>: q₀ is HbA1c, q₁ glucose, and so on up to "
-                        "BMI. With 256 amplitudes there is no picture of the state left to look at—neither "
-                        "Q-sphere nor histogram—but the <b>same two quantities</b> from the previous "
+                        "BMI. With 256 amplitudes there is no picture of the state left to look at (neither "
+                        "Q-sphere nor histogram), but the <b>same two quantities</b> from the previous "
                         "section can still be measured: how much of its own state each qubit keeps, and how "
                         "much information it shares with every other one. This is no longer a textbook "
                         "example: it is the circuit the model was trained with."),
         "bl_zz_current": "Variable in play: <b>{var} = {val} {unidad}</b>. The other seven at their reference value.",
         "bl_zz_r_title": "Each qubit's own state",
-        "bl_zz_r_xaxis": "|r| — 1 = keeps its own state · 0 = fully entangled",
+        "bl_zz_r_xaxis": "|r|: 1 = keeps its own state · 0 = fully entangled",
         "bl_zz_mi_title": "Mutual information between qubits",
         "bl_zz_mi_cbar": "bits",
         "bl_zz_note": ("<b>How to read the matrix.</b> Each cell says how much information two qubits "
@@ -1586,7 +1688,7 @@ STR = {
                        "(checked over 300 profiles: at distance ≥ 5 along the chain, 0.0000 bits without a "
                        "single exception). The circuit's topology draws itself.<br><br>"
                        "And there is a second thing you can see by moving the slider above: changing "
-                       "<b>one</b> variable moves only <b>its qubit and its immediate neighbours</b>—the "
+                       "<b>one</b> variable moves only <b>its qubit and its immediate neighbours</b>: the "
                        "rest do not shift by a single decimal. It is the same fact from the other side: "
                        "the circuit's light cone, live."),
         "bl_zz_caveat": ("<b>A reading caveat, and not a minor one.</b> Entanglement <b>does not grow with "
@@ -1604,7 +1706,7 @@ STR = {
         "lp_eyebrow": "Interactive inference",
         "lp_title": "Live Predictor",
         "lp_subtitle": ("Probability that a clinical profile corresponds to a person already diagnosed with "
-                        "diabetes—LightGBM over the 8 most important variables."),
+                        "diabetes: LightGBM over the 8 most important variables."),
         "lp_what_note": ("<b>What this form estimates.</b> The target of the pipeline is "
                          "<code>TARGET = (DIQ010 == 1)</code>, the answer to <i>“has a doctor ever told you that "
                          "you have diabetes?”</i>. The model therefore <b>detects already diagnosed diabetes</b>: "
@@ -1617,7 +1719,7 @@ STR = {
                          "available in real time because of the O(n²) cost of the quantum kernel: predicting the "
                          "1,567 test instances took 144.5 minutes."),
         "lp_proxy_note": ("⚠ <b>Technical and clinical warning.</b> This form does not have the real serialized "
-                          "models (<code>.onnx</code>) connected—place <code>lgbm_final.onnx</code>, "
+                          "models (<code>.onnx</code>) connected: place <code>lgbm_final.onnx</code>, "
                           "<code>svm_final.onnx</code>, <code>scaler_correcto.json</code> and "
                           "<code>medianas_correctas.json</code> in <code>streamlit/models/</code>. The score "
                           "shown below is a <b>transparent stand-in</b>: a combination weighted by normalized "
@@ -1625,7 +1727,7 @@ STR = {
                           "model</b> and must not be cited as a result. QSVM is likewise unavailable in real time "
                           "(O(n²) cost of the quantum kernel)."),
         "lp_train_range": "Training: {mu} ± {sd} (±3 sd → {lo} to {hi})",
-        "lp_extrapolates": "⚠ z = {z} — outside the trained range: the model extrapolates",
+        "lp_extrapolates": "⚠ z = {z} · outside the trained range: the model extrapolates",
         "lp_ada": "ADA criterion: &lt; 5.7 normal · 5.7–6.4 prediabetes · ≥ 6.5 diabetes",
         "lp_who_model": "the model",
         "lp_who_proxy": "the stand-in",
@@ -1643,14 +1745,14 @@ STR = {
         "lp_gauge_caption": ("Compatibility with an existing diagnosis: low · intermediate · high · "
                              "&nbsp;decision threshold = 50%"),
         "lp_side_title": "The two models, side by side",
-        "lp_side_sub": ("Each probability is judged against the cut-off point of its own model—they are not "
+        "lp_side_sub": ("Each probability is judged against the cut-off point of its own model: they are not "
                         "interchangeable"),
         "lp_own_threshold": "Its threshold",
         "lp_would_classify": "Would classify as",
         "lp_positive": "positive",
         "lp_negative": "negative",
         "lp_disagree": ("<b>The two models disagree by {dif} on this profile.</b> They agree at the extremes"
-                        "—clearly healthy or clearly diabetic profiles—and diverge in the intermediate band, "
+                        "(clearly healthy or clearly diabetic profiles) and diverge in the intermediate band, "
                         "which is precisely where an estimate would be most useful. Read it as a signal of "
                         "uncertainty, not as one of the two being right."),
         "lp_curve_title": "Response curve",
@@ -1666,10 +1768,10 @@ STR = {
                          "diagnosis, the model also learns the effect of <b>treatment</b>, not only that of the "
                          "disease. This inverts the clinical meaning of two variables:"
                          '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
-                         "<li><b>LDL cholesterol</b> — the higher the LDL, the <i>lower</i> the estimated "
+                         "<li><b>LDL cholesterol</b>: the higher the LDL, the <i>lower</i> the estimated "
                          "probability (from 43% to 18% across the slider). Diagnosed patients are usually on "
                          "statins.</li>"
-                         "<li><b>Fasting glucose</b> — the response is U-shaped: very low values raise the "
+                         "<li><b>Fasting glucose</b>: the response is U-shaped: very low values raise the "
                          "estimate as much as high ones, because of hypoglycemia in treated patients.</li></ul>"
                          '<div style="margin-top:10px;">Neither should be read as a modifiable risk '
                          "factor.</div>"),
@@ -1706,7 +1808,7 @@ STR = {
         "sidebar_collapse": "Seitenleiste einklappen",
         "search_label": "Suchen",
         "search_ph": "Im Dashboard oder im Web suchen…",
-        "search_expand": "Suchen — klappt die Seitenleiste aus",
+        "search_expand": "Suchen: klappt die Seitenleiste aus",
         "scroll_top": "Nach oben",
         "search_in": "in {p}",
         "search_none": "Keine Treffer im Dashboard.",
@@ -1737,14 +1839,60 @@ STR = {
             "<b>Databricks Community Edition</b>, mit <b>AWS S3</b> als echter Cloud-Speicherschicht "
             "und einer <b>Medaillon</b>-Architektur (Bronze → Silver → Gold) über Delta Lake als "
             "Rückgrat. Als Anwendungsfall wird Typ-2-Diabetes anhand von Datensätzen der "
-            "<b>NHANES</b>-Studie (CDC) vorhergesagt — der Datensatz ist nicht der Gegenstand der "
+            "<b>NHANES</b>-Studie (CDC) vorhergesagt: Der Datensatz ist nicht der Gegenstand der "
             "Untersuchung, sondern das Vehikel, um zu zeigen, dass die Architektur an echten Daten "
             "im großen Maßstab tragfähig, reproduzierbar und prüfbar ist. Der experimentelle Kern "
             "ist ein <b>triangulierter Vergleich</b> zwischen LightGBM (tabellarische Baseline), "
             "einer SVM mit RBF-Kernel (strukturelle Brücke) und einer <b>QSVM</b> mit "
             "FidelityQuantumKernel in Qiskit, wobei der zugrunde liegende Klassifikator identisch "
             "bleibt, damit jeder Leistungsunterschied dem Effekt des Quantenkernels zugeschrieben "
-            "werden kann."),
+            "werden kann."
+            " Die Auswertung schließt den Weg ab: Jedes Modell wird mit AUC-ROC, F1, Accuracy und "
+            "MCC gemessen, <b>SHAP</b> zeigt an LightGBM die 20 Variablen, die in der Vorhersage am "
+            "schwersten wiegen, und die beiden klassischen Modelle werden mit geprüfter "
+            "Portabilität nach <b>ONNX</b> serialisiert. Das GitHub-Repository veröffentlicht die 7 "
+            "Notebooks, die diesen Weg ausführen, und diese Anwendung selbst, auf Streamlit Cloud "
+            "bereitgestellt, ist ihr letztes Glied: die Vorhersage in Echtzeit und ihre SHAP-Lesart."),
+        "ov_arch_alt": ("Diagramm der Pipeline-Architektur: AWS S3 speist Databricks Community "
+                        "Edition, wo die Medaillon-Architektur (Bronze, Silver und Gold) in drei "
+                        "Modelle (LightGBM, SVM mit RBF-Kernel und QSVM mit Qiskit) und in die "
+                        "Auswertung mit Metriken, SHAP und ONNX-Serialisierung mündet; die Ausgabe "
+                        "geht an GitHub und Streamlit Cloud."),
+        # Rótulos del diagrama de arquitectura que abre la página (arquitectura_svg()). Las
+        # cifras NO van escritas: llegan por marcador y las pone mil(), que usa el separador
+        # de millar del idioma. Lo que no viaja aquí es la geometría ni qué caja va resaltada,
+        # que son dibujo y no texto.
+        "ov_arch_io": (
+            ("AWS S3", "NHANES roh · 27 XPT", "IAM"),
+            ("GitHub", "7 Notebooks · README"),
+            ("Streamlit Cloud", "Vorhersage · SHAP visuell"),
+        ),
+        "ov_arch_grupos": (
+            ("Medaillon-Architektur", (
+                ("Bronze · Roh-Ingestion",
+                 "{bronze} Zeilen · 162 Sp. · Delta Lake ACID"),
+                ("Silver · Qualität",
+                 "{silver} Zeilen · 91 Sp. · Expectations"),
+                ("Gold · kuratierte Features",
+                 "89 Features · Train {train} / Test {test}"),
+            )),
+            ("Modelle · ML / QML", (
+                ("LightGBM",
+                 "Tabellarische Baseline · GOSS · EFB"),
+                ("SVM · RBF-Kernel",
+                 "Direkte Brücke zum QSVM"),
+                ("QSVM · Qiskit",
+                 "ZZFeatureMap · FidelityQuantumKernel"),
+            )),
+            ("Auswertung und Serialisierung", (
+                ("Metriken",
+                 "AUC-ROC · F1 · Accuracy · MCC"),
+                ("SHAP",
+                 "LightGBM-Erklärbarkeit · Top 20"),
+                ("Auswahl · ONNX",
+                 "Portabilität geprüft"),
+            )),
+        ),
         "ov_stats_title": "Statistik des NHANES-Datensatzes",
         "ov_stats_sub": "Drei Zweijahreszyklen integriert · Schichtenpipeline Bronze → Silver → Gold",
         "ov_stat_bronze": "Bronze-Datensätze",
@@ -1850,17 +1998,17 @@ STR = {
         "gov_hover_records": "Datensätze",
         "gov_hover_dropped": "Verworfen",
         "gov_embudo": [
-            ("Bronze — 3 Zyklen zusammengeführt",
+            ("Bronze · 3 Zyklen zusammengeführt",
              "27 XPT-Dateien · Join über SEQN · 162 in allen drei Zyklen gemeinsame Spalten"),
             ("Altersfilter ≥ 18 Jahre", "Beschränkung auf die erwachsene Bevölkerung"),
-            ("Nüchternfilter — LBXGLU nicht null",
+            ("Nüchternfilter · LBXGLU nicht null",
              "Proxy für die nüchterne Teilgruppe: PHAFSTMN ist zyklusübergreifend nicht konsistent"),
             ("Filter auf gültiges DIQ010",
              "Verwirft die Codes 7 „weiß nicht“ und 9 „Antwort verweigert“ sowie die Nullwerte"),
         ],
         "gov_dropped_title": "Pro Filter verworfene Datensätze",
         "gov_split_label": "Gold-Aufteilung 80/20",
-        "gov_suite_title": "Validierungssuite — dataframe-expectations",
+        "gov_suite_title": "Validierungssuite · dataframe-expectations",
         "gov_suite_sub": ("Suite <code>{nombre}</code>, ausgeführt am {fecha} über die {registros} "
                           "Silver-Datensätze in {duracion} Sekunden. Great Expectations ist mit den "
                           "festgeschriebenen Versionen der Serverless-Runtime unvereinbar: dies ist die "
@@ -1883,8 +2031,8 @@ STR = {
             ("Volumen", "DataFrame", "höchstens 9.000 Zeilen"),
         ],
         "gov_ops_title": "Qualitätsoperationen je Schicht",
-        "gov_silver_card": "Silver — Bereinigung und Aufbereitung",
-        "gov_gold_card": "Gold — Vorbereitung für die Modellierung",
+        "gov_silver_card": "Silver · Bereinigung und Aufbereitung",
+        "gov_gold_card": "Gold · Vorbereitung für die Modellierung",
         "gov_silver_ops": [
             ("Wegen Leakage ausgeschlossene DIQ-Variablen", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
             ("Entfernte dünn besetzte Spalten", "Schwelle von >80 % fehlenden Werten"),
@@ -1907,8 +2055,8 @@ STR = {
                          "numerisch kodierte kategoriale Variablen angewandt wurde (Antworten 1/2, "
                          "Interviewsprache, Codes 7 und 9). Wenn mehr als 75 % der Stichprobe dasselbe "
                          "antworten, lässt die Kappung die Spalte auf einen einzigen Wert zusammenfallen. "
-                         "Die in Notebook 02 am stärksten gekappten — PAQ635, PAQ650, PAQ605, DMDHHSZA, "
-                         "DMDCITZN, SIALANG — sind genau jene, die hier als konstant erscheinen."),
+                         "Die in Notebook 02 am stärksten gekappten (PAQ635, PAQ650, PAQ605, DMDHHSZA, "
+                         "DMDCITZN, SIALANG) sind genau jene, die hier als konstant erscheinen."),
         "gov_lin_title": "Nachvollziehbarkeit ohne MLflow",
         "gov_lin_sub": "Die Einschränkung, die die Architektur der Pipeline am stärksten prägt, und ihre Abhilfe.",
         "gov_lin_limit_title": "Einschränkung",
@@ -1916,18 +2064,18 @@ STR = {
                                "deaktiviert. Jeder Aufruf von <code>mlflow.start_run()</code> oder "
                                "<code>mlflow.log_metric()</code> erzeugt Authentifizierungsfehler: es gibt "
                                "keine Protokollierung von Experimenten, Metriken oder Artefakten."),
-        "gov_lin_mit_title": "Abhilfe — ein zweifacher Mechanismus",
-        "gov_lin_mit_body": ("<b>Transaktionsprotokolle von Delta Lake</b> — jeder Schreibvorgang erzeugt "
+        "gov_lin_mit_title": "Abhilfe · ein zweifacher Mechanismus",
+        "gov_lin_mit_body": ("<b>Transaktionsprotokolle von Delta Lake</b>: Jeder Schreibvorgang erzeugt "
                              "einen ACID-Eintrag mit Version, Zeitstempel und Operationsmetriken.<br><br>"
-                             "<b>Metriken-CSV je Modell</b> — jedes Notebook schreibt seine Ergebnisse "
+                             "<b>Metriken-CSV je Modell</b>: Jedes Notebook schreibt seine Ergebnisse "
                              "dauerhaft in Unity Catalog Volumes, und die Abbildungen lesen sie von dort, "
                              "statt sie fest einkodiert mitzuführen."),
-        "gov_delta_title": "Delta-Historie — Gold-Schicht",
+        "gov_delta_title": "Delta-Historie · Gold-Schicht",
         "gov_delta_sub": ("Die sechs jüngsten der zehn protokollierten Versionen. Delta löscht die älteren "
                           "nach 168 h Aufbewahrung: erwartetes Verhalten, kein Fehler der Pipeline."),
         "gov_delta_cols": ["Version", "Zeitstempel", "Operation", "Zeilen", "Größe"],
         "gov_chain_title": "Lückenlose Kette gegen Informationsleckagen",
-        "gov_chain_sub": ("Vier verkettete Barrieren. Die dritte verwirft keine einzige Spalte — und genau "
+        "gov_chain_sub": ("Vier verkettete Barrieren. Die dritte verwirft keine einzige Spalte, und genau "
                           "das will man sehen: der Beleg, dass die vorherigen ihre Arbeit getan haben."),
         "gov_leakage": [
             ("Ausschluss in Silver",
@@ -1938,7 +2086,7 @@ STR = {
              "von Gold überlebt. Ergebnis: 15/15 saubere Artefakte."),
             ("Defensiver Filter der QSVM",
              "Zweite Barriere vor der Auswahl per Random Forest. Sie verwirft keine Spalte (89 von 89 "
-             "passieren) — eben der Beleg, dass die erste Barriere funktioniert hat."),
+             "passieren), eben der Beleg, dass die erste Barriere funktioniert hat."),
             ("Wächter für Stichprobengewichte",
              "Stoppt die Pipeline, sobald ein anderes als das bekannte Stichprobengewicht auftaucht. "
              "WTINT2YR erreicht die Modellierung tatsächlich und ist in Entscheidung 10 dokumentiert."),
@@ -1947,17 +2095,22 @@ STR = {
         "gov_scaler": [
             ("Anpassung", "Nur auf dem Training", "fit_transform im Training · transform im Test"),
             ("Ausgewertete Spalten", "66", "Mit Varianz > 0"),
-            ("Konstante Spalten", "23", "Varianz 0 — siehe Entscheidung 08"),
+            ("Konstante Spalten", "23", "Varianz 0 · siehe Entscheidung 08"),
             ("Mittelwert ≈ 0 · Std. ≈ 1", "Verifiziert", "Assert über alle Spalten mit Streuung"),
         ],
         "gov_scaler_note": ("Der <b>StandardScaler</b> wird ausschließlich auf dem <b>Training</b> angepasst: "
                             "<code>fit_transform</code> im Training und <code>transform</code> im Test. Würde "
                             "er auf dem vollständigen Datensatz angepasst, sickerten Mittelwert und "
                             "Standardabweichung des Tests in die Vorverarbeitung, und die Metriken fielen zu "
-                            "optimistisch aus. Die Auswahl der 8 QSVM-Variablen folgt derselben Regel — der "
+                            "optimistisch aus. Die Auswahl der 8 QSVM-Variablen folgt derselben Regel: Der "
                             "Random Forest wird nur mit <code>X_train_svm_scaled</code> trainiert.<br><br>"
                             "Der Korrelationsfilter hingegen wird <b>sehr wohl</b> vor der Aufteilung "
-                            "berechnet. Das ist in Entscheidung 09 dokumentiert und bewusst hingenommen."),
+                            "berechnet. Das ist in Entscheidung 09 dokumentiert und bewusst hingenommen."
+                            "<br><br>Die Prüfung wird ausgeführt, nicht behauptet: Über die 66 Spalten mit Streuung "
+                            "werden |Mittelwert| &lt; 0,01 und eine Abweichung zwischen 0,90 und 1,10 verlangt. "
+                            "Die angepassten Parameter (<code>mean_</code> und <code>scale_</code>) gehen nach "
+                            "<code>scaler_correcto.json</code>, die Datei, die der Live-Prädiktor lädt: Die Skala "
+                            "des Trainings wird nie neu berechnet."),
         "gov_e2e_title": "End-to-End-Prüfung gegen die trainierten Modelle",
         "gov_e2e_missing": ('<b style="color:{color};">Nicht verifiziert.</b> Der Testdatensatz liegt nicht im '
                             "Repository, deshalb kann das Dashboard nicht von sich aus prüfen, ob sein "
@@ -1977,9 +2130,9 @@ STR = {
         "gov_e2e_fail_title": "⚠ Der Inferenzpfad reproduziert die Modelle nicht",
         "gov_e2e_note": ("Jede Zeile des <i>Golden Set</i> ist eine echte Testinstanz zusammen mit der "
                          "Wahrscheinlichkeit, die das in seinem Notebook trainierte Modell zurückgegeben hat. "
-                         "Das Dashboard schickt sie durch den eigenen Pfad — Rohvektor, Skalierung nur für die "
+                         "Das Dashboard schickt sie durch den eigenen Pfad (Rohvektor, Skalierung nur für die "
                          "SVM, Umwandlung nach <code>float32</code>, ONNX-Sitzung und Auslesen des "
-                         "Ausgabetensors — und vergleicht. Toleranz {tol}; das durch die Arbeit in "
+                         "Ausgabetensors) und vergleicht. Toleranz {tol}; das durch die Arbeit in "
                          "<code>float32</code> erwartete Rauschen liegt in der Größenordnung 10⁻⁷."),
         "gov_stack_title": "Frameworks je Schicht",
         "gov_stack_sub": ("Das erste Abzeichen jeder Karte ist das Framework, das die Schicht trägt; die "
@@ -2010,15 +2163,15 @@ STR = {
         "gov_dec_title": "Entscheidungsprotokoll",
         "gov_dec_sub": ("Die elf in TECHNICAL_NOTES dokumentierten Einschränkungen samt Abhilfe. Drei prägen "
                         "die Architektur, sechs werden hingenommen und dokumentiert, ohne sie zu korrigieren "
-                        "— weil das die bereits erzielten Ergebnisse entwerten würde — und zwei sind "
+                        "(weil das die bereits erzielten Ergebnisse entwerten würde), und zwei sind "
                         "rückstandslos gelöst."),
         "gov_dec_tags": {"critical": "Architektur", "warning": "Hingenommen", "good": "Gelöst"},
         "gov_dec_problem": "Problem · ",
         "gov_dec_solution": "Gewählte Lösung · ",
         "gov_decisiones": [
             ("spark.conf unter Serverless blockiert",
-             "Die Konfiguration der AWS-Zugangsdaten über spark.conf.set liefert CONFIG_NOT_AVAILABLE "
-             "— der Standardweg, um Spark mit S3 zu verbinden.",
+             "Die Konfiguration der AWS-Zugangsdaten über spark.conf.set, den Standardweg, um Spark "
+             "mit S3 zu verbinden, liefert CONFIG_NOT_AVAILABLE.",
              "boto3 als alternativer Client. S3 bleibt der Ursprungsspeicher und Unity Catalog Volumes "
              "die Verarbeitungsschicht."),
             ("MLflow unter Serverless blockiert",
@@ -2031,13 +2184,13 @@ STR = {
              "Serverless-Runtime kollidiert (pandas 1.5.3 / numpy 1.23.5).",
              "dataframe-expectations 0.7.0 als kompatible Alternative. 15 Erwartungen an Silver in drei "
              "Dimensionen. Ergebnis 15/15, Pass-Rate 1,0."),
-            ("QSVM — Rechenaufwand O(n²)",
+            ("QSVM · Rechenaufwand O(n²)",
              "Über die 6.264 Trainingsinstanzen verlangte die Kernelmatrix rund 39 Millionen "
              "Auswertungen des Schaltkreises. Bei 1.500 erschöpft der Kernel den Speicher.",
              "Training auf einer stratifizierten Stichprobe von 500 Instanzen (~22 min) unter Wahrung "
              "des Verhältnisses 86/14. Die Auswertung nutzt sehr wohl den vollständigen Testsatz, damit "
              "die Metriken vergleichbar bleiben."),
-            ("QSVM — keine native ONNX-Unterstützung",
+            ("QSVM · keine native ONNX-Unterstützung",
              "Das ONNX-Format lässt keine Quantenoperationen zu: weder skl2onnx noch onnxmltools können "
              "einen auf Zustandssimulation beruhenden Kernel serialisieren.",
              "Serialisierung mit joblib. Das Modell benötigt für die Inferenz die Qiskit-Umgebung, "
@@ -2058,13 +2211,13 @@ STR = {
              "Wert, ist IQR = 0, die Grenzen fallen zusammen und clip() macht die Variable zur "
              "Konstanten. 10 Spalten sind so kollabiert.",
              "Dokumentiert, ohne es zu ändern: eine Korrektur würde Silver, Gold und alle drei Modelle "
-             "verändern. Konstante Spalten verzerren nichts — das Modell zieht kein Signal aus ihnen —, "
+             "verändern. Konstante Spalten verzerren nichts (das Modell zieht kein Signal aus ihnen), "
              "aber Information geht verloren. Die Korrektur ist als künftige Arbeit vermerkt."),
             ("Korrelation vor der Aufteilung berechnet",
              "Der Filter r > 0,90 wird auf dem vollständigen Datensatz berechnet, die 16 verworfenen "
              "Spalten werden also auch anhand der Testbeobachtungen bestimmt.",
              "Dokumentiert, ohne es zu ändern. Es betrifft weder die Skalierung noch die Feature-Auswahl "
-             "der QSVM — beide nur auf dem Training angepasst —, aber die Auswahl ist nicht mehr streng "
+             "der QSVM (beide nur auf dem Training angepasst), aber die Auswahl ist nicht mehr streng "
              "blind gegenüber dem Test."),
             ("Stichprobengewicht WTINT2YR unter den Features",
              "Der Join innerhalb des Zyklus dupliziert WTSAF2YR über drei Spalten. WTINT2YR steht nicht "
@@ -2074,7 +2227,7 @@ STR = {
              "lässt das Modell aber auf dem Erhebungsdesign aufsetzen."),
             ("Die serialisierte QSVM ist versionsübergreifend nicht ladbar",
              "Der Pickle schleppt die ZZFeatureMap mitsamt ihren ParameterExpression mit. Wechselt "
-             "Qiskit die Version, scheitert die Deserialisierung — und Serverless aktualisiert ohne "
+             "Qiskit die Version, scheitert die Deserialisierung, und Serverless aktualisiert ohne "
              "Vorwarnung.",
              "Das Laden ist in try/except gefasst: schlägt es fehl, springt TRAINING_MODE auf True und "
              "das Notebook trainiert neu, statt abzubrechen. Es bleibt in allen drei Szenarien "
@@ -2095,15 +2248,15 @@ STR = {
         "res_threshold": "Schwelle",
         "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
         "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
-                        "svm_rbf": "SVC.predict() — Vorzeichen von decision_function",
+                        "svm_rbf": "SVC.predict() · Vorzeichen von decision_function",
                         "qsvm": "decision_function > 0 (keine Wahrscheinlichkeit)"},
-        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Abgeglichen</span> — die vier '
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Abgeglichen</span>: die vier '
                            "Metriken aller drei Modelle wurden aus den Scores je Instanz neu berechnet und "
                            "stimmen mit den veröffentlichten überein."),
-        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Nicht abgeglichen</span> — {fallos}',
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Nicht abgeglichen</span>: {fallos}',
         "res_no_scores": "Scores nicht verfügbar",
         "res_threshold_note": ("<b>Die drei Modelle sind an unterschiedlichen Schwellen gemessen.</b> Jedes "
-                               "nutzt seinen natürlichen Schnittpunkt — LightGBM "
+                               "nutzt seinen natürlichen Schnittpunkt: LightGBM "
                                "<code>predict_proba ≥ 0,50</code>; SVM-RBF das Vorzeichen von "
                                "<code>decision_function</code>, was auf der gespeicherten "
                                "Wahrscheinlichkeitsskala ≈ 0,22 entspricht; QSVM "
@@ -2127,7 +2280,7 @@ STR = {
         "res_cm_tags": {"tn": "RN", "fp": "FP", "fn": "FN", "tp": "RP"},
         "res_metrics_title": "Metrikvergleich",
         "res_metrics_sub": ("Die vier Metriken werden über die 1.567 Instanzen berechnet. Accuracy, MCC und "
-                            "F1-Macro bestrafen das Klassenungleichgewicht sehr wohl — aber sie hängen von "
+                            "F1-Macro bestrafen das Klassenungleichgewicht sehr wohl, aber sie hängen von "
                             "der Schwelle ab, und jedes Modell nutzt seine eigene: vergleiche alles außer "
                             "dem AUC-ROC mit Vorsicht"),
         "res_metric_desc": {
@@ -2139,14 +2292,14 @@ STR = {
         "res_qsvm_note": ("<b>Anmerkung zum QSVM-Experiment.</b> Die QSVM wurde auf einer stratifizierten "
                           "Stichprobe von 500 Instanzen trainiert (Aufwand O(n²) des Quantenkernels) und auf "
                           "den vollständigen 1.567 des Tests ausgewertet. AUC-ROC = 0,5493 zeigt, dass das "
-                          "Modell die zufällige Klassifikation kaum übertrifft — Recall ≈ 0 für die Klasse "
+                          "Modell die zufällige Klassifikation kaum übertrifft: Recall ≈ 0 für die Klasse "
                           "Diabetes (1 von 220), Accuracy = 0,8602 spiegelt nur den Anteil der "
                           "Mehrheitsklasse. Der MCC ≈ 0 bestätigt das Fehlen echter Vorhersagekraft."),
 
         # ── Seite 4 · SHAP-Analyse ──
         "sh_eyebrow": "Interpretierbarkeit",
         "sh_title": "SHAP-Analyse",
-        "sh_subtitle": ("Globale Variablenwichtigkeit — TreeExplainer (LightGBM) vs. "
+        "sh_subtitle": ("Globale Variablenwichtigkeit: TreeExplainer (LightGBM) vs. "
                         "KernelExplainer (SVM-RBF)."),
         "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
         "sh_hint": "Fahre über einen Balken, um die Bedeutung der Variablen zu sehen. {nota}",
@@ -2164,11 +2317,11 @@ STR = {
                         "Gültigkeit des Befunds stärkt, weil er damit vom Algorithmus unabhängig und "
                         "methodisch robuster wird. KernelExplainer behandelt das Modell als Blackbox und "
                         "ist deshalb auf jeden Klassifikator anwendbar."),
-        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Abbildung 27)",
+        "sh_fig_lgbm_title": "SHAP Summary Plot · LightGBM (Abbildung 27)",
         "sh_fig_lgbm_cap": ("Jeder Punkt ist eine Testinstanz; die Farbe zeigt den Wert der Variablen (rot "
                             "hoch, blau niedrig) und die waagerechte Lage ihren Einfluss auf die Vorhersage. "
                             "LBXGH und RIDAGEYR dominieren das Modell."),
-        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Abbildung 31)",
+        "sh_fig_svm_title": "SHAP Summary Plot · SVM-RBF (Abbildung 31)",
         "sh_fig_svm_cap": ("Jeder Punkt ist eine Instanz; Farbe = Wert der Variablen, Lage = Einfluss. "
                            "KernelExplainer über 200 Testinstanzen."),
 
@@ -2183,12 +2336,12 @@ STR = {
         "qc_how_p1": ("Die <b>ZZFeatureMap</b> kodiert jede der 8 klinischen Variablen als Phasenwinkel "
                       "(P-Gatter) auf einem eigenen Qubit, nachdem sie mit Hadamard-Gattern Superposition "
                       "erzeugt hat. Ihr Unterscheidungsmerkmal ist die <b>Verschränkung</b> zwischen "
-                      "Qubit-Paaren über Gatter, die vom Kreuzprodukt zweier Variablen abhängen — "
+                      "Qubit-Paaren über Gatter, die vom Kreuzprodukt zweier Variablen abhängen, "
                       "Korrelationen, die der klassische RBF-Kernel nicht darstellen kann."),
         "qc_how_p2": ("Der <b>FidelityQuantumKernel</b> misst die Ähnlichkeit zweier Patienten als die "
                       "Fidelity zwischen ihren Quantenzuständen: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. Die "
                       "Implementierung nutzt <code>StatevectorSampler</code> und simuliert den exakten "
-                      "Zustand ohne Rauschen — deterministische, reproduzierbare Ergebnisse."),
+                      "Zustand ohne Rauschen: deterministische, reproduzierbare Ergebnisse."),
         "qc_feat_title": "8 ausgewählte Features (Random Forest)",
         "qc_xaxis": "RF-Wichtigkeit",
         "qc_train_title": "Training und Auswertung",
@@ -2209,7 +2362,7 @@ STR = {
         "bl_what_note": ("<b>Was die Bloch-Kugel ist.</b> Ein klassisches Bit kann nur 0 oder 1 "
                          "sein. Ein Qubit lässt zusätzlich jede Mischung aus beidem zu, und diese "
                          "Mischung passt nicht in eine einzige Zahl: es braucht eine Karte. Die "
-                         "Bloch-Kugel ist diese Karte — jeder mögliche Zustand eines Qubits ist ein "
+                         "Bloch-Kugel ist diese Karte: Jeder mögliche Zustand eines Qubits ist ein "
                          "Punkt auf der Oberfläche einer Kugel mit Radius 1. Der Nordpol ist "
                          "<b>|0⟩</b> und der Südpol <b>|1⟩</b>; dazwischen liegen die "
                          "Superpositionen, und je näher der Pfeil an einem Pol steht, desto "
@@ -2230,20 +2383,20 @@ STR = {
                     "„eine Zahl zu einem Zustand wird“.<br><br>"
                     "Die <b>echte ZZFeatureMap</b> tut etwas anderes: sie wendet H an und danach "
                     "P(2·x<sub>i</sub>), und ein Phasengatter nach einer Hadamard lässt den Zustand "
-                    "<b>auf dem Äquator</b> — θ = π/2 fest, P(|0⟩) = P(|1⟩) = 50 % immer — und kodiert "
+                    "<b>auf dem Äquator</b> (θ = π/2 fest, P(|0⟩) = P(|1⟩) = 50 % immer) und kodiert "
                     "den Wert im <b>azimutalen</b> Winkel φ, nicht im polaren. Sie normiert auch nicht "
                     "auf [0,1], sondern nutzt den skalierten Wert direkt. Deshalb veranschaulicht diese "
                     "Kugel das Konzept, bildet den Schaltkreis aber nicht Schritt für Schritt ab. Die "
                     "Verschränkung (Gatter P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) ist nur im "
-                    "gemeinsamen Raum der 8 Qubits darstellbar — siehe Quantenschaltkreis."),
+                    "gemeinsamen Raum der 8 Qubits darstellbar (siehe Quantenschaltkreis)."),
 
         # ── Seite 5 · Tab Bloch-Kugel → Abschnitt Verschränkung ──
         "bl_ent_title": "Verschränkung: drei Qubits, ein einziger Zustand",
         "bl_ent_sub": ("Die Grenze der Kugel von oben. Wende die drei Gatter an und sieh, was mit dem "
-                       "lokalen Zustand jedes Qubits geschieht — und mit dem des Paares, das übrig bleibt."),
+                       "lokalen Zustand jedes Qubits geschieht, und mit dem des Paares, das übrig bleibt."),
         "bl_ent_intro": ("<b>Wo die Bloch-Kugel aufhört zu taugen.</b> Für ein Qubit genügen eine Kugel "
                          "und ein Pfeil. Bei mehreren liegt die Versuchung nahe, eine Kugel je Qubit zu "
-                         "zeichnen — und für die meisten Zustände geht das auf. Aber es gibt eine Familie "
+                         "zeichnen, und für die meisten Zustände geht das auf. Aber es gibt eine Familie "
                          "von Zuständen, in der <b>kein Pfeil mehr zu zeichnen bleibt</b>: das Ganze hat "
                          "einen vollkommen bestimmten Zustand, und keines seiner Mitglieder hat einen für "
                          "sich. Das ist die Verschränkung, und hier entsteht sie aus drei Gattern. Wende "
@@ -2261,22 +2414,22 @@ STR = {
              "Wahrscheinlichkeit trägt."),
             ("<b>Superposition, noch nicht verschränkt.</b> Die Hadamard lässt q₀ auf halbem Weg "
              "zwischen |0⟩ und |1⟩, während q₁ und q₂ fest in |0⟩ bleiben: der gemeinsame Zustand ist "
-             "(|000⟩ + |100⟩)/√2. Die drei Qubits sind weiterhin <b>unabhängig</b> — jedes hat seinen "
+             "(|000⟩ + |100⟩)/√2. Die drei Qubits sind weiterhin <b>unabhängig</b>: Jedes hat seinen "
              "eigenen reinen Zustand, und drei Bloch-Kugeln würden sie vollständig beschreiben. Beachte, "
              "dass die Länge des lokalen Vektors weiterhin 1 beträgt: es gibt einen Pfeil zu zeichnen."),
             ("<b>Ein Bell-Paar, und ein Zuschauer.</b> Das erste CNOT kippt q₁ nur dann, wenn q₀ gleich 1 "
              "ist; auf eine Superposition angewandt, bindet das beide Ergebnisse zu einem: "
-             "(|000⟩ + |110⟩)/√2. Hier zerbricht die Karte — die Länge des lokalen Vektors von q₀ ist "
+             "(|000⟩ + |110⟩)/√2. Hier zerbricht die Karte: Die Länge des lokalen Vektors von q₀ ist "
              "gerade auf <b>0</b> gefallen, das Qubit liegt an keinem Punkt seiner Kugel mehr, weil es für "
              "sich genommen <b>keinen Zustand mehr hat</b>. Und es geschieht noch etwas, das nur mit einem "
              "dritten Qubit sichtbar wird: q₂ ist AUSSEN vor geblieben und schaut aus |0⟩ zu, und "
              "verschränkt ist genau das Paar q₀q₁. Seine Konkurrenz steht auf <b>1</b>, dem Maximum."),
             ("<b>GHZ-Zustand.</b> Das zweite CNOT hängt q₂ an die Kette: (|000⟩ + |111⟩)/√2. Die Knoten "
              "sind zu den Polen gewandert und die beiden mittleren Ringe sind leer. Die ersten drei Zahlen "
-             "rühren sich nicht — q₀ hat weiterhin keinen eigenen Zustand —, aber die vierte bricht ein: "
+             "rühren sich nicht (q₀ hat weiterhin keinen eigenen Zustand), aber die vierte bricht ein: "
              "die Konkurrenz des Paares q₀q₁ steht wieder auf <b>0</b>. Alle drei zu verschränken hat das "
-             "Band des Paares AUFGELÖST. Die beiden bleiben korreliert — misst man eines, sagt das andere "
-             "voraus —, aber nicht mehr verschränkt: die Verschränkung eines GHZ gehört dem Ganzen und ist "
+             "Band des Paares AUFGELÖST. Die beiden bleiben korreliert (misst man eines, sagt das andere "
+             "voraus), aber nicht mehr verschränkt: die Verschränkung eines GHZ gehört dem Ganzen und ist "
              "<b>nicht die Summe paarweiser Bänder</b>."),
         ],
         "bl_ent_circuit_title": "Schaltkreis",
@@ -2299,8 +2452,8 @@ STR = {
             ("Mit allen drei Qubits in |0⟩ lautet das Ergebnis bei jedem Schuss <b>000</b>. Es gibt noch "
              "nichts auszulosen: so verhalten sich drei klassische Bits."),
             ("<b>000</b> und <b>100</b> kommen zu gleichen Teilen heraus: q₀ verhält sich wie ein "
-             "Münzwurf, und q₁ und q₂ sind 0, was auch geschieht. Die Ergebnisse sind <b>unabhängig</b> "
-             "— eines zu kennen sagt nichts über die anderen."),
+             "Münzwurf, und q₁ und q₂ sind 0, was auch geschieht. Die Ergebnisse sind <b>unabhängig</b>: "
+             "Eines zu kennen sagt nichts über die anderen."),
             ("Heraus kommen <b>000</b> und <b>110</b>: q₀ und q₁ liefern immer denselben Wert, eines zu "
              "messen legt also das andere fest, während q₂ auf 0 festgenagelt bleibt und von nichts "
              "erfährt. Zwei der drei sind schon aneinander gebunden; das dritte schaut noch von außen zu."),
@@ -2311,14 +2464,14 @@ STR = {
              "Diese perfekte Korrelation ist die Verschränkung, vom Labor aus gesehen."),
         ],
         "bl_ent_impl_note": ("<b>Wie das berechnet ist.</b> Die acht Amplituden stammen aus <b>exakter</b> "
-                             "linearer Algebra in NumPy — der Matrix H⊗I⊗I und den beiden CNOT, angewandt "
-                             "auf |000⟩ —, nicht aus einer Näherung; die Konkurrenz des Paares ist die "
+                             "linearer Algebra in NumPy (der Matrix H⊗I⊗I und den beiden CNOT, angewandt "
+                             "auf |000⟩), nicht aus einer Näherung; die Konkurrenz des Paares ist die "
                              "Formel von Wootters, die für zwei Qubits den exakten Wert liefert und keine "
                              "Schranke; und die Messungen stammen aus einer multinomialen "
                              "Ziehung über |ψ|², also dem, was ein idealer rauschfreier Simulator tut. Das "
                              "Panel <b>lädt kein Qiskit</b>: die ausgelieferte Umgebung besteht aus "
                              "Streamlit, NumPy, Plotly und ONNX Runtime, während Qiskit in der "
-                             "Databricks-Pipeline lebt — dort wird die QSVM trainiert — und seine "
+                             "Databricks-Pipeline lebt (dort wird die QSVM trainiert) und seine "
                              "Abbildungen hier bereits gerendert ankommen, wie der 8-Qubit-Schaltkreis auf "
                              "der Seite Quantenschaltkreis. Die Basiskonvention ist die des Lehrbuchs, "
                              "|q₀q₁q₂⟩ mit q₀ links; Qiskit nummeriert umgekehrt und schriebe „001“, wo der "
@@ -2331,14 +2484,14 @@ STR = {
         "bl_zz_intro": ("<b>Von drei Qubits zu den acht des Modells.</b> Jedes Qubit der ZZFeatureMap "
                         "trägt <b>eine klinische Variable</b>: q₀ ist der HbA1c, q₁ die Glukose, und so "
                         "weiter bis zum BMI. Bei 256 Amplituden gibt es kein Bild des Zustands mehr, das "
-                        "man anschauen könnte — weder Q-Sphere noch Histogramm —, aber es lassen sich "
+                        "man anschauen könnte (weder Q-Sphere noch Histogramm), aber es lassen sich "
                         "weiterhin die <b>gleichen beiden Größen</b> aus dem vorigen Abschnitt messen: "
                         "wie viel eigenen Zustand jedes Qubit behält und wie viel Information es mit "
                         "jedem anderen teilt. Das ist kein Lehrbuchbeispiel mehr: es ist der Schaltkreis, "
                         "mit dem das Modell trainiert wurde."),
         "bl_zz_current": "Variable im Spiel: <b>{var} = {val} {unidad}</b>. Die anderen sieben auf ihrem Referenzwert.",
         "bl_zz_r_title": "Eigener Zustand jedes Qubits",
-        "bl_zz_r_xaxis": "|r| — 1 = behält seinen Zustand · 0 = vollständig verschränkt",
+        "bl_zz_r_xaxis": "|r|: 1 = behält seinen Zustand · 0 = vollständig verschränkt",
         "bl_zz_mi_title": "Wechselseitige Information zwischen Qubits",
         "bl_zz_mi_cbar": "Bit",
         "bl_zz_note": ("<b>Wie die Matrix zu lesen ist.</b> Jede Zelle sagt, wie viel Information zwei "
@@ -2352,7 +2505,7 @@ STR = {
                        "Topologie des Schaltkreises zeichnet sich von selbst.<br><br>"
                        "Und es gibt eine zweite Sache, die man sieht, wenn man den Schieberegler oben "
                        "bewegt: ändert man <b>eine</b> Variable, bewegen sich nur <b>ihr Qubit und "
-                       "dessen unmittelbare Nachbarn</b> — die übrigen ändern sich nicht um eine "
+                       "dessen unmittelbare Nachbarn</b>: Die übrigen ändern sich nicht um eine "
                        "Nachkommastelle. Es ist derselbe Sachverhalt von der anderen Seite: der "
                        "Lichtkegel des Schaltkreises, live."),
         "bl_zz_caveat": ("<b>Ein Lesehinweis, und kein kleiner.</b> Die Verschränkung <b>wächst nicht mit "
@@ -2371,7 +2524,7 @@ STR = {
         "lp_eyebrow": "Interaktive Inferenz",
         "lp_title": "Live-Prädiktor",
         "lp_subtitle": ("Wahrscheinlichkeit, dass ein klinisches Profil zu einer bereits mit Diabetes "
-                        "diagnostizierten Person gehört — LightGBM über die 8 wichtigsten Variablen."),
+                        "diagnostizierten Person gehört: LightGBM über die 8 wichtigsten Variablen."),
         "lp_what_note": ("<b>Was dieses Formular schätzt.</b> Das Ziel der Pipeline ist "
                          "<code>TARGET = (DIQ010 == 1)</code>, die Antwort auf <i>„Hat Ihnen jemals ein "
                          "Arzt gesagt, dass Sie Diabetes haben?“</i>. Das Modell <b>erkennt</b> also "
@@ -2386,7 +2539,7 @@ STR = {
                          "in Echtzeit zur Verfügung: die Vorhersage der 1.567 Testinstanzen kostete "
                          "144,5 Minuten."),
         "lp_proxy_note": ("⚠ <b>Technischer und klinischer Hinweis.</b> Dieses Formular hat die echten "
-                          "serialisierten Modelle (<code>.onnx</code>) nicht angebunden — lege "
+                          "serialisierten Modelle (<code>.onnx</code>) nicht angebunden: Lege "
                           "<code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>, "
                           "<code>scaler_correcto.json</code> und <code>medianas_correctas.json</code> "
                           "in <code>streamlit/models/</code>. Der unten gezeigte Wert ist ein "
@@ -2396,7 +2549,7 @@ STR = {
                           "werden. Auch die QSVM steht nicht in Echtzeit zur Verfügung (Aufwand O(n²) "
                           "des Quantenkernels)."),
         "lp_train_range": "Training: {mu} ± {sd} (±3 SD → {lo} bis {hi})",
-        "lp_extrapolates": "⚠ z = {z} — außerhalb des trainierten Bereichs: das Modell extrapoliert",
+        "lp_extrapolates": "⚠ z = {z} · außerhalb des trainierten Bereichs: das Modell extrapoliert",
         "lp_ada": "ADA-Kriterium: &lt; 5,7 normal · 5,7–6,4 Prädiabetes · ≥ 6,5 Diabetes",
         "lp_who_model": "das Modell",
         "lp_who_proxy": "der Platzhalter",
@@ -2418,14 +2571,14 @@ STR = {
         "lp_gauge_caption": ("Übereinstimmung mit einer bestehenden Diagnose: gering · mittel · hoch · "
                              "&nbsp;Entscheidungsschwelle = 50 %"),
         "lp_side_title": "Die beiden Modelle nebeneinander",
-        "lp_side_sub": ("Jede Wahrscheinlichkeit wird am Schnittpunkt ihres eigenen Modells beurteilt — sie "
+        "lp_side_sub": ("Jede Wahrscheinlichkeit wird am Schnittpunkt ihres eigenen Modells beurteilt: Sie "
                         "sind nicht austauschbar"),
         "lp_own_threshold": "Seine Schwelle",
         "lp_would_classify": "Würde einstufen als",
         "lp_positive": "positiv",
         "lp_negative": "negativ",
         "lp_disagree": ("<b>Die beiden Modelle weichen bei diesem Profil um {dif} voneinander ab.</b> Sie "
-                        "stimmen an den Extremen überein — klar gesunde oder klar diabetische Profile — "
+                        "stimmen an den Extremen überein (klar gesunde oder klar diabetische Profile) "
                         "und gehen im mittleren Band auseinander, also genau dort, wo eine Schätzung am "
                         "nützlichsten wäre. Nimm es als Zeichen von Unsicherheit, nicht als Hinweis "
                         "darauf, dass eines der beiden recht hat."),
@@ -2443,10 +2596,10 @@ STR = {
                          "<b>Behandlung</b>, nicht nur den der Krankheit. Das kehrt die klinische "
                          "Bedeutung zweier Variablen um:"
                          '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
-                         "<li><b>LDL-Cholesterin</b> — je höher das LDL, desto <i>geringer</i> die "
+                         "<li><b>LDL-Cholesterin</b>: Je höher das LDL, desto <i>geringer</i> die "
                          "geschätzte Wahrscheinlichkeit (von 43 % auf 18 % über den Schieberegler). "
                          "Diagnostizierte Personen sind meist mit Statinen behandelt.</li>"
-                         "<li><b>Nüchternglukose</b> — die Antwort ist U-förmig: sehr niedrige Werte "
+                         "<li><b>Nüchternglukose</b>: Die Antwort ist U-förmig: sehr niedrige Werte "
                          "heben die Schätzung ebenso wie hohe, wegen der Hypoglykämien behandelter "
                          "Patienten.</li></ul>"
                          '<div style="margin-top:10px;">Keine der beiden darf als veränderbarer '
@@ -2480,7 +2633,7 @@ STR = {
         "sidebar_collapse": "Replier la barre latérale",
         "search_label": "Rechercher",
         "search_ph": "Rechercher dans le tableau de bord ou sur le web…",
-        "search_expand": "Rechercher — déplie la barre latérale",
+        "search_expand": "Rechercher : déplie la barre latérale",
         "scroll_top": "Revenir en haut",
         "search_in": "dans {p}",
         "search_none": "Aucun résultat dans le tableau de bord.",
@@ -2511,13 +2664,59 @@ STR = {
             "<b>Databricks Community Edition</b>, avec <b>AWS S3</b> comme véritable couche de "
             "stockage cloud et une architecture <b>Médaillon</b> (Bronze → Silver → Gold) sur Delta "
             "Lake comme colonne vertébrale. Le cas d'usage prédit le diabète de type 2 à partir des "
-            "enregistrements de l'étude <b>NHANES</b> (CDC) — le jeu de données n'est pas l'objet de "
+            "enregistrements de l'étude <b>NHANES</b> (CDC) : le jeu de données n'est pas l'objet de "
             "la recherche, mais le véhicule qui démontre que l'architecture est viable, reproductible "
             "et auditable sur des données réelles à grande échelle. Le cœur expérimental est une "
             "<b>comparaison triangulée</b> entre LightGBM (baseline tabulaire), un SVM à noyau RBF "
             "(pont structurel) et un <b>QSVM</b> avec FidelityQuantumKernel sous Qiskit, en gardant "
             "le classifieur sous-jacent identique afin d'attribuer toute différence de performance à "
-            "l'effet du noyau quantique."),
+            "l'effet du noyau quantique."
+            " L'évaluation ferme le parcours : chaque modèle est mesuré avec AUC-ROC, F1, accuracy "
+            "et MCC, <b>SHAP</b> désigne sur LightGBM les 20 variables qui pèsent le plus dans la "
+            "prédiction, et les deux modèles classiques sont sérialisés en <b>ONNX</b> avec leur "
+            "portabilité vérifiée. Le dépôt GitHub publie les 7 notebooks qui exécutent ce "
+            "parcours, et cette application même, déployée sur Streamlit Cloud, en est le dernier "
+            "maillon : la prédiction en direct et sa lecture SHAP."),
+        "ov_arch_alt": ("Schéma de l'architecture du pipeline : AWS S3 alimente Databricks "
+                        "Community Edition, où l'architecture Médaillon (Bronze, Silver et Gold) "
+                        "débouche sur trois modèles (LightGBM, SVM à noyau RBF et QSVM avec Qiskit) et "
+                        "sur l'évaluation avec métriques, SHAP et sérialisation ONNX ; la sortie part "
+                        "vers GitHub et Streamlit Cloud."),
+        # Rótulos del diagrama de arquitectura que abre la página (arquitectura_svg()). Las
+        # cifras NO van escritas: llegan por marcador y las pone mil(), que usa el separador
+        # de millar del idioma. Lo que no viaja aquí es la geometría ni qué caja va resaltada,
+        # que son dibujo y no texto.
+        "ov_arch_io": (
+            ("AWS S3", "NHANES brut · 27 XPT", "IAM"),
+            ("GitHub", "7 notebooks · README"),
+            ("Streamlit Cloud", "Prédiction · SHAP visuel"),
+        ),
+        "ov_arch_grupos": (
+            ("Architecture Médaillon", (
+                ("Bronze · ingestion brute",
+                 "{bronze} lignes · 162 col. · Delta Lake ACID"),
+                ("Silver · qualité",
+                 "{silver} lignes · 91 col. · expectations"),
+                ("Gold · features curées",
+                 "89 features · train {train} / test {test}"),
+            )),
+            ("Modèles · ML / QML", (
+                ("LightGBM",
+                 "Baseline tabulaire · GOSS · EFB"),
+                ("SVM · noyau RBF",
+                 "Pont direct vers le QSVM"),
+                ("QSVM · Qiskit",
+                 "ZZFeatureMap · FidelityQuantumKernel"),
+            )),
+            ("Évaluation et sérialisation", (
+                ("Métriques",
+                 "AUC-ROC · F1 · Accuracy · MCC"),
+                ("SHAP",
+                 "Explicabilité LightGBM · top 20"),
+                ("Sélection · ONNX",
+                 "Portabilité vérifiée"),
+            )),
+        ),
         "ov_stats_title": "Statistiques du jeu de données NHANES",
         "ov_stats_sub": "Trois cycles biennaux intégrés · pipeline en couches Bronze → Silver → Gold",
         "ov_stat_bronze": "Enregistrements Bronze",
@@ -2624,17 +2823,17 @@ STR = {
         "gov_hover_records": "Enregistrements",
         "gov_hover_dropped": "Écartés",
         "gov_embudo": [
-            ("Bronze — 3 cycles réunis",
+            ("Bronze · 3 cycles réunis",
              "27 fichiers XPT · jointure par SEQN · 162 colonnes communes aux trois cycles"),
             ("Filtre âge ≥ 18 ans", "Restriction à la population adulte"),
-            ("Filtre à jeun — LBXGLU non nul",
+            ("Filtre à jeun · LBXGLU non nul",
              "Proxy du sous-groupe à jeun : PHAFSTMN n'est pas cohérent d'un cycle à l'autre"),
             ("Filtre DIQ010 valide",
              "Écarte les codes 7 « ne sait pas » et 9 « refuse de répondre », ainsi que les valeurs nulles"),
         ],
         "gov_dropped_title": "Enregistrements écartés par filtre",
         "gov_split_label": "Partition Gold 80/20",
-        "gov_suite_title": "Suite de validation — dataframe-expectations",
+        "gov_suite_title": "Suite de validation · dataframe-expectations",
         "gov_suite_sub": ("Suite <code>{nombre}</code>, exécutée le {fecha} sur les {registros} "
                           "enregistrements de Silver en {duracion} secondes. Great Expectations est "
                           "incompatible avec les versions figées du runtime serverless : voici "
@@ -2657,8 +2856,8 @@ STR = {
             ("Volume", "DataFrame", "au plus 9 000 lignes"),
         ],
         "gov_ops_title": "Opérations de qualité par couche",
-        "gov_silver_card": "Silver — nettoyage et assainissement",
-        "gov_gold_card": "Gold — préparation à la modélisation",
+        "gov_silver_card": "Silver · nettoyage et assainissement",
+        "gov_gold_card": "Gold · préparation à la modélisation",
         "gov_silver_ops": [
             ("Variables DIQ exclues pour fuite", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
             ("Colonnes creuses supprimées", "Seuil de >80 % de valeurs manquantes"),
@@ -2681,7 +2880,7 @@ STR = {
                          "à des variables catégorielles encodées numériquement (réponses 1/2, langue de "
                          "l'entretien, codes 7 et 9). Lorsque plus de 75 % de l'échantillon répond la même "
                          "chose, l'écrêtage réduit la colonne à une valeur unique. Les plus écrêtées dans "
-                         "le notebook 02 — PAQ635, PAQ650, PAQ605, DMDHHSZA, DMDCITZN, SIALANG — sont "
+                         "le notebook 02 (PAQ635, PAQ650, PAQ605, DMDHHSZA, DMDCITZN, SIALANG) sont "
                          "exactement celles qui apparaissent ici comme constantes."),
         "gov_lin_title": "Traçabilité sans MLflow",
         "gov_lin_sub": "La contrainte qui conditionne le plus l'architecture du pipeline, et son atténuation.",
@@ -2690,19 +2889,19 @@ STR = {
                                "Serverless gratuit. Tout appel à <code>mlflow.start_run()</code> ou "
                                "<code>mlflow.log_metric()</code> produit des erreurs d'authentification : "
                                "aucun suivi des expériences, des métriques ni des artefacts."),
-        "gov_lin_mit_title": "Atténuation — double mécanisme",
-        "gov_lin_mit_body": ("<b>Journaux de transactions de Delta Lake</b> — chaque écriture génère un "
+        "gov_lin_mit_title": "Atténuation · double mécanisme",
+        "gov_lin_mit_body": ("<b>Journaux de transactions de Delta Lake</b> : chaque écriture génère un "
                              "enregistrement ACID avec version, horodatage et métriques d'opération."
-                             "<br><br><b>CSV de métriques par modèle</b> — chaque notebook persiste ses "
+                             "<br><br><b>CSV de métriques par modèle</b> : chaque notebook persiste ses "
                              "résultats dans Unity Catalog Volumes, et les figures les y lisent au lieu "
                              "de les porter en dur."),
-        "gov_delta_title": "Historique Delta — couche Gold",
+        "gov_delta_title": "Historique Delta · couche Gold",
         "gov_delta_sub": ("Les six versions les plus récentes sur les dix enregistrées. Delta purge les "
                           "précédentes après 168 h de rétention : comportement attendu, et non une "
                           "défaillance du pipeline."),
         "gov_delta_cols": ["Version", "Horodatage", "Opération", "Lignes", "Taille"],
         "gov_chain_title": "Chaîne de contrôle contre la fuite d'information",
-        "gov_chain_sub": ("Quatre barrières enchaînées. La troisième n'écarte aucune colonne — et c'est "
+        "gov_chain_sub": ("Quatre barrières enchaînées. La troisième n'écarte aucune colonne, et c'est "
                           "exactement ce que l'on veut voir : la preuve que les précédentes ont fait "
                           "leur travail."),
         "gov_leakage": [
@@ -2714,7 +2913,7 @@ STR = {
              "Gold. Résultat : 15/15 artefacts propres."),
             ("Filtre défensif du QSVM",
              "Deuxième barrière avant la sélection par Random Forest. Elle n'écarte aucune colonne "
-             "(89 sur 89 passent) — précisément la preuve que la première a fonctionné."),
+             "(89 sur 89 passent), précisément la preuve que la première a fonctionné."),
             ("Garde-fou des poids de sondage",
              "Arrête le pipeline si un poids de sondage autre que celui connu apparaît. WTINT2YR "
              "atteint bel et bien la modélisation et est documenté à la décision 10."),
@@ -2723,17 +2922,22 @@ STR = {
         "gov_scaler": [
             ("Ajustement", "Sur train uniquement", "fit_transform sur train · transform sur test"),
             ("Colonnes évaluées", "66", "Avec variance > 0"),
-            ("Colonnes constantes", "23", "Variance 0 — voir décision 08"),
+            ("Colonnes constantes", "23", "Variance 0 · voir décision 08"),
             ("Moyenne ≈ 0 · écart-type ≈ 1", "Vérifié", "Assert sur toutes les colonnes avec dispersion"),
         ],
         "gov_scaler_note": ("Le <b>StandardScaler</b> est ajusté exclusivement sur <b>train</b> : "
                             "<code>fit_transform</code> à l'entraînement et <code>transform</code> au "
                             "test. S'il était ajusté sur l'ensemble complet, la moyenne et l'écart-type "
                             "du test fuiraient dans le prétraitement et les métriques seraient "
-                            "optimistes. La sélection des 8 variables du QSVM suit la même règle — le "
+                            "optimistes. La sélection des 8 variables du QSVM suit la même règle : le "
                             "Random Forest n'est entraîné que sur <code>X_train_svm_scaled</code>."
                             "<br><br>Le filtre de corrélation, en revanche, <b>est bien</b> calculé "
-                            "avant la partition. C'est documenté et assumé à la décision 09."),
+                            "avant la partition. C'est documenté et assumé à la décision 09."
+                            "<br><br>La vérification s'exécute, elle ne se déclare pas : sur les 66 colonnes ayant "
+                            "de la dispersion, on exige |moyenne| &lt; 0,01 et un écart-type entre 0,90 et 1,10. "
+                            "Les paramètres ajustés (<code>mean_</code> et <code>scale_</code>) partent dans "
+                            "<code>scaler_correcto.json</code>, le fichier que charge le Prédicteur en direct : "
+                            "l'échelle du train n'est jamais recalculée."),
         "gov_e2e_title": "Vérification de bout en bout face aux modèles entraînés",
         "gov_e2e_missing": ('<b style="color:{color};">Non vérifié.</b> Le jeu de test n\'est pas dans le '
                             "dépôt, le tableau de bord ne peut donc pas vérifier seul que son chemin "
@@ -2753,9 +2957,9 @@ STR = {
         "gov_e2e_fail_title": "⚠ Le chemin d'inférence ne reproduit pas les modèles",
         "gov_e2e_note": ("Chaque ligne du <i>golden set</i> est une instance réelle du test accompagnée "
                          "de la probabilité renvoyée par le modèle entraîné dans son notebook. Le "
-                         "tableau de bord la fait passer par son propre chemin — vecteur brut, mise à "
+                         "tableau de bord la fait passer par son propre chemin (vecteur brut, mise à "
                          "l'échelle du SVM seulement, conversion en <code>float32</code>, session ONNX "
-                         "et lecture du tenseur de sortie — puis compare. Tolérance {tol} ; le bruit "
+                         "et lecture du tenseur de sortie) puis compare. Tolérance {tol} ; le bruit "
                          "attendu du travail en <code>float32</code> est de l'ordre de 10⁻⁷."),
         "gov_stack_title": "Frameworks par couche",
         "gov_stack_sub": ("Le premier badge de chaque carte est le framework qui structure la couche ; "
@@ -2785,7 +2989,7 @@ STR = {
         "gov_dec_title": "Registre des décisions",
         "gov_dec_sub": ("Les onze limitations documentées dans TECHNICAL_NOTES, avec leur atténuation. "
                         "Trois conditionnent l'architecture, six sont assumées et documentées sans "
-                        "correction — car la corriger invaliderait les résultats déjà obtenus — et deux "
+                        "correction (car la corriger invaliderait les résultats déjà obtenus) et deux "
                         "sont résolues sans reliquat."),
         "gov_dec_tags": {"critical": "Architecture", "warning": "Assumée", "good": "Résolue"},
         "gov_dec_problem": "Problème · ",
@@ -2807,13 +3011,13 @@ STR = {
              "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
              "dataframe-expectations 0.7.0 comme alternative compatible. 15 attentes sur Silver dans "
              "trois dimensions. Résultat 15/15, taux de réussite 1,0."),
-            ("QSVM — coût de calcul O(n²)",
+            ("QSVM · coût de calcul O(n²)",
              "Sur les 6 264 instances d'entraînement, la matrice de noyau exigerait environ "
              "39 millions d'évaluations du circuit. À 1 500, le noyau épuise la mémoire.",
              "Entraînement sur un échantillon stratifié de 500 instances (~22 min) en préservant le "
              "ratio 86/14. L'évaluation utilise bien le test complet, pour que les métriques restent "
              "comparables."),
-            ("QSVM — pas de support ONNX natif",
+            ("QSVM · pas de support ONNX natif",
              "Le format ONNX n'admet pas d'opérations quantiques : ni skl2onnx ni onnxmltools ne "
              "peuvent sérialiser un noyau fondé sur la simulation d'états.",
              "Sérialisation avec joblib. Le modèle exige l'environnement Qiskit pour l'inférence, si "
@@ -2834,7 +3038,7 @@ STR = {
              "valeur, IQR = 0, les bornes s'effondrent et clip() transforme la variable en constante. "
              "10 colonnes se sont ainsi effondrées.",
              "Documenté sans modification : corriger altérerait Silver, Gold et les trois modèles. "
-             "Les colonnes constantes ne biaisent rien — le modèle n'en tire aucun signal — mais de "
+             "Les colonnes constantes ne biaisent rien (le modèle n'en tire aucun signal), mais de "
              "l'information est perdue. La correction est identifiée comme travail futur."),
             ("Corrélation calculée avant la partition",
              "Le filtre r > 0,90 est calculé sur le jeu complet : les 16 colonnes écartées sont donc "
@@ -2850,7 +3054,7 @@ STR = {
              "cible, mais laisse le modèle s'appuyer sur le plan de l'enquête."),
             ("Le QSVM sérialisé n'est pas rechargeable d'une version à l'autre",
              "Le pickle entraîne avec lui la ZZFeatureMap et ses ParameterExpression. Si Qiskit change "
-             "de version, la désérialisation échoue — et Serverless met à jour sans prévenir.",
+             "de version, la désérialisation échoue, et Serverless met à jour sans prévenir.",
              "Le chargement est enveloppé dans un try/except : en cas d'échec, TRAINING_MODE passe à "
              "True et le notebook réentraîne au lieu d'abandonner. Il reste opérationnel dans les "
              "trois scénarios possibles."),
@@ -2870,15 +3074,15 @@ STR = {
         "res_threshold": "Seuil",
         "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
         "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
-                        "svm_rbf": "SVC.predict() — signe de decision_function",
+                        "svm_rbf": "SVC.predict() · signe de decision_function",
                         "qsvm": "decision_function > 0 (n'est pas une probabilité)"},
-        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Réconciliées</span> — les '
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Réconciliées</span> : les '
                            "quatre métriques des trois modèles ont été recalculées à partir des scores "
                            "par instance et coïncident avec celles publiées."),
-        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Non réconciliées</span> — {fallos}',
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Non réconciliées</span> : {fallos}',
         "res_no_scores": "scores non disponibles",
         "res_threshold_note": ("<b>Les trois modèles sont mesurés à des seuils différents.</b> Chacun "
-                               "utilise son point de coupure naturel — LightGBM "
+                               "utilise son point de coupure naturel : LightGBM "
                                "<code>predict_proba ≥ 0,50</code> ; SVM-RBF le signe de "
                                "<code>decision_function</code>, qui sur l'échelle de probabilité "
                                "enregistrée équivaut à ≈ 0,22 ; QSVM <code>decision_function &gt; 0</code>, "
@@ -2904,7 +3108,7 @@ STR = {
         "res_cm_tags": {"tn": "VN", "fp": "FP", "fn": "FN", "tp": "VP"},
         "res_metrics_title": "Comparaison des métriques",
         "res_metrics_sub": ("Les quatre métriques portent sur les 1 567 instances. Accuracy, MCC et "
-                            "F1-macro pénalisent bien le déséquilibre des classes — mais elles dépendent "
+                            "F1-macro pénalisent bien le déséquilibre des classes, mais elles dépendent "
                             "du seuil, et chaque modèle utilise le sien : comparez avec prudence tout ce "
                             "qui n'est pas l'AUC-ROC"),
         "res_metric_desc": {
@@ -2916,14 +3120,14 @@ STR = {
         "res_qsvm_note": ("<b>Note sur l'expérience QSVM.</b> Le QSVM a été entraîné sur un échantillon "
                           "stratifié de 500 instances (coût O(n²) du noyau quantique) et évalué sur les "
                           "1 567 du test complet. AUC-ROC = 0,5493 indique que le modèle dépasse à peine "
-                          "la classification aléatoire — rappel ≈ 0 pour la classe diabète (1 sur 220), "
+                          "la classification aléatoire : rappel ≈ 0 pour la classe diabète (1 sur 220), "
                           "et une accuracy de 0,8602 qui ne reflète que la proportion de la classe "
                           "majoritaire. Le MCC ≈ 0 confirme l'absence de véritable capacité prédictive."),
 
         # ── Page 4 · Analyse SHAP ──
         "sh_eyebrow": "Interprétabilité",
         "sh_title": "Analyse SHAP",
-        "sh_subtitle": ("Importance globale des variables — TreeExplainer (LightGBM) vs "
+        "sh_subtitle": ("Importance globale des variables : TreeExplainer (LightGBM) vs "
                         "KernelExplainer (SVM-RBF)."),
         "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
         "sh_hint": "Survolez chaque barre pour voir la signification de la variable. {nota}",
@@ -2941,11 +3145,11 @@ STR = {
                         "la validité clinique du résultat en le rendant indépendant de l'algorithme et "
                         "méthodologiquement plus robuste. KernelExplainer traite le modèle comme une "
                         "boîte noire, applicable à n'importe quel classifieur."),
-        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Figure 27)",
+        "sh_fig_lgbm_title": "SHAP Summary Plot · LightGBM (Figure 27)",
         "sh_fig_lgbm_cap": ("Chaque point est une instance du test ; la couleur indique la valeur de la "
                             "variable (rouge élevé, bleu bas) et la position horizontale son impact sur "
                             "la prédiction. LBXGH et RIDAGEYR dominent le modèle."),
-        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Figure 31)",
+        "sh_fig_svm_title": "SHAP Summary Plot · SVM-RBF (Figure 31)",
         "sh_fig_svm_cap": ("Chaque point est une instance ; couleur = valeur de la variable, position = "
                            "impact. KernelExplainer sur 200 instances du test."),
 
@@ -2961,11 +3165,11 @@ STR = {
                       "phase (porte P) sur un qubit indépendant, après avoir créé la superposition avec "
                       "des portes de Hadamard. Son élément distinctif est l'<b>intrication</b> entre "
                       "paires de qubits au moyen de portes qui dépendent du produit croisé de deux "
-                      "variables — des corrélations que le noyau RBF classique ne peut pas représenter."),
+                      "variables, des corrélations que le noyau RBF classique ne peut pas représenter."),
         "qc_how_p2": ("Le <b>FidelityQuantumKernel</b> mesure la similarité entre deux patients comme la "
                       "fidélité entre leurs états quantiques : <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. "
                       "L'implémentation utilise <code>StatevectorSampler</code> et simule l'état exact "
-                      "sans bruit — des résultats déterministes et reproductibles."),
+                      "sans bruit : des résultats déterministes et reproductibles."),
         "qc_feat_title": "8 features sélectionnées (Random Forest)",
         "qc_xaxis": "Importance RF",
         "qc_train_title": "Entraînement et évaluation",
@@ -2986,7 +3190,7 @@ STR = {
         "bl_what_note": ("<b>Ce qu'est la sphère de Bloch.</b> Un bit classique ne peut valoir "
                          "que 0 ou 1. Un qubit admet en plus n'importe quel mélange des deux, et "
                          "ce mélange ne tient pas dans un seul nombre : il faut une carte. La "
-                         "sphère de Bloch est cette carte — chaque état possible d'un qubit est "
+                         "sphère de Bloch est cette carte : chaque état possible d'un qubit est "
                          "un point à la surface d'une sphère de rayon 1. Le pôle nord est "
                          "<b>|0⟩</b> et le pôle sud <b>|1⟩</b> ; entre les deux se trouvent les "
                          "superpositions, et plus la flèche est proche d'un pôle, plus ce "
@@ -3007,21 +3211,21 @@ STR = {
                     "devient un état ».<br><br>"
                     "La <b>vraie ZZFeatureMap</b> fait autre chose : elle applique H puis "
                     "P(2·x<sub>i</sub>), et une porte de phase après une Hadamard laisse l'état <b>sur "
-                    "l'équateur</b> — θ = π/2 fixe, P(|0⟩) = P(|1⟩) = 50 % toujours — en encodant la "
+                    "l'équateur</b> (θ = π/2 fixe, P(|0⟩) = P(|1⟩) = 50 % toujours), en encodant la "
                     "donnée dans l'angle <b>azimutal</b> φ, et non dans le polaire. Elle ne normalise "
                     "pas non plus sur [0,1] : elle utilise directement la valeur mise à l'échelle. Voilà "
                     "pourquoi cette sphère illustre le concept sans reproduire le circuit pas à pas. "
                     "L'intrication (portes P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) n'est représentable "
-                    "que dans l'espace conjoint des 8 qubits — voir Circuit quantique."),
+                    "que dans l'espace conjoint des 8 qubits (voir Circuit quantique)."),
 
         # ── Page 5 · onglet Sphère de Bloch → section intrication ──
         "bl_ent_title": "Intrication : trois qubits, un seul état",
         "bl_ent_sub": ("La limite de la sphère ci-dessus. Appliquez les trois portes et regardez ce "
-                       "qu'il advient de l'état local de chaque qubit — et de celui de la paire laissée "
+                       "qu'il advient de l'état local de chaque qubit, et de celui de la paire laissée "
                        "en chemin."),
         "bl_ent_intro": ("<b>Là où la sphère de Bloch cesse de servir.</b> Avec un qubit, une sphère "
                          "et une flèche suffisent. Avec plusieurs, la tentation est d'en dessiner une par "
-                         "qubit — et pour la plupart des états cela fonctionne. Mais il existe une famille "
+                         "qubit, et pour la plupart des états cela fonctionne. Mais il existe une famille "
                          "d'états où <b>il ne reste aucune flèche à dessiner</b> : l'ensemble possède un "
                          "état parfaitement défini et aucun de ses membres n'en a un séparément. C'est "
                          "cela, l'intrication, et ici elle se construit avec trois portes. Appliquez-les "
@@ -3039,21 +3243,21 @@ STR = {
              "emporte toute la probabilité."),
             ("<b>Superposition, pas encore d'intrication.</b> La Hadamard laisse q₀ à mi-chemin entre "
              "|0⟩ et |1⟩, tandis que q₁ et q₂ restent fermement en |0⟩ : l'état conjoint est "
-             "(|000⟩ + |100⟩)/√2. Les trois qubits restent <b>indépendants</b> — chacun a son propre "
+             "(|000⟩ + |100⟩)/√2. Les trois qubits restent <b>indépendants</b> : chacun a son propre "
              "état pur et trois sphères de Bloch suffiraient à les décrire. Notez que la longueur du "
              "vecteur local vaut toujours 1 : il y a une flèche à dessiner."),
             ("<b>Une paire de Bell, et un témoin.</b> Le premier CNOT retourne q₁ seulement lorsque q₀ "
              "vaut 1 ; appliqué à une superposition, cela lie les deux résultats en un seul : "
-             "(|000⟩ + |110⟩)/√2. C'est ici que la carte se rompt — la longueur du vecteur local de q₀ "
+             "(|000⟩ + |110⟩)/√2. C'est ici que la carte se rompt : la longueur du vecteur local de q₀ "
              "vient de tomber à <b>0</b>, le qubit n'est plus en aucun point de sa sphère car séparément "
              "il <b>n'a plus d'état</b>. Et il se passe autre chose, visible seulement parce qu'il y a un "
              "troisième qubit : q₂ est resté DEHORS, à regarder depuis |0⟩, et ce qui est intriqué, c'est "
              "exactement la paire q₀q₁. Sa concurrence affiche <b>1</b>, le maximum."),
             ("<b>État GHZ.</b> Le second CNOT accroche q₂ à la chaîne : (|000⟩ + |111⟩)/√2. Les nœuds "
              "sont partis aux pôles et les deux anneaux du milieu sont vides. Les trois premiers "
-             "chiffres ne bougent pas — q₀ reste sans état propre — mais le quatrième s'effondre : la "
+             "chiffres ne bougent pas (q₀ reste sans état propre), mais le quatrième s'effondre : la "
              "concurrence de la paire q₀q₁ retombe à <b>0</b>. Intriquer les trois a DÉFAIT le lien de "
-             "la paire. Les deux restent corrélés — mesurer l'un prédit l'autre — mais ne sont plus "
+             "la paire. Les deux restent corrélés (mesurer l'un prédit l'autre), mais ne sont plus "
              "intriqués : l'intrication d'un GHZ appartient à l'ensemble et n'est <b>pas la somme de "
              "liens deux à deux</b>."),
         ],
@@ -3077,7 +3281,7 @@ STR = {
             ("Avec les trois qubits en |0⟩, le résultat est <b>000</b> à chaque tir. Il n'y a encore "
              "rien à tirer au sort : c'est le comportement de trois bits classiques."),
             ("<b>000</b> et <b>100</b> sortent à parts égales : q₀ se comporte comme un tirage à pile "
-             "ou face, et q₁ et q₂ valent 0 quoi qu'il arrive. Les résultats sont <b>indépendants</b> — "
+             "ou face, et q₁ et q₂ valent 0 quoi qu'il arrive. Les résultats sont <b>indépendants</b> : "
              "connaître l'un ne dit rien des autres."),
             ("Sortent <b>000</b> et <b>110</b> : q₀ et q₁ donnent toujours la même valeur, mesurer l'un "
              "détermine donc l'autre, tandis que q₂ reste cloué à 0 sans rien en savoir. Deux des trois "
@@ -3089,14 +3293,14 @@ STR = {
              "Cette corrélation parfaite, c'est l'intrication vue depuis le laboratoire."),
         ],
         "bl_ent_impl_note": ("<b>Comment c'est calculé.</b> Les huit amplitudes proviennent d'une "
-                             "algèbre linéaire <b>exacte</b> sous NumPy — la matrice H⊗I⊗I et les deux "
-                             "CNOT appliqués à |000⟩ —, et non d'une approximation ; la concurrence de "
+                             "algèbre linéaire <b>exacte</b> sous NumPy (la matrice H⊗I⊗I et les deux "
+                             "CNOT appliqués à |000⟩), et non d'une approximation ; la concurrence de "
                              "la paire est la formule de Wootters, qui pour deux qubits donne la valeur "
                              "exacte et non une borne ; et les mesures viennent "
                              "d'un tirage multinomial sur |ψ|², ce que fait un simulateur idéal sans "
                              "bruit. Ce panneau <b>ne charge pas Qiskit</b> : l'environnement déployé "
                              "est Streamlit, NumPy, Plotly et ONNX Runtime, tandis que Qiskit vit dans "
-                             "le pipeline Databricks — là où le QSVM est entraîné — et ses figures "
+                             "le pipeline Databricks (là où le QSVM est entraîné) et ses figures "
                              "arrivent ici déjà rendues, comme le circuit à 8 qubits de la page Circuit "
                              "quantique. La convention de base est celle des manuels, |q₀q₁q₂⟩ avec q₀ à "
                              "gauche ; Qiskit numérote à l'envers et écrirait « 001 » là où la première "
@@ -3109,14 +3313,14 @@ STR = {
         "bl_zz_intro": ("<b>De trois qubits aux huit du modèle.</b> Chaque qubit de la ZZFeatureMap "
                         "porte <b>une variable clinique</b> : q₀ est l'HbA1c, q₁ la glycémie, et "
                         "ainsi de suite jusqu'à l'IMC. Avec 256 amplitudes, il n'y a plus de figure "
-                        "de l'état à regarder — ni Q-sphere ni histogramme —, mais on peut toujours "
+                        "de l'état à regarder (ni Q-sphere ni histogramme), mais on peut toujours "
                         "mesurer les <b>deux mêmes grandeurs</b> que dans la section précédente : "
                         "combien d'état propre il reste à chaque qubit, et combien d'information il "
                         "partage avec chacun des autres. Ce n'est plus un exemple de manuel : c'est "
                         "le circuit avec lequel le modèle a été entraîné."),
         "bl_zz_current": "Variable en jeu : <b>{var} = {val} {unidad}</b>. Les sept autres à leur valeur de référence.",
         "bl_zz_r_title": "État propre de chaque qubit",
-        "bl_zz_r_xaxis": "|r| — 1 = conserve son état · 0 = totalement intriqué",
+        "bl_zz_r_xaxis": "|r| : 1 = conserve son état · 0 = totalement intriqué",
         "bl_zz_mi_title": "Information mutuelle entre qubits",
         "bl_zz_mi_cbar": "bits",
         "bl_zz_note": ("<b>Comment lire la matrice.</b> Chaque cellule dit combien d'information deux "
@@ -3130,7 +3334,7 @@ STR = {
                        "une seule exception). La topologie du circuit se dessine toute seule.<br><br>"
                        "Et il y a une seconde chose que l'on voit en déplaçant le curseur du haut : en "
                        "changeant <b>une</b> variable, seuls <b>son qubit et ses voisins immédiats</b> "
-                       "bougent — les autres ne changent pas d'une décimale. C'est le même fait vu de "
+                       "bougent : les autres ne changent pas d'une décimale. C'est le même fait vu de "
                        "l'autre côté : le cône de lumière du circuit, en direct."),
         "bl_zz_caveat": ("<b>Un avertissement de lecture, et non des moindres.</b> L'intrication <b>ne "
                          "croît pas avec la valeur clinique</b> : en montant l'HbA1c sur sa plage, le "
@@ -3148,7 +3352,7 @@ STR = {
         "lp_eyebrow": "Inférence interactive",
         "lp_title": "Prédicteur en direct",
         "lp_subtitle": ("Probabilité qu'un profil clinique corresponde à une personne déjà "
-                        "diagnostiquée diabétique — LightGBM sur les 8 variables les plus importantes."),
+                        "diagnostiquée diabétique : LightGBM sur les 8 variables les plus importantes."),
         "lp_what_note": ("<b>Ce que ce formulaire estime.</b> La cible du pipeline est "
                          "<code>TARGET = (DIQ010 == 1)</code>, la réponse à <i>« un médecin vous a-t-il "
                          "déjà dit que vous aviez du diabète ? »</i>. Le modèle <b>détecte donc un "
@@ -3162,7 +3366,7 @@ STR = {
                          "coût O(n²) du noyau quantique : prédire les 1 567 instances du test a pris "
                          "144,5 minutes."),
         "lp_proxy_note": ("⚠ <b>Avertissement technique et clinique.</b> Ce formulaire n'a pas les "
-                          "vrais modèles sérialisés (<code>.onnx</code>) connectés — placez "
+                          "vrais modèles sérialisés (<code>.onnx</code>) connectés : placez "
                           "<code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>, "
                           "<code>scaler_correcto.json</code> et <code>medianas_correctas.json</code> "
                           "dans <code>streamlit/models/</code>. Le score affiché ci-dessous est un "
@@ -3172,7 +3376,7 @@ STR = {
                           "n'est pas davantage disponible en temps réel (coût O(n²) du noyau "
                           "quantique)."),
         "lp_train_range": "Entraînement : {mu} ± {sd} (±3 σ → {lo} à {hi})",
-        "lp_extrapolates": "⚠ z = {z} — hors de la plage entraînée : le modèle extrapole",
+        "lp_extrapolates": "⚠ z = {z} · hors de la plage entraînée : le modèle extrapole",
         "lp_ada": "Critère ADA : &lt; 5,7 normal · 5,7–6,4 prédiabète · ≥ 6,5 diabète",
         "lp_who_model": "le modèle",
         "lp_who_proxy": "le substitut",
@@ -3192,14 +3396,14 @@ STR = {
         "lp_gauge_caption": ("Compatibilité avec un diagnostic existant : faible · intermédiaire · "
                              "élevée · &nbsp;seuil de décision = 50 %"),
         "lp_side_title": "Les deux modèles, côte à côte",
-        "lp_side_sub": ("Chaque probabilité se juge au point de coupure de son propre modèle — ils ne "
+        "lp_side_sub": ("Chaque probabilité se juge au point de coupure de son propre modèle : ils ne "
                         "sont pas interchangeables"),
         "lp_own_threshold": "Son seuil",
         "lp_would_classify": "Classerait comme",
         "lp_positive": "positif",
         "lp_negative": "négatif",
         "lp_disagree": ("<b>Les deux modèles divergent de {dif} sur ce profil.</b> Ils s'accordent aux "
-                        "extrêmes — profils clairement sains ou clairement diabétiques — et divergent "
+                        "extrêmes (profils clairement sains ou clairement diabétiques) et divergent "
                         "dans la bande intermédiaire, justement là où une estimation serait la plus "
                         "utile. Prenez-le comme un signal d'incertitude, non comme le signe que l'un "
                         "des deux a raison."),
@@ -3217,10 +3421,10 @@ STR = {
                          "seulement celui de la maladie. Cela inverse le sens clinique de deux "
                          "variables :"
                          '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
-                         "<li><b>Cholestérol LDL</b> — plus le LDL est élevé, <i>plus faible</i> est la "
+                         "<li><b>Cholestérol LDL</b> : plus le LDL est élevé, <i>plus faible</i> est la "
                          "probabilité estimée (de 43 % à 18 % en parcourant le curseur). Les personnes "
                          "diagnostiquées sont généralement traitées par statines.</li>"
-                         "<li><b>Glycémie à jeun</b> — la réponse a une forme en U : les valeurs très "
+                         "<li><b>Glycémie à jeun</b> : la réponse a une forme en U : les valeurs très "
                          "basses élèvent l'estimation autant que les hautes, à cause des hypoglycémies "
                          "des patients sous traitement.</li></ul>"
                          '<div style="margin-top:10px;">Aucune des deux ne doit se lire comme un '
@@ -3251,7 +3455,7 @@ STR = {
         "sidebar_collapse": "Comprimi la barra laterale",
         "search_label": "Cerca",
         "search_ph": "Cerca nella dashboard o sul web…",
-        "search_expand": "Cerca — espande la barra laterale",
+        "search_expand": "Cerca: espande la barra laterale",
         "scroll_top": "Torna su",
         "search_in": "in {p}",
         "search_none": "Nessun risultato nella dashboard.",
@@ -3282,12 +3486,58 @@ STR = {
             "<b>Databricks Community Edition</b>, con <b>AWS S3</b> come vero livello di archiviazione "
             "cloud e un'architettura <b>Medallion</b> (Bronze → Silver → Gold) su Delta Lake come "
             "spina dorsale. Come caso d'uso si predice il diabete di tipo 2 a partire dai record dello "
-            "studio <b>NHANES</b> (CDC) — il dataset non è l'oggetto della ricerca, ma il veicolo per "
+            "studio <b>NHANES</b> (CDC): il dataset non è l'oggetto della ricerca, ma il veicolo per "
             "dimostrare che l'architettura è praticabile, riproducibile e verificabile su dati reali "
             "su larga scala. Il nucleo sperimentale è un <b>confronto triangolato</b> fra LightGBM "
             "(baseline tabellare), una SVM con kernel RBF (ponte strutturale) e una <b>QSVM</b> con "
             "FidelityQuantumKernel in Qiskit, mantenendo identico il classificatore sottostante per "
-            "attribuire qualsiasi differenza di prestazioni all'effetto del kernel quantistico."),
+            "attribuire qualsiasi differenza di prestazioni all'effetto del kernel quantistico."
+            " La valutazione chiude il percorso: ogni modello si misura con AUC-ROC, F1, accuracy e "
+            "MCC, <b>SHAP</b> indica su LightGBM le 20 variabili che pesano di più nella previsione, "
+            "e i due modelli classici si serializzano in <b>ONNX</b> con la portabilità verificata. "
+            "Il repository GitHub pubblica i 7 notebook che eseguono quel percorso, e questa stessa "
+            "applicazione, distribuita su Streamlit Cloud, ne è l'ultimo anello: la previsione in "
+            "diretta e la sua lettura SHAP."),
+        "ov_arch_alt": ("Diagramma dell'architettura della pipeline: AWS S3 alimenta Databricks "
+                        "Community Edition, dove l'architettura Medallion (Bronze, Silver e Gold) "
+                        "sfocia in tre modelli (LightGBM, SVM con kernel RBF e QSVM con Qiskit) e "
+                        "nella valutazione con metriche, SHAP e serializzazione ONNX; l'output va "
+                        "su GitHub e Streamlit Cloud."),
+        # Rótulos del diagrama de arquitectura que abre la página (arquitectura_svg()). Las
+        # cifras NO van escritas: llegan por marcador y las pone mil(), que usa el separador
+        # de millar del idioma. Lo que no viaja aquí es la geometría ni qué caja va resaltada,
+        # que son dibujo y no texto.
+        "ov_arch_io": (
+            ("AWS S3", "NHANES raw · 27 XPT", "IAM"),
+            ("GitHub", "7 notebook · README"),
+            ("Streamlit Cloud", "Previsione · SHAP visivo"),
+        ),
+        "ov_arch_grupos": (
+            ("Architettura Medallion", (
+                ("Bronze · ingestione raw",
+                 "{bronze} righe · 162 col · Delta Lake ACID"),
+                ("Silver · qualità",
+                 "{silver} righe · 91 col · expectations"),
+                ("Gold · feature curate",
+                 "89 feature · train {train} / test {test}"),
+            )),
+            ("Modelli · ML / QML", (
+                ("LightGBM",
+                 "Baseline tabellare · GOSS · EFB"),
+                ("SVM · kernel RBF",
+                 "Ponte diretto alla QSVM"),
+                ("QSVM · Qiskit",
+                 "ZZFeatureMap · FidelityQuantumKernel"),
+            )),
+            ("Valutazione e serializzazione", (
+                ("Metriche",
+                 "AUC-ROC · F1 · Accuracy · MCC"),
+                ("SHAP",
+                 "Spiegabilità LightGBM · top 20"),
+                ("Selezione · ONNX",
+                 "Portabilità verificata"),
+            )),
+        ),
         "ov_stats_title": "Statistiche del dataset NHANES",
         "ov_stats_sub": "Tre cicli biennali integrati · pipeline a livelli Bronze → Silver → Gold",
         "ov_stat_bronze": "Record Bronze",
@@ -3394,17 +3644,17 @@ STR = {
         "gov_hover_records": "Record",
         "gov_hover_dropped": "Scartati",
         "gov_embudo": [
-            ("Bronze — 3 cicli uniti",
+            ("Bronze · 3 cicli uniti",
              "27 file XPT · join per SEQN · 162 colonne comuni ai tre cicli"),
             ("Filtro età ≥ 18 anni", "Restrizione alla popolazione adulta"),
-            ("Filtro digiuno — LBXGLU non nullo",
+            ("Filtro digiuno · LBXGLU non nullo",
              "Proxy del sottogruppo a digiuno: PHAFSTMN non è coerente fra i cicli"),
             ("Filtro DIQ010 valido",
              "Scarta i codici 7 «non so» e 9 «rifiuta di rispondere», e i valori nulli"),
         ],
         "gov_dropped_title": "Record scartati per filtro",
         "gov_split_label": "Partizione Gold 80/20",
-        "gov_suite_title": "Suite di validazione — dataframe-expectations",
+        "gov_suite_title": "Suite di validazione · dataframe-expectations",
         "gov_suite_sub": ("Suite <code>{nombre}</code>, eseguita il {fecha} sui {registros} record di "
                           "Silver in {duracion} secondi. Great Expectations è incompatibile con le "
                           "versioni fissate del runtime serverless: questa è l'alternativa adottata."),
@@ -3426,8 +3676,8 @@ STR = {
             ("Volume", "DataFrame", "al massimo 9.000 righe"),
         ],
         "gov_ops_title": "Operazioni di qualità per livello",
-        "gov_silver_card": "Silver — pulizia e risanamento",
-        "gov_gold_card": "Gold — preparazione alla modellazione",
+        "gov_silver_card": "Silver · pulizia e risanamento",
+        "gov_gold_card": "Gold · preparazione alla modellazione",
         "gov_silver_ops": [
             ("Variabili DIQ escluse per leakage", "DIQ050, DIQ070, DIQ160, DIQ170, DIQ172, DIQ180"),
             ("Colonne sparse eliminate", "Soglia di >80 % di valori mancanti"),
@@ -3450,7 +3700,7 @@ STR = {
                          "anche a variabili categoriali codificate numericamente (risposte 1/2, lingua "
                          "dell'intervista, codici 7 e 9). Quando più del 75 % del campione risponde allo "
                          "stesso modo, il taglio riduce la colonna a un unico valore. Le più tagliate "
-                         "nel notebook 02 — PAQ635, PAQ650, PAQ605, DMDHHSZA, DMDCITZN, SIALANG — sono "
+                         "nel notebook 02 (PAQ635, PAQ650, PAQ605, DMDHHSZA, DMDCITZN, SIALANG) sono "
                          "esattamente quelle che qui risultano costanti."),
         "gov_lin_title": "Tracciabilità senza MLflow",
         "gov_lin_sub": "Il vincolo che condiziona di più l'architettura della pipeline, e la sua mitigazione.",
@@ -3459,19 +3709,19 @@ STR = {
                                "Serverless gratuito. Qualsiasi chiamata a <code>mlflow.start_run()</code> "
                                "o <code>mlflow.log_metric()</code> produce errori di autenticazione: non "
                                "c'è registrazione di esperimenti, metriche né artefatti."),
-        "gov_lin_mit_title": "Mitigazione — doppio meccanismo",
-        "gov_lin_mit_body": ("<b>Transaction log di Delta Lake</b> — ogni scrittura genera un record "
+        "gov_lin_mit_title": "Mitigazione · doppio meccanismo",
+        "gov_lin_mit_body": ("<b>Transaction log di Delta Lake</b>: ogni scrittura genera un record "
                              "ACID con versione, timestamp e metriche di operazione.<br><br>"
-                             "<b>CSV di metriche per modello</b> — ogni notebook rende persistenti i "
+                             "<b>CSV di metriche per modello</b>: ogni notebook rende persistenti i "
                              "propri risultati in Unity Catalog Volumes, e le figure li leggono da lì "
                              "invece di portarli scritti a mano."),
-        "gov_delta_title": "Cronologia Delta — livello Gold",
+        "gov_delta_title": "Cronologia Delta · livello Gold",
         "gov_delta_sub": ("Le sei versioni più recenti fra le dieci registrate. Delta elimina le "
                           "precedenti dopo 168 h di conservazione: comportamento atteso, non un guasto "
                           "della pipeline."),
         "gov_delta_cols": ["Versione", "Timestamp", "Operazione", "Righe", "Dimensione"],
         "gov_chain_title": "Catena di custodia contro la fuga di informazione",
-        "gov_chain_sub": ("Quattro barriere concatenate. La terza non scarta nessuna colonna — ed è "
+        "gov_chain_sub": ("Quattro barriere concatenate. La terza non scarta nessuna colonna, ed è "
                           "esattamente ciò che si vuole vedere: la prova che le precedenti hanno fatto "
                           "il loro lavoro."),
         "gov_leakage": [
@@ -3483,7 +3733,7 @@ STR = {
              "Risultato: 15/15 artefatti puliti."),
             ("Filtro difensivo della QSVM",
              "Seconda barriera prima della selezione con Random Forest. Non scarta nessuna colonna "
-             "(89 su 89 passano) — proprio la prova che la prima ha funzionato."),
+             "(89 su 89 passano), proprio la prova che la prima ha funzionato."),
             ("Guardia sui pesi campionari",
              "Ferma la pipeline se compare un peso campionario diverso da quello noto. WTINT2YR "
              "arriva davvero alla modellazione ed è documentato nella decisione 10."),
@@ -3492,7 +3742,7 @@ STR = {
         "gov_scaler": [
             ("Adattamento", "Solo sul train", "fit_transform sul train · transform sul test"),
             ("Colonne valutate", "66", "Con varianza > 0"),
-            ("Colonne costanti", "23", "Varianza 0 — vedi decisione 08"),
+            ("Colonne costanti", "23", "Varianza 0 · vedi decisione 08"),
             ("Media ≈ 0 · dev. ≈ 1", "Verificato", "Assert su tutte le colonne con dispersione"),
         ],
         "gov_scaler_note": ("Lo <b>StandardScaler</b> si adatta esclusivamente sul <b>train</b>: "
@@ -3500,10 +3750,15 @@ STR = {
                             "test. Se si adattasse sull'insieme completo, la media e la deviazione "
                             "standard del test filtrerebbero nel preprocessing e le metriche "
                             "risulterebbero ottimistiche. La selezione delle 8 variabili della QSVM "
-                            "segue la stessa regola — il Random Forest si addestra solo su "
+                            "segue la stessa regola: il Random Forest si addestra solo su "
                             "<code>X_train_svm_scaled</code>.<br><br>Il filtro di correlazione, invece, "
                             "<b>viene</b> calcolato prima di partizionare. È documentato e accettato "
-                            "nella decisione 09."),
+                            "nella decisione 09."
+                            "<br><br>La verifica si esegue, non si dichiara: sulle 66 colonne con dispersione esige "
+                            "|media| &lt; 0,01 e una deviazione fra 0,90 e 1,10. I parametri adattati ("
+                            "<code>mean_</code> e <code>scale_</code>) finiscono in "
+                            "<code>scaler_correcto.json</code>, il file che carica il Predittore in diretta: la "
+                            "scala del train non si ricalcola mai."),
         "gov_e2e_title": "Verifica end-to-end rispetto ai modelli addestrati",
         "gov_e2e_missing": ('<b style="color:{color};">Non verificato.</b> Il set di test non è nel '
                             "repository, quindi la dashboard non può controllare da sola che il suo "
@@ -3523,9 +3778,9 @@ STR = {
         "gov_e2e_fail_title": "⚠ Il percorso di inferenza non riproduce i modelli",
         "gov_e2e_note": ("Ogni riga del <i>golden set</i> è un'istanza reale del test accompagnata dalla "
                          "probabilità restituita dal modello addestrato nel suo notebook. La dashboard "
-                         "la fa passare per il proprio percorso — vettore grezzo, scalatura solo per la "
+                         "la fa passare per il proprio percorso (vettore grezzo, scalatura solo per la "
                          "SVM, conversione in <code>float32</code>, sessione ONNX e lettura del tensore "
-                         "di output — e confronta. Tolleranza {tol}; il rumore atteso lavorando in "
+                         "di output) e confronta. Tolleranza {tol}; il rumore atteso lavorando in "
                          "<code>float32</code> è dell'ordine di 10⁻⁷."),
         "gov_stack_title": "Framework per livello",
         "gov_stack_sub": ("Il primo distintivo di ogni scheda è il framework che regge il livello; gli "
@@ -3556,7 +3811,7 @@ STR = {
         "gov_dec_title": "Registro delle decisioni",
         "gov_dec_sub": ("Le undici limitazioni documentate in TECHNICAL_NOTES, con la relativa "
                         "mitigazione. Tre condizionano l'architettura, sei sono accettate e documentate "
-                        "senza correzione — perché correggerle invaliderebbe i risultati già ottenuti — "
+                        "senza correzione (perché correggerle invaliderebbe i risultati già ottenuti) "
                         "e due restano risolte senza residui."),
         "gov_dec_tags": {"critical": "Architettura", "warning": "Accettata", "good": "Risolta"},
         "gov_dec_problem": "Problema · ",
@@ -3578,13 +3833,13 @@ STR = {
              "runtime serverless (pandas 1.5.3 / numpy 1.23.5).",
              "dataframe-expectations 0.7.0 come alternativa compatibile. 15 aspettative su Silver in "
              "tre dimensioni. Risultato 15/15, pass rate 1,0."),
-            ("QSVM — costo computazionale O(n²)",
+            ("QSVM · costo computazionale O(n²)",
              "Sulle 6.264 istanze di train, la matrice del kernel richiederebbe circa 39 milioni di "
              "valutazioni del circuito. Con 1.500 il kernel esaurisce la memoria.",
              "Addestramento su un campione stratificato di 500 istanze (~22 min) preservando il "
              "rapporto 86/14. La valutazione usa invece il test completo, perché le metriche restino "
              "confrontabili."),
-            ("QSVM — nessun supporto ONNX nativo",
+            ("QSVM · nessun supporto ONNX nativo",
              "Il formato ONNX non ammette operazioni quantistiche: né skl2onnx né onnxmltools "
              "possono serializzare un kernel basato sulla simulazione di stati.",
              "Serializzazione con joblib. Il modello richiede l'ambiente Qiskit per l'inferenza, "
@@ -3605,7 +3860,7 @@ STR = {
              "IQR = 0, i limiti collassano e clip() trasforma la variabile in una costante. "
              "10 colonne sono collassate così.",
              "Documentato senza modificare: correggerlo altererebbe Silver, Gold e i tre modelli. Le "
-             "colonne costanti non introducono distorsioni — il modello non ne estrae segnale — ma "
+             "colonne costanti non introducono distorsioni (il modello non ne estrae segnale), ma "
              "si perde informazione. La correzione è indicata come lavoro futuro."),
             ("Correlazione calcolata prima di partizionare",
              "Il filtro r > 0,90 si calcola sul dataset completo, quindi le 16 colonne scartate "
@@ -3621,7 +3876,7 @@ STR = {
              "target, ma lascia che il modello si appoggi al disegno dell'indagine."),
             ("La QSVM serializzata non è ricaricabile fra versioni",
              "Il pickle si porta dietro la ZZFeatureMap con le sue ParameterExpression. Se Qiskit "
-             "cambia versione, la deserializzazione fallisce — e Serverless aggiorna senza preavviso.",
+             "cambia versione, la deserializzazione fallisce, e Serverless aggiorna senza preavviso.",
              "Il caricamento è avvolto in try/except: se fallisce, TRAINING_MODE passa a True e il "
              "notebook riaddestra invece di interrompersi. Resta operativo in tutti e tre gli "
              "scenari possibili."),
@@ -3641,15 +3896,15 @@ STR = {
         "res_threshold": "Soglia",
         "res_thr_label": {"lightgbm": "p ≥ {v}", "svm_rbf": "p ≈ {v}", "qsvm": "df > 0"},
         "res_thr_src": {"lightgbm": "predict_proba()[:,1] >= 0.5",
-                        "svm_rbf": "SVC.predict() — segno di decision_function",
+                        "svm_rbf": "SVC.predict() · segno di decision_function",
                         "qsvm": "decision_function > 0 (non è una probabilità)"},
-        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Riconciliate</span> — le '
+        "res_reconciled": ('<span style="color:{color}; font-weight:600;">✓ Riconciliate</span>: le '
                            "quattro metriche dei tre modelli sono state ricalcolate dagli score per "
                            "istanza e coincidono con quelle pubblicate."),
-        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Non riconciliate</span> — {fallos}',
+        "res_unreconciled": '<span style="color:{color}; font-weight:600;">⚠ Non riconciliate</span>: {fallos}',
         "res_no_scores": "score non disponibili",
         "res_threshold_note": ("<b>I tre modelli sono misurati a soglie diverse.</b> Ciascuno usa il "
-                               "proprio punto di taglio naturale — LightGBM "
+                               "proprio punto di taglio naturale: LightGBM "
                                "<code>predict_proba ≥ 0,50</code>; SVM-RBF il segno di "
                                "<code>decision_function</code>, che sulla scala di probabilità salvata "
                                "equivale a ≈ 0,22; QSVM <code>decision_function &gt; 0</code>, che non è "
@@ -3674,7 +3929,7 @@ STR = {
         "res_cm_tags": {"tn": "VN", "fp": "FP", "fn": "FN", "tp": "VP"},
         "res_metrics_title": "Confronto delle metriche",
         "res_metrics_sub": ("Le quattro metriche si applicano sulle 1.567 istanze. Accuracy, MCC e "
-                            "F1-macro penalizzano davvero lo sbilanciamento delle classi — ma dipendono "
+                            "F1-macro penalizzano davvero lo sbilanciamento delle classi, ma dipendono "
                             "dalla soglia, e ogni modello usa la propria: confronta con cautela tutto "
                             "ciò che non sia l'AUC-ROC"),
         "res_metric_desc": {
@@ -3686,14 +3941,14 @@ STR = {
         "res_qsvm_note": ("<b>Nota sull'esperimento QSVM.</b> La QSVM è stata addestrata su un campione "
                           "stratificato di 500 istanze (costo O(n²) del kernel quantistico) e valutata "
                           "sulle 1.567 del test completo. AUC-ROC = 0,5493 indica che il modello supera "
-                          "a malapena la classificazione casuale — richiamo ≈ 0 per la classe diabete "
+                          "a malapena la classificazione casuale: richiamo ≈ 0 per la classe diabete "
                           "(1 su 220), e accuracy = 0,8602 che riflette solo la proporzione della classe "
                           "maggioritaria. L'MCC ≈ 0 conferma l'assenza di reale capacità predittiva."),
 
         # ── Pagina 4 · Analisi SHAP ──
         "sh_eyebrow": "Interpretabilità",
         "sh_title": "Analisi SHAP",
-        "sh_subtitle": ("Importanza globale delle variabili — TreeExplainer (LightGBM) vs. "
+        "sh_subtitle": ("Importanza globale delle variabili: TreeExplainer (LightGBM) vs. "
                         "KernelExplainer (SVM-RBF)."),
         "sh_tabs": ["LightGBM · TreeExplainer", "SVM-RBF · KernelExplainer"],
         "sh_hint": "Passa il cursore su ogni barra per vedere il significato della variabile. {nota}",
@@ -3711,11 +3966,11 @@ STR = {
                         "la validità clinica del risultato rendendolo indipendente dall'algoritmo e "
                         "metodologicamente più robusto. KernelExplainer tratta il modello come una "
                         "scatola nera, applicabile a qualsiasi classificatore."),
-        "sh_fig_lgbm_title": "SHAP Summary Plot — LightGBM (Figura 27)",
+        "sh_fig_lgbm_title": "SHAP Summary Plot · LightGBM (Figura 27)",
         "sh_fig_lgbm_cap": ("Ogni punto è un'istanza del test; il colore indica il valore della "
                             "variabile (rosso alto, blu basso) e la posizione orizzontale il suo impatto "
                             "sulla predizione. LBXGH e RIDAGEYR dominano il modello."),
-        "sh_fig_svm_title": "SHAP Summary Plot — SVM-RBF (Figura 31)",
+        "sh_fig_svm_title": "SHAP Summary Plot · SVM-RBF (Figura 31)",
         "sh_fig_svm_cap": ("Ogni punto è un'istanza; colore = valore della variabile, posizione = "
                            "impatto. KernelExplainer su 200 istanze del test."),
 
@@ -3731,12 +3986,12 @@ STR = {
                       "angolo di fase (porta P) su un qubit indipendente, dopo aver creato la "
                       "sovrapposizione con porte di Hadamard. Il suo elemento distintivo è "
                       "l'<b>entanglement</b> fra coppie di qubit mediante porte che dipendono dal "
-                      "prodotto incrociato di due variabili — correlazioni che il kernel RBF classico "
+                      "prodotto incrociato di due variabili, correlazioni che il kernel RBF classico "
                       "non può rappresentare."),
         "qc_how_p2": ("Il <b>FidelityQuantumKernel</b> misura la somiglianza fra due pazienti come la "
                       "fedeltà fra i loro stati quantistici: <code>K(x,y) = |⟨ψ(x)|ψ(y)⟩|²</code>. "
                       "L'implementazione usa <code>StatevectorSampler</code> e simula lo stato esatto "
-                      "senza rumore — risultati deterministici e riproducibili."),
+                      "senza rumore: risultati deterministici e riproducibili."),
         "qc_feat_title": "8 feature selezionate (Random Forest)",
         "qc_xaxis": "Importanza RF",
         "qc_train_title": "Addestramento e valutazione",
@@ -3757,7 +4012,7 @@ STR = {
         "bl_what_note": ("<b>Che cos'è la sfera di Bloch.</b> Un bit classico può valere solo 0 "
                          "o 1. Un qubit ammette in più qualsiasi miscela dei due, e quella "
                          "miscela non entra in un solo numero: serve una mappa. La sfera di Bloch "
-                         "è quella mappa — ogni stato possibile di un qubit è un punto sulla "
+                         "è quella mappa: ogni stato possibile di un qubit è un punto sulla "
                          "superficie di una sfera di raggio 1. Il polo nord è <b>|0⟩</b> e il polo "
                          "sud <b>|1⟩</b>; in mezzo stanno le sovrapposizioni, e più la freccia si "
                          "avvicina a un polo, più quel risultato è probabile alla misura. Qui il "
@@ -3777,21 +4032,21 @@ STR = {
                     "diventa uno stato».<br><br>"
                     "La <b>vera ZZFeatureMap</b> fa qualcosa di diverso: applica H e poi "
                     "P(2·x<sub>i</sub>), e una porta di fase dopo una Hadamard lascia lo stato "
-                    "<b>sull'equatore</b> — θ = π/2 fisso, P(|0⟩) = P(|1⟩) = 50 % sempre — "
+                    "<b>sull'equatore</b> (θ = π/2 fisso, P(|0⟩) = P(|1⟩) = 50 % sempre) "
                     "codificando il dato nell'angolo <b>azimutale</b> φ, non nel polare. Non "
                     "normalizza nemmeno su [0,1]: usa direttamente il valore scalato. Per questo "
                     "questa sfera illustra il concetto, ma non riproduce passo per passo il circuito. "
                     "L'entanglement (porte P(2·(π−x<sub>i</sub>)·(π−x<sub>j</sub>))) è rappresentabile "
-                    "solo nello spazio congiunto degli 8 qubit — vedi Circuito quantistico."),
+                    "solo nello spazio congiunto degli 8 qubit (vedi Circuito quantistico)."),
 
         # ── Pagina 5 · scheda Sfera di Bloch → sezione entanglement ──
         "bl_ent_title": "Entanglement: tre qubit, un solo stato",
         "bl_ent_sub": ("Il limite della sfera qui sopra. Applica le tre porte e guarda che cosa "
-                       "succede allo stato locale di ciascun qubit — e a quello della coppia che resta "
+                       "succede allo stato locale di ciascun qubit, e a quello della coppia che resta "
                        "per strada."),
         "bl_ent_intro": ("<b>Dove la sfera di Bloch smette di servire.</b> Con un qubit bastano una "
                          "sfera e una freccia. Con più di uno, la tentazione è disegnare una sfera per "
-                         "qubit — e per la maggior parte degli stati funziona. Ma esiste una famiglia di "
+                         "qubit, e per la maggior parte degli stati funziona. Ma esiste una famiglia di "
                          "stati in cui <b>non resta nessuna freccia da disegnare</b>: l'insieme ha uno "
                          "stato perfettamente definito e nessuno dei suoi membri ce l'ha separatamente. "
                          "Questo è l'entanglement, e qui si costruisce con tre porte. Applicale e segui "
@@ -3808,21 +4063,21 @@ STR = {
              "tutta la probabilità."),
             ("<b>Sovrapposizione, ancora senza entanglement.</b> La Hadamard lascia q₀ a metà strada "
              "fra |0⟩ e |1⟩, mentre q₁ e q₂ restano saldi in |0⟩: lo stato congiunto è "
-             "(|000⟩ + |100⟩)/√2. I tre qubit restano <b>indipendenti</b> — ciascuno ha il proprio "
+             "(|000⟩ + |100⟩)/√2. I tre qubit restano <b>indipendenti</b>: ciascuno ha il proprio "
              "stato puro e tre sfere di Bloch basterebbero a descriverli. Nota che la lunghezza del "
              "vettore locale vale ancora 1: c'è una freccia da disegnare."),
             ("<b>Una coppia di Bell, e un testimone.</b> Il primo CNOT ribalta q₁ solo quando q₀ vale "
              "1; applicato a una sovrapposizione, questo lega i due esiti in uno solo: "
-             "(|000⟩ + |110⟩)/√2. È qui che la mappa si rompe — la lunghezza del vettore locale di q₀ è "
+             "(|000⟩ + |110⟩)/√2. È qui che la mappa si rompe: la lunghezza del vettore locale di q₀ è "
              "appena caduta a <b>0</b>, il qubit non è più in nessun punto della sua sfera perché "
              "separatamente <b>non ha più stato</b>. E succede anche altro, visibile solo perché c'è un "
              "terzo qubit: q₂ è rimasto FUORI, a guardare da |0⟩, e ciò che è in entanglement è "
              "esattamente la coppia q₀q₁. La sua concorrenza segna <b>1</b>, il massimo."),
             ("<b>Stato GHZ.</b> Il secondo CNOT aggancia q₂ alla catena: (|000⟩ + |111⟩)/√2. I nodi "
              "sono andati ai poli e i due anelli di mezzo sono rimasti vuoti. Le prime tre cifre non si "
-             "muovono — q₀ resta senza stato proprio — ma la quarta crolla: la concorrenza della coppia "
+             "muovono (q₀ resta senza stato proprio), ma la quarta crolla: la concorrenza della coppia "
              "q₀q₁ torna a <b>0</b>. Mettere in entanglement tutti e tre ha DISFATTO il legame della "
-             "coppia. I due restano correlati — misurarne uno predice l'altro — ma non più in "
+             "coppia. I due restano correlati (misurarne uno predice l'altro), ma non più in "
              "entanglement: l'entanglement di un GHZ è dell'insieme e <b>non è la somma di legami a "
              "due a due</b>."),
         ],
@@ -3846,7 +4101,7 @@ STR = {
             ("Con tutti e tre i qubit in |0⟩ il risultato è <b>000</b> a ogni lancio. Non c'è ancora "
              "nulla da sorteggiare: è il comportamento di tre bit classici."),
             ("Escono <b>000</b> e <b>100</b> in parti uguali: q₀ si comporta come una monetina, e q₁ e "
-             "q₂ valgono 0 qualunque cosa accada. Gli esiti sono <b>indipendenti</b> — conoscerne uno "
+             "q₂ valgono 0 qualunque cosa accada. Gli esiti sono <b>indipendenti</b>: conoscerne uno "
              "non dice nulla degli altri."),
             ("Escono <b>000</b> e <b>110</b>: q₀ e q₁ danno sempre lo stesso valore, quindi misurarne "
              "uno determina l'altro, mentre q₂ resta inchiodato a 0 senza accorgersi di nulla. Due dei "
@@ -3858,14 +4113,14 @@ STR = {
              "perfetta è l'entanglement visto dal laboratorio."),
         ],
         "bl_ent_impl_note": ("<b>Come è calcolato.</b> Le otto ampiezze vengono da algebra lineare "
-                             "<b>esatta</b> in NumPy — la matrice H⊗I⊗I e i due CNOT applicati a |000⟩ —, "
+                             "<b>esatta</b> in NumPy (la matrice H⊗I⊗I e i due CNOT applicati a |000⟩), "
                              "non da un'approssimazione; la concorrenza della coppia è la formula di "
                              "Wootters, che per due qubit dà il valore esatto e non un limite; e le "
                              "misure vengono da un campionamento multinomiale "
                              "su |ψ|², che è ciò che fa un simulatore ideale senza rumore. Il pannello "
                              "<b>non carica Qiskit</b>: l'ambiente distribuito è Streamlit, NumPy, "
                              "Plotly e ONNX Runtime, mentre Qiskit vive nella pipeline di Databricks "
-                             "— dove si addestra la QSVM — e le sue figure arrivano qui già "
+                             "(dove si addestra la QSVM) e le sue figure arrivano qui già "
                              "renderizzate, come il circuito a 8 qubit della pagina Circuito "
                              "quantistico. La convenzione della base è quella dei manuali, |q₀q₁q₂⟩ con "
                              "q₀ a sinistra; Qiskit numera al contrario e scriverebbe «001» dove il "
@@ -3878,14 +4133,14 @@ STR = {
         "bl_zz_intro": ("<b>Da tre qubit agli otto del modello.</b> Ogni qubit della ZZFeatureMap "
                         "porta <b>una variabile clinica</b>: q₀ è l'HbA1c, q₁ la glicemia, e così "
                         "via fino all'IMC. Con 256 ampiezze non c'è più una figura dello stato da "
-                        "guardare — né Q-sphere né istogramma —, ma si possono comunque misurare le "
+                        "guardare (né Q-sphere né istogramma), ma si possono comunque misurare le "
                         "<b>stesse due grandezze</b> della sezione precedente: quanto stato proprio "
                         "resta a ciascun qubit, e quanta informazione condivide con ognuno degli "
                         "altri. Questo non è più un esempio da manuale: è il circuito con cui il "
                         "modello è stato addestrato."),
         "bl_zz_current": "Variabile in gioco: <b>{var} = {val} {unidad}</b>. Le altre sette al loro valore di riferimento.",
         "bl_zz_r_title": "Stato proprio di ciascun qubit",
-        "bl_zz_r_xaxis": "|r| — 1 = conserva il suo stato · 0 = del tutto in entanglement",
+        "bl_zz_r_xaxis": "|r|: 1 = conserva il suo stato · 0 = del tutto in entanglement",
         "bl_zz_mi_title": "Informazione mutua fra qubit",
         "bl_zz_mi_cbar": "bit",
         "bl_zz_note": ("<b>Come leggere la matrice.</b> Ogni cella dice quanta informazione due qubit "
@@ -3898,7 +4153,7 @@ STR = {
                        "senza una sola eccezione). La topologia del circuito si disegna da sé.<br><br>"
                        "E c'è una seconda cosa che si vede muovendo il cursore in alto: cambiando "
                        "<b>una</b> variabile si muovono solo <b>il suo qubit e i vicini immediati</b> "
-                       "— gli altri non cambiano di un decimale. È lo stesso fatto visto dall'altro "
+                       ": gli altri non cambiano di un decimale. È lo stesso fatto visto dall'altro "
                        "lato: il cono di luce del circuito, in diretta."),
         "bl_zz_caveat": ("<b>Un avvertimento di lettura, e non da poco.</b> L'entanglement <b>non "
                          "cresce con il valore clinico</b>: alzando l'HbA1c lungo il suo intervallo, "
@@ -3915,7 +4170,7 @@ STR = {
         "lp_eyebrow": "Inferenza interattiva",
         "lp_title": "Predittore in diretta",
         "lp_subtitle": ("Probabilità che un profilo clinico corrisponda a una persona già "
-                        "diagnosticata con diabete — LightGBM sulle 8 variabili di maggiore "
+                        "diagnosticata con diabete: LightGBM sulle 8 variabili di maggiore "
                         "importanza."),
         "lp_what_note": ("<b>Che cosa stima questo modulo.</b> L'obiettivo della pipeline è "
                          "<code>TARGET = (DIQ010 == 1)</code>, la risposta a <i>«un medico le ha mai "
@@ -3930,7 +4185,7 @@ STR = {
                          "del kernel quantistico: predire le 1.567 istanze del test è costato "
                          "144,5 minuti."),
         "lp_proxy_note": ("⚠ <b>Avviso tecnico e clinico.</b> Questo modulo non ha collegati i modelli "
-                          "serializzati reali (<code>.onnx</code>) — colloca "
+                          "serializzati reali (<code>.onnx</code>): colloca "
                           "<code>lgbm_final.onnx</code>, <code>svm_final.onnx</code>, "
                           "<code>scaler_correcto.json</code> e <code>medianas_correctas.json</code> in "
                           "<code>streamlit/models/</code>. Il punteggio mostrato sotto è un "
@@ -3939,7 +4194,7 @@ STR = {
                           "modello addestrato</b> e non deve essere citato come risultato. Nemmeno la "
                           "QSVM è disponibile in tempo reale (costo O(n²) del kernel quantistico)."),
         "lp_train_range": "Addestramento: {mu} ± {sd} (±3 σ → da {lo} a {hi})",
-        "lp_extrapolates": "⚠ z = {z} — fuori dall'intervallo addestrato: il modello estrapola",
+        "lp_extrapolates": "⚠ z = {z} · fuori dall'intervallo addestrato: il modello estrapola",
         "lp_ada": "Criterio ADA: &lt; 5,7 normale · 5,7–6,4 prediabete · ≥ 6,5 diabete",
         "lp_who_model": "il modello",
         "lp_who_proxy": "il sostituto",
@@ -3959,14 +4214,14 @@ STR = {
         "lp_gauge_caption": ("Compatibilità con una diagnosi esistente: bassa · intermedia · alta · "
                              "&nbsp;soglia di decisione = 50 %"),
         "lp_side_title": "I due modelli, fianco a fianco",
-        "lp_side_sub": ("Ogni probabilità si giudica con il punto di taglio del proprio modello — non "
+        "lp_side_sub": ("Ogni probabilità si giudica con il punto di taglio del proprio modello: non "
                         "sono intercambiabili"),
         "lp_own_threshold": "La sua soglia",
         "lp_would_classify": "Classificherebbe come",
         "lp_positive": "positivo",
         "lp_negative": "negativo",
         "lp_disagree": ("<b>I due modelli divergono di {dif} su questo profilo.</b> Concordano agli "
-                        "estremi — profili chiaramente sani o chiaramente diabetici — e divergono nella "
+                        "estremi (profili chiaramente sani o chiaramente diabetici) e divergono nella "
                         "fascia intermedia, che è proprio dove una stima sarebbe più utile. Prendilo "
                         "come segnale di incertezza, non come prova che uno dei due abbia ragione."),
         "lp_curve_title": "Curva di risposta",
@@ -3983,10 +4238,10 @@ STR = {
                          "non solo quello della malattia. Questo inverte il senso clinico di due "
                          "variabili:"
                          '<ul style="margin:8px 0 0; padding-left:20px; line-height:1.7;">'
-                         "<li><b>Colesterolo LDL</b> — più alto è l'LDL, <i>minore</i> è la probabilità "
+                         "<li><b>Colesterolo LDL</b>: più alto è l'LDL, <i>minore</i> è la probabilità "
                          "stimata (dal 43 % al 18 % percorrendo il cursore). Chi è diagnosticato di "
                          "solito è in terapia con statine.</li>"
-                         "<li><b>Glicemia a digiuno</b> — la risposta ha forma di U: i valori molto "
+                         "<li><b>Glicemia a digiuno</b>: la risposta ha forma di U: i valori molto "
                          "bassi alzano la stima quanto quelli alti, per via delle ipoglicemie dei "
                          "pazienti in terapia.</li></ul>"
                          '<div style="margin-top:10px;">Nessuna delle due va letta come un fattore di '
@@ -4127,7 +4382,7 @@ def search_index(lang):
     # Las ocho variables clínicas: se busca tanto por rótulo ("HbA1c") como por su
     # código NHANES ("LBXGH"), que es como aparecen en los informes del TFM.
     for codigo, rotulo in txt("qsvm_labels").items():
-        filas.append({"page": "predictor", "label": f"{codigo} — {rotulo}", "kind": 2,
+        filas.append({"page": "predictor", "label": f"{codigo} · {rotulo}", "kind": 2,
                       "hay": _plano(f"{codigo} {rotulo}")})
     return filas
 

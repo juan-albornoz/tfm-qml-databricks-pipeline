@@ -2058,10 +2058,15 @@ div[class*="st-key-navk_"] {{
     font-size:16px; color:{t['text_secondary']}; line-height:1.7; margin:0; text-align:justify;
 }}
 .lead-card p b {{ color:{t['text']}; font-weight:600; }}
+/* Tarjeta de la figura de arquitectura (Resumen). Lleva MENOS aire lateral que las demás
+   —16/18 en vez de 20/22— porque el propio dibujo trae su recuadro discontinuo y, con el
+   padding normal, se leían dos marcos concéntricos separados por una franja vacía. El
+   margen inferior es el mismo que el de la tarjeta del párrafo que va debajo. */
+.arch-card {{ padding:16px 18px; margin-bottom:20px; }}
 /* Fila de tarjetas comparativas: grid en vez de st.columns para que las 3 tengan SIEMPRE la
    misma altura (el estirado es nativo del grid), sin importar cuánto texto envuelva ni el zoom. */
 .compare-grid {{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; align-items:stretch; }}
-.compare-grid .info-card {{ height:100%; box-sizing:border-box; }}
+.compare-grid .info-card, .compare-grid .clinical-note {{ height:100%; box-sizing:border-box; }}
 /* Esfera de Bloch: el alto lo fija la figura Plotly en píxeles (height=BLOCH_H en Python), SIN
    autosize. Así el tamaño es idéntico en cada rerun y en CUALQUIER navegador (Firefox incluido):
    no depende de medir el contenedor (lo que con autosize hacía que "volviera a quedar pequeña" al
@@ -4889,6 +4894,132 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
             + "".join(piezas) + "</svg>")
 
 
+# ══════════════════════════════════════════════════════════════════════
+# DIAGRAMA DE ARQUITECTURA — figura de cabecera de Resumen
+# ══════════════════════════════════════════════════════════════════════
+# Es la figura figures/arquitectura_tfm.png redibujada como SVG EN LÍNEA. El PNG original mide
+# 1404 px de ancho y en esta página se pinta a ~1060: en una pantalla a 2x el navegador lo
+# estira y el texto de 13 px sale emborronado, que es justo lo que no se le puede pedir a la
+# primera figura del documento. En vector no hay resolución que valga: el mismo dibujo, los
+# mismos rótulos y las mismas proporciones, pero nítido a cualquier zoom y en cualquier DPI.
+# (los mismos rótulos en castellano: en los otros cuatro idiomas van traducidos, ver abajo).
+# Hereda además la tipografía de la app y sigue al tema, como el circuito de tres qubits.
+#
+# LOS RÓTULOS VIVEN EN i18n.py y siguen al selector de idioma, igual que el resto de la app:
+# el PNG solo existía en castellano, y ser texto de verdad —y no píxeles— es justamente lo que
+# permite traducirlo. Lo que NO se traduce son los nombres propios (AWS S3, IAM, Databricks
+# Community Edition, LightGBM, Qiskit, ZZFeatureMap, ONNX, GitHub…): son lo que son en los
+# cinco idiomas. El texto alternativo para lectores de pantalla va aparte, en ov_arch_alt.
+#
+# Geometría medida sobre el PNG (bounding boxes reales, no a ojo) y desplazada 18/16 px para
+# darle el aire lateral que allí no tenía: las cajas llegaban pegadas al borde de la imagen.
+ARQ_CAJA_W, ARQ_CAJA_H = 269, 55        # cajas de dentro de cada grupo
+ARQ_GRUPO_X = (231, 561, 891)           # esquina izquierda de los tres paneles de grupo
+ARQ_FILA_Y = (110, 178, 246)            # tope de las tres filas de cajas
+# Lo único de la figura que NO es texto: por grupo, si sus cajas van encadenadas con flechas
+# y cuál de ellas va resaltada. El grupo del medio no lleva flechas porque los tres modelos
+# son alternativas que se comparan entre sí, no una cadena; en el PNG tampoco las lleva.
+ARQ_ESTRUCTURA = ((True, None), (False, 2), (True, None))
+# Las cifras no viajan escritas dentro de los rótulos traducidos: llegan por marcador y las
+# pone mil(), que las escribe con el separador de millar del idioma activo (29.400 · 29,400 ·
+# 29 400). Es el mismo criterio que las cuatro tarjetas de estadísticas de esta página, y por
+# el mismo motivo: "29.400" leído en inglés es veintinueve coma cuatro.
+ARQ_CIFRAS = {"bronze": 29400, "silver": 7831, "train": 6264, "test": 1567}
+
+
+def arquitectura_svg() -> str:
+    """Diagrama de arquitectura del pipeline, en SVG y con la paleta activa."""
+    if _is_dark:
+        # En oscuro no valen los grises azulados del original —serían tres manchas claras sobre
+        # el lienzo—, así que la ESCALERA se invierte: el panel exterior apenas se separa de la
+        # tarjeta, el grupo sube un paso y la caja sube otro. Los recuadros llenos (S3, GitHub,
+        # Streamlit, QSVM) se aclaran: el azul marino del original sobre fondo oscuro deja de
+        # leerse como relleno y parece un agujero.
+        c_out, c_grupo, c_caja = "#0A1519", "#122229", t["surface_alt"]
+        c_borde, c_tinta, c_sub = t["border_strong"], t["text"], t["text_secondary"]
+        c_acento, c_traza = "#7FA9C4", "#3D6C87"
+        c_lleno, c_lleno_alt = "#2B4E66", "#3D6C87"
+        c_lleno_tinta, c_lleno_sub = "#FFFFFF", "#CFE0EA"
+    else:
+        # Los colores exactos del PNG, muestreados sobre el propio fichero.
+        c_out, c_grupo, c_caja = "#F2F7FA", "#E6EEF4", "#FFFFFF"
+        c_borde, c_tinta, c_sub = "#86A8BC", "#203D50", "#5A6B75"
+        c_acento, c_traza = "#3D6C87", "#5D8BA6"
+        c_lleno, c_lleno_alt = "#203D50", "#3D6C87"
+        c_lleno_tinta, c_lleno_sub = "#FFFFFF", "#CCDCE5"
+
+    def _texto(x, y, txt, color, tam, peso=400):
+        return (f'<text x="{x}" y="{y}" text-anchor="middle" fill="{color}" '
+                f'font-family="{FONT_SANS}" font-size="{tam}" font-weight="{peso}">'
+                f'{html.escape(txt)}</text>')
+
+    def _caja(x, y, w, h, titulo, sub, relleno, borde, tinta, sub_color, rx=8):
+        """Caja de dos líneas: rótulo en negrita y detalle debajo, centrados en el recuadro.
+        Las bases van a −4 y +13 del centro vertical, la separación medida en el original."""
+        cx, cy = x + w / 2, y + h / 2
+        trazo = f' stroke="{borde}" stroke-width="1"' if borde else ""
+        return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{rx}" '
+                f'fill="{relleno}"{trazo}/>'
+                + _texto(cx, cy - 4, titulo, tinta, 15, 600)
+                + _texto(cx, cy + 13, sub, sub_color, 13.5))
+
+    def _flecha_h(x1, x2, y):
+        return (f'<line x1="{x1}" y1="{y}" x2="{x2 - 7}" y2="{y}" stroke="{c_acento}" '
+                f'stroke-width="1.6"/><path d="M{x2} {y} L{x2 - 8.5} {y - 4.5} '
+                f'L{x2 - 8.5} {y + 4.5} Z" fill="{c_acento}"/>')
+
+    def _flecha_v(x, y1, y2):
+        return (f'<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2 - 5}" stroke="{c_acento}" '
+                f'stroke-width="1.6"/><path d="M{x} {y2} L{x - 4.5} {y2 - 8.5} '
+                f'L{x + 4.5} {y2 - 8.5} Z" fill="{c_acento}"/>')
+
+    _s3, _git, _cloud = S("ov_arch_io")
+    _cifras = {k: mil(v) for k, v in ARQ_CIFRAS.items()}
+
+    p = [
+        # Panel exterior: el recuadro discontinuo marca lo que corre DENTRO de Databricks.
+        f'<rect x="212" y="16" width="1001" height="331" rx="14" fill="{c_out}" '
+        f'stroke="{c_traza}" stroke-width="1.4" stroke-dasharray="9 5"/>',
+        f'<text x="227" y="43.5" fill="{c_tinta}" font-family="{FONT_SANS}" '
+        f'font-size="16" font-weight="600">Databricks Community Edition</text>',
+        # Origen y destinos, fuera del recuadro: S3 entra por la izquierda; GitHub y Streamlit
+        # Cloud salen por la derecha, uno debajo del otro.
+        f'<rect x="19" y="149" width="174" height="95" rx="10" fill="{c_lleno}"/>',
+        _texto(106, 183.5, _s3[0], c_lleno_tinta, 15, 600),
+        _texto(106, 200.5, _s3[1], c_lleno_sub, 13.5),
+        _texto(106, 217.5, _s3[2], c_lleno_sub, 13.5),
+        _caja(1243, 178, 179, 56, _git[0], _git[1],
+              c_lleno, None, c_lleno_tinta, c_lleno_sub, rx=10),
+        _caja(1243, 291, 179, 55, _cloud[0], _cloud[1],
+              c_lleno, None, c_lleno_tinta, c_lleno_sub, rx=10),
+        _flecha_h(193, 231, 196.5),      # S3 → Medallón
+        _flecha_h(1193, 1243, 206),      # evaluación → GitHub
+        _flecha_v(1332.5, 234, 291),     # GitHub → Streamlit Cloud
+    ]
+    for i, (gx, (titulo, cajas), (encadenado, destacada)) in enumerate(
+            zip(ARQ_GRUPO_X, S("ov_arch_grupos"), ARQ_ESTRUCTURA)):
+        p.append(f'<rect x="{gx}" y="71" width="302" height="251" rx="12" fill="{c_grupo}"/>')
+        p.append(_texto(gx + 151, 95.5, titulo, c_acento, 15, 600))
+        if i:                                    # flecha entre este grupo y el anterior
+            p.append(_flecha_h(gx - 28, gx, 196.5))
+        for j, (rot, det) in enumerate(cajas):
+            y = ARQ_FILA_Y[j]
+            det = det.format(**_cifras)
+            if j == destacada:
+                p.append(_caja(gx + 17, y, ARQ_CAJA_W, ARQ_CAJA_H, rot, det,
+                               c_lleno_alt, None, c_lleno_tinta, c_lleno_sub, rx=10))
+            else:
+                p.append(_caja(gx + 17, y, ARQ_CAJA_W, ARQ_CAJA_H, rot, det,
+                               c_caja, c_borde, c_tinta, c_sub))
+            if encadenado and j:
+                p.append(_flecha_v(gx + 151, ARQ_FILA_Y[j - 1] + ARQ_CAJA_H, y))
+    # Sin atributo height, igual que el circuito de tres qubits: el alto lo deduce el viewBox
+    # del ancho al 100 %, y "auto" no es un valor válido para el atributo de presentación.
+    return (f'<svg viewBox="0 0 1441 363" width="100%" role="img" '
+            f'style="display:block; height:auto; margin:0 auto;" '
+            f'aria-label="{html.escape(S("ov_arch_alt"))}">' + "".join(p) + "</svg>")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # PORTADA DE RESUMEN — LÁMINA A PANTALLA COMPLETA (solo en esta página)
 # ═══════════════════════════════════════════════════════════════════════
@@ -5671,6 +5802,14 @@ if page == "overview":
     with st.container(key="ov_sheet"):
         header(S("ov_eyebrow"), S("ov_title"), S("ov_subtitle"))
 
+        # La figura de arquitectura abre el cuerpo, justo encima del párrafo que la explica: se
+        # ve el mapa y se lee después el texto que lo recorre. Va a ancho completo de la columna
+        # —el diagrama es apaisado y cualquier recorte lo dejaría ilegible— dentro de una
+        # .info-card como el resto de la página, con menos aire lateral que las demás porque
+        # aquí el recuadro discontinuo del propio dibujo ya hace de marco interior.
+        st.markdown(f'<div class="info-card arch-card">{arquitectura_svg()}</div>',
+                    unsafe_allow_html=True)
+
         # El párrafo llega de i18n.py como prosa con <b>, sin un solo atributo de estilo: el
         # tamaño, el color y el realce los pone .lead-card p / .lead-card p b en la hoja de
         # estilos. Antes cada <b> traía su color incrustado y el texto era irrevisable.
@@ -6053,22 +6192,32 @@ elif page == "governance":
                 f'</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        _scol1, _scol2 = st.columns([1, 1.15], gap="medium")
-        with _scol1:
-            _srows = "".join(
-                f'<div class="kpi-row" style="align-items:flex-start;">'
-                f'<span class="kpi-label" style="max-width:56%;">{lab}'
-                f'<span style="display:block;font-size:13.5px;color:{t["text_muted"]};'
-                f'line-height:1.5;margin-top:3px;">{det}</span></span>'
-                f'<span class="kpi-value">{val}</span></div>'
-                for lab, val, det in S("gov_scaler"))
-            st.markdown(
-                f'<div class="info-card"><div class="kpi-model">'
-                f'<span class="kpi-dot" style="background:{C_PRIMARY};"></span>'
-                f'{S("gov_scaler_card")}</div>{_srows}</div>', unsafe_allow_html=True)
-        with _scol2:
-            st.markdown(f'<div class="clinical-note">{S("gov_scaler_note")}</div>',
-                        unsafe_allow_html=True)
+        # La tabla del escalado y la nota que la explica son el MISMO bloque de discurso, así que
+        # tienen que cerrar a la misma altura. Van en UNA sola .compare-grid y no en dos st.columns
+        # porque el estirado es nativo del grid: la caja más corta crece hasta la más alta ella
+        # sola, sin depender de que height:100% atraviese los divs intermedios de Streamlit ni de
+        # cuadrar al píxel el largo del texto en las cinco traducciones. El reparto 1 : 1,15 es el
+        # de las columnas que sustituye, y los saltos de 1024 y 768 px de .compare-grid lo
+        # reajustan y lo apilan igual que en el resto de la app.
+        # La tarjeta reparte en sus filas el sobrante que le quede (space-between, igual que la de
+        # Circuito Cuántico): según el idioma y el ancho manda una caja u otra por una línea, y
+        # así ese resto se va en cuatro huecos de unos pocos píxeles en vez de amontonarse al pie.
+        _srows = "".join(
+            f'<div class="kpi-row" style="align-items:flex-start;">'
+            f'<span class="kpi-label" style="max-width:56%;">{lab}'
+            f'<span style="display:block;font-size:13.5px;color:{t["text_muted"]};'
+            f'line-height:1.5;margin-top:3px;">{det}</span></span>'
+            f'<span class="kpi-value">{val}</span></div>'
+            for lab, val, det in S("gov_scaler"))
+        st.markdown(
+            f'<div class="compare-grid" '
+            f'style="grid-template-columns:minmax(0, 1fr) minmax(0, 1.15fr);">'
+            f'<div class="info-card" style="display:flex;flex-direction:column;'
+            f'justify-content:space-between;"><div class="kpi-model">'
+            f'<span class="kpi-dot" style="background:{C_PRIMARY};"></span>'
+            f'{S("gov_scaler_card")}</div>{_srows}</div>'
+            f'<div class="clinical-note">{S("gov_scaler_note")}</div>'
+            f'</div>', unsafe_allow_html=True)
 
         # Verificación end-to-end. Es el cierre del linaje: comprueba que ESTE dashboard
         # reproduce los modelos entrenados, no solo que sus cifras son coherentes entre sí.
@@ -6628,7 +6777,7 @@ elif page == "circuit":
             # colapsar la barra), donde antes el rótulo traducido hacía que el widget se diera por
             # nuevo y se perdiera la posición.
             var_code = st.selectbox(S("bl_var"), list(QSVM_FEATURES.keys()),
-                                     format_func=lambda c: f"{c} — {q_label(c)}", key="bl_var")
+                                     format_func=lambda c: f"{c} · {q_label(c)}", key="bl_var")
             v = QSVM_FEATURES[var_code]
             lo, hi = v["range"]
             val = st.slider(S("bl_value").format(unidad=q_unit(var_code)),
@@ -7301,7 +7450,7 @@ elif page == "predictor":
         st.markdown(f'<div class="section-title" style="margin-top:22px;">{S("lp_curve_title")}</div>',
                     unsafe_allow_html=True)
         _cur_code = st.selectbox(S("lp_curve_var"), list(QSVM_FEATURES.keys()),
-                                 format_func=lambda c: f"{c} — {q_label(c)}",
+                                 format_func=lambda c: f"{c} · {q_label(c)}",
                                  key="lp_curva")
         _cv = QSVM_FEATURES[_cur_code]
         _clo, _chi = _cv["range"]
