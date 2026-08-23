@@ -197,42 +197,57 @@ st.set_page_config(page_title="QML DataOps", page_icon="◆", layout="wide", ini
 # ═════════════════════════════════════════════════════════════════════════
 # SISTEMA DE DISEÑO
 # ═════════════════════════════════════════════════════════════════════════
-# PALETA BASE (definida por el autor, y definitiva):
-#   #05060A  abismo     #141826  pizarra    #2B2F3A  grafito
-#   #FFB703  ámbar      #F1F5F9  niebla
+# PALETA BASE — REGISTRO CLÍNICO (cuatro anclas del autor):
+#   #1565C0  azul clínico (primario)     #00ACC1  cian (acento)
+#   #F4F8FB  papel (fondo)               #263238  tinta (texto)
 #
-# Medida con el validador, esta paleta tiene una propiedad que las anteriores no
-# tenían y que decide TODO el reparto: sus tres oscuros no son tres colores, son
-# UNA ESCALERA.
-#   · Comparten tono casi exacto (271° · 272° · 269°) con croma mínimo (0,011 ·
-#     0,028 · 0,021) y se escalonan limpiamente en luminosidad: L 0,123 · 0,212 ·
-#     0,306. Entre peldaños consecutivos hay 1,15:1 y 1,32:1 — demasiado poco para
-#     leerse como colores distintos, que es EXACTAMENTE lo que se quiere de unos
-#     planos de elevación. El tema oscuro no los reparte, los apila: lienzo →
-#     tarjeta → superficie alterna. Es la paleta la que pide el aspecto "elevado".
-#   · El ámbar es el único cromático (C 0,171, h 80°) y el más brillante de las tres
-#     paletas que ha tenido la app. Sobre los tres oscuros da 11,6 / 10,1 / 7,7:1.
-#     Sobre la niebla, 1,6:1 — como siempre, un color concebido para fondo oscuro.
-#   · La niebla #F1F5F9 es fría (h 248°) y está altísima: L 0,968, a 1,10:1 del
-#     blanco. Eso tiene una consecuencia que hay que tener presente en todo el tema
-#     claro: la tarjeta blanca sobre este lienzo CASI NO SE DESPEGA POR COLOR. La
-#     elevación en claro la sostienen la sombra y el filete, no el escalón tonal —
-#     ver SHADOW, que por esto se rehizo a tres capas.
-#   · Lo que esta paleta NO trae es un tono medio: no hay nada entre L 0,306 y
-#     L 0,825. Los pasos intermedios que necesitan la segunda serie, la rampa y las
-#     tintas apagadas se DERIVAN sobre el eje frío (h 265°), que es el de la propia
-#     escalera. No hay ni un color inventado fuera de esa línea.
+# Esta paleta se especifica al revés que las anteriores, y eso cambia el método: las
+# tres primeras partían de un LIENZO OSCURO y derivaban el tema claro; esta declara
+# el papel y la tinta, o sea el tema CLARO, que es además el registro en el que se lee
+# un panel clínico. Medidas:
+#   · azul   L 0,513  C 0,160  h 256°     · cian   L 0,682  C 0,118  h 210°
+#   · papel  L 0,977  C 0,006  h 240°     · tinta  L 0,309  C 0,019  h 230°
 #
-# Reparto en consecuencia — las dos familias tienen trabajos DISTINTOS y no se cruzan:
-#   · FRÍOS (abismo · pizarra · grafito + derivados) → ESTRUCTURA y MAGNITUD: los
-#     planos de elevación, bordes, tinta, los dos modelos clásicos y la rampa entera.
-#   · ÁMBAR → SEÑAL: acento de marca, foco, navegación activa, filetes, halos y el
-#     modelo cuántico. Es el único color de la app que grita, así que solo se le
-#     deja gritar donde hay algo que señalar.
-#   · SERIES (los 3 modelos) → tinta · pizarra media · ámbar. Los dos clásicos en la
-#     familia fría, el cuántico en el color de marca: el color va donde está la
-#     tesis. El ámbar separa al cuántico también por TONO, que es lo que sobrevive
-#     al daltonismo (peor caso simulado: ΔE 30,5).
+# Tres propiedades deciden todo el reparto:
+#   · HAY DOS CROMÁTICOS, y no uno. La paleta anterior tenía un solo cálido, así que
+#     el acento de marca y el modelo cuántico acababan siendo el MISMO color (ver la
+#     nota de C_QUANTUM). Aquí no hace falta: el azul se queda con el cromo de
+#     interfaz y el cian con el componente cuántico, que es donde está la tesis. Se
+#     separan 46° de tono y ΔL 0,17, o sea que se distinguen por las dos vías.
+#   · EL AZUL SÍ PUEDE LLEVAR TEXTO EN CLARO, que es la diferencia práctica más
+#     grande con el ámbar. #1565C0 da 5,75:1 sobre la tarjeta, 5,38 sobre el lienzo y
+#     4,61 sobre la barra lateral: pasa WCAG AA en los tres fondos que reciben tinta,
+#     así que el acento del autor entra SIN TOCAR. El ámbar daba 1,75:1 y había que
+#     oscurecerlo a mano hasta L 0,52 antes de dejarle un rótulo.
+#   · EL CIAN NO. 2,56:1 sobre el lienzo: es un color concebido para fondo oscuro, y
+#     hereda exactamente el papel que tenía el ámbar en claro — vive en rellenos,
+#     bordes y tintes, y cuando tiene que llevar texto usa un paso oscurecido.
+#
+# Lo que la paleta NO trae es el tema oscuro: no hay ni un oscuro entre las cuatro
+# anclas. Se deriva, y se deriva CONSERVANDO LA ESCALERA de la paleta anterior —los
+# mismos peldaños de luminosidad L 0,122 · 0,165 · 0,212 · 0,307— sobre el eje de la
+# tinta (h 230°) en vez del violáceo de antes. Los saltos entre planos siguen siendo
+# 1,05 / 1,15 / 1,33:1, así que todo el aspecto "elevado" del tema oscuro sobrevive
+# intacto al cambio de color: cambia el tono, no la arquitectura.
+#
+# El papel #F4F8FB está altísimo (L 0,977, a 1,05:1 del blanco), y eso hay que tenerlo
+# presente en todo el tema claro: la tarjeta blanca sobre este lienzo CASI NO SE DESPEGA
+# POR COLOR. La elevación en claro la sostienen la sombra y el filete, no el escalón
+# tonal — ver SHADOW, que por esto se rehizo a tres capas.
+#
+# Reparto en consecuencia — las tres familias tienen trabajos DISTINTOS y no se cruzan:
+#   · NEUTROS (papel · tinta + la escalera derivada) → ESTRUCTURA: planos de elevación,
+#     bordes y todos los niveles de texto. Van sobre el eje de la tinta (h 230°), no en
+#     gris: comparten tono con las superficies, así que el texto secundario se hunde en
+#     el plano en vez de ensuciarse.
+#   · AZUL → CROMO DE INTERFAZ: acento de marca, foco, navegación activa, filetes,
+#     halos y la rampa de magnitud. Es lo que la app usa para decir «esto responde».
+#   · CIAN → EL COMPONENTE CUÁNTICO: la serie del QSVM, la esfera de Bloch y el
+#     ZZFeatureMap. El color va donde está la tesis, y al ser el único de su tono en
+#     toda la app, señala sin competir con el cromo.
+#   · SERIES (los 3 modelos) → tinta · azul-gris medio · cian. Los dos clásicos en la
+#     familia neutra y el cuántico en el acento. El cian separa al cuántico también por
+#     TONO, que es lo que sobrevive al daltonismo.
 #   · RAMP (magnitud) → rampa fría de un solo tono (h 265°), cinco pasos de
 #     luminosidad monótona sobre el eje de la escalera. Va en frío y NO en ámbar a
 #     propósito: si la magnitud fuera dorada, el ojo no podría distinguir "esta
@@ -623,93 +638,121 @@ CSS_FLAGS_MOVIL = "\n    ".join(
     _css_banderas(FLAG_TOP_M, _FLAG_ANCHO_M, _FLAG_ALTO_M, _MENU_BORDE_M, con_imagen=False))
 
 # ── Paleta base, literal. Referencia única para todo lo demás. ──
-P_ABISMO, P_PIZARRA, P_GRAFITO, P_AMBAR, P_NIEBLA = "#05060A", "#141826", "#2B2F3A", "#FFB703", "#F1F5F9"
-# Paso alto del ámbar. NO está en la paleta del autor: se deriva subiendo la luminosidad
-# del #FFB703 (L 0,825 → 0,876) con el tono intacto (h 81°). Existe porque el ámbar es el
-# único cálido de la paleta y hay dos sitios que necesitan DOS pasos cálidos y no uno:
-# el degradado del filete de portada y el acento enfático en tema oscuro (C_DARK). Sin
-# él, ese degradado sería un color plano y ese acento no tendría a dónde separarse.
-P_AMBAR_ALTO = "#FFCE75"
+# Las CUATRO ANCLAS del autor, literales y sin tocar.
+P_CLINICO, P_CIAN, P_PAPEL, P_TINTA = "#1565C0", "#00ACC1", "#F4F8FB", "#263238"
+# La escalera del tema OSCURO, derivada. No está en la paleta del autor: son cuatro pasos
+# de luminosidad sobre el tono de la tinta (h 230°, croma 0,020-0,024), en los mismos
+# peldaños que traía la paleta anterior —L 0,122 · 0,212 · 0,307— para conservar sus
+# saltos de 1,15 y 1,33:1, que es lo que hace que se lean como ALTURAS y no como colores
+# distintos. Ver T(), donde se reparten.
+P_NOCHE, P_ACERO, P_PLOMO = "#01070C", "#0C1B22", "#243239"
+# La tinta del tema oscuro: el papel del autor llevado casi al blanco sobre el mismo eje
+# (L 0,968). Es el reflejo de P_TINTA — cada tema escribe con el ancla del otro.
+P_NIEBLA = "#F1F5F8"
+# Paso alto del azul, derivado subiendo la luminosidad (L 0,513 → 0,762) con el tono
+# intacto. Existe porque hay dos sitios que necesitan DOS pasos de marca y no uno: el
+# degradado del filete de portada y el acento enfático en tema oscuro (C_DARK). Sin él,
+# ese degradado sería un color plano y ese acento no tendría a dónde separarse.
+P_CLINICO_ALTO = "#6AB5FF"
 
 # ── Escala CATEGÓRICA: identidad de cada modelo. Orden fijo, nunca reciclado. ──
-# Tinta = baseline clásico · pizarra media = puente estructural · ámbar = cuántico.
-# Los dos clásicos van en la familia FRÍA, invertidos entre temas para que el que hace
-# de tinta sea siempre el que contrasta: niebla/pizarra en el slot de LightGBM, y en el
-# de SVM un paso MEDIO del eje frío (h 265°) que la paleta no trae hecho — sus tres
-# oscuros están todos por debajo de L 0,31 y ninguno llega al 3:1 que exige un relleno
-# de barra sobre la tarjeta. Se deriva a L 0,64 en oscuro y a L 0,47 en claro: mismo
-# tono que la escalera, la luminosidad que hace falta en cada fondo.
-# El slot cuántico lleva el color de marca: en oscuro es el #FFB703 del autor sin tocar
-# (10,1:1); en claro se baja a L 0,655 porque el original da 1,75:1 sobre blanco y como
-# relleno de barra sería invisible. Se conserva el tono, se corrige el paso.
+# Tinta = baseline clásico · azul-gris medio = puente estructural · cian = cuántico.
+# Los dos clásicos van en la familia NEUTRA, invertidos entre temas para que el que hace
+# de tinta sea siempre el que contrasta: niebla en oscuro y la tinta del autor en claro.
+# En el slot del SVM va un paso del eje de la tinta (h 228°) que la paleta no trae hecho:
+# sus superficies están todas por debajo de L 0,31 o por encima de L 0,92, y nada entre
+# medias llega al 3:1 que exige un relleno de barra.
+# DÓNDE se pone ese paso lo decide la separación con el cian, no el contraste con el fondo,
+# y es la trampa de esta paleta: con las tres series en la mitad azul del círculo, dos de
+# ellas pueden acabar a 18° de tono y a ΔL 0,04 —o sea, el mismo color en una gráfica— sin
+# que ningún contraste contra el fondo lo denuncie. Así que el neutro se coloca AL OTRO
+# LADO del cian: por encima en oscuro (L 0,80) y por debajo en claro (L 0,44), de modo que
+# las tres quedan en una escalera de luminosidad con saltos de 0,12 a 0,17 en los dos temas.
+# Y con croma 0,022 frente al 0,118 del cian: el cuántico es el ÚNICO saturado de los tres,
+# que es la segunda vía por la que se distingue cuando la primera falla.
+# El slot cuántico lleva el ACENTO, y esta es la mejora directa de tener dos cromáticos:
+# ya no comparte color con el cromo de interfaz. En oscuro es el #00ACC1 del autor sin
+# tocar (4,82:1 en el peor fondo); en claro se baja a L 0,573 porque el original da
+# 2,74:1 sobre blanco y como relleno de barra no llegaría al 3:1. Se conserva el tono,
+# se corrige el paso.
 SERIES = {
-    "lightgbm": P_NIEBLA  if _is_dark else P_PIZARRA,
-    "svm_rbf":  "#7D8CAB" if _is_dark else "#4C5A7A",
-    "qsvm":     P_AMBAR   if _is_dark else "#BD8500",
+    "lightgbm": P_NIEBLA  if _is_dark else P_TINTA,
+    "svm_rbf":  "#B0C1C9" if _is_dark else "#46555C",
+    "qsvm":     P_CIAN    if _is_dark else "#0091A6",
 }
 
 # ── Escala SECUENCIAL: magnitud (matriz de confusión, velocímetro) ──
-# Un solo tono (h 265°, el eje FRÍO de la escalera), luminosidad monótona. Va en frío y
-# no en ámbar por la razón de arriba: el ámbar significa "señal" en el resto de la app y
-# una magnitud dorada no se distinguiría de una selección.
+# Un solo tono (h 256°, el del azul de marca), luminosidad monótona. Va en el azul y no
+# en el cian por la razón de arriba: el cian significa "cuántico" en el resto de la app y
+# una magnitud cian se leería como una medida del QSVM. El azul, en cambio, es la familia
+# del cromo, y aquí aparece en pasos que ninguna pieza de interfaz usa.
 # El índice 4 es SIEMPRE el extremo de máxima magnitud: en claro eso es el paso más
 # oscuro y en oscuro el más brillante — en ambos casos, el que más se despega de su
 # fondo. Los pasos van a ΔL constante (≈0,10 en oscuro, 0,12 en claro), no a ojo: es lo
 # que hace que el orden se lea sin leyenda.
-RAMP = (["#333D51", "#4A5671", "#657391", "#8492AF", "#B1BBD0"] if _is_dark
-        else ["#B4BED3", "#8997B4", "#647392", "#45516B", "#283042"])
+RAMP = (["#26364C", "#3F5168", "#5B6D86", "#7A8EA8", "#9FB3CE"] if _is_dark
+        else ["#A9C0DE", "#879DBB", "#677C98", "#485C77", "#2B3E57"])
 
 # ── Acento de marca (cromo de interfaz: navegación, foco, sliders, reglas) ──
-# En oscuro es el #FFB703 del autor sin tocar (10,1:1 sobre la superficie). En claro
-# ese mismo ámbar da 1,75:1 y no puede llevar texto: el acento baja del mismo tono, y
-# el ámbar puro queda reservado a rellenos y tintes, donde no se le pide legibilidad.
+# En CLARO es el #1565C0 del autor sin tocar, y eso es nuevo: es el primer acento de la
+# app que entra intacto en el tema claro. Da 5,75:1 sobre la tarjeta, 5,38 sobre el
+# lienzo y 4,61 sobre la barra lateral, o sea que pasa WCAG AA en los TRES fondos que
+# reciben tinta y puede llevar rótulo donde caiga.
 #
-# CUÁNTO baja se decidió midiendo, y el motivo importa porque se repite por toda la
-# paleta: el acento no vive solo en las tarjetas. Cae también sobre el lienzo (#F1F5F9)
-# en los antetítulos y las cifras del deslizador, sobre la barra lateral (#E2E9F0) en
-# los enlaces del buscador, y sobre la superficie alterna. Medido SOLO contra el blanco
-# de la tarjeta, cualquier paso hasta L 0,57 parece pasar; contra la barra lateral, que
-# es el fondo claro más oscuro de la app, el mismo color se queda en 3,7:1 — por debajo
-# del 4,5:1 de WCAG.
-# L 0,52 (#8A6000) es el paso MÁS CLARO que pasa en los CUATRO con margen (5,59 sobre
-# tarjeta, 5,11 sobre lienzo, 4,57 sobre barra lateral y alterna), así que se conserva
-# todo el color que se puede conservar.
-# Al medir un acento nuevo, medirlo contra el fondo MÁS OSCURO de los cuatro, no contra
-# el blanco.
-C_PRIMARY = P_AMBAR if _is_dark else "#8A6000"
-# C_DARK es el acento ENFÁTICO: el mismo oro separado un paso MÁS de la superficie, en
+# La regla con la que se comprueba eso importa, porque se repite por toda la paleta: el
+# acento no vive solo en las tarjetas. Cae también sobre el lienzo en los antetítulos y
+# las cifras del deslizador, y sobre la barra lateral en los enlaces del buscador. Medido
+# SOLO contra el blanco cualquier paso hasta L 0,57 parece pasar; contra la barra lateral,
+# que es el fondo claro más oscuro que recibe texto, varios de esos se quedan por debajo
+# del 4,5:1. Al medir un acento nuevo, medirlo contra ESE fondo y no contra el blanco.
+# (La barra ACTIVA —sidebar_active— queda fuera de la cuenta a propósito: es un fondo de
+# hover, y allí el rótulo cambia a tinta plena; ninguna pieza escribe en acento sobre él.)
+#
+# En OSCURO el azul del autor da 2,44:1 sobre la tarjeta y no vale: se sube por el mismo
+# tono hasta L 0,676, que es el paso MÁS SATURADO que aún pasa 4,5:1 contra los cuatro
+# planos del tema. Se conserva todo el color que se puede conservar.
+C_PRIMARY = "#4D98F8" if _is_dark else P_CLINICO
+# C_DARK es el acento ENFÁTICO: el mismo azul separado un paso MÁS de la superficie, en
 # la dirección que corresponda a cada tema (más brillante en oscuro, más profundo en
 # claro). Lo usan los rótulos que tienen que ganarle al acento normal sin cambiar de
 # color — el botón de la puerta que toca en la esfera de Bloch, el ítem seleccionado.
-C_DARK    = P_AMBAR_ALTO if _is_dark else "#664600"
+C_DARK    = P_CLINICO_ALTO if _is_dark else "#00479F"
 C_QUANTUM = SERIES["qsvm"]          # acento del componente cuántico (Bloch, ZZFeatureMap)
-# En la paleta original C_QUANTUM y C_PRIMARY eran dos cálidos distintos (#F9C449 y
-# #F5A623), pero se llevaban ΔE 7,1: el mismo color para cualquier ojo. Aquí hay UN
-# solo cálido y en oscuro los dos valen #FFB703. No se pierde nada que se viera.
+# Y aquí está la diferencia con las dos paletas anteriores. En la original, C_QUANTUM y
+# C_PRIMARY eran dos cálidos distintos (#F9C449 y #F5A623) que se llevaban ΔE 7,1: el
+# mismo color para cualquier ojo. En la siguiente había un solo cálido y los dos pasaron
+# a valer literalmente lo mismo. Con dos cromáticos vuelven a ser dos colores de verdad
+# —azul 256° y cian 210°—, así que el componente cuántico se distingue del cromo de
+# interfaz sin depender de dónde esté puesto.
+# Cuando el cian tiene que llevar TEXTO en claro no vale ni el del autor ni el paso de
+# relleno: hace falta bajar a L 0,478 (#007186, 4,55:1 en el peor fondo).
+C_QUANTUM_TEXTO = P_CIAN if _is_dark else "#007186"
 #
 # Pasos intermedios. Aquí SE SEPARAN los dos, que antes salían ambos de la rampa:
 #   · C_MID1 es dato — la retícula de ticks del deslizador y las líneas guía de las
 #     gráficas—, así que sale de la RAMPA, que es la escala del dato.
 #   · C_MID2 es BRILLO — el halo del interruptor de tema, el anillo de las láminas,
-#     el pulgar del deslizador, el latido de la portada—, así que sale del ORO, que
-#     es la familia de la señal. Con la rampa ahora en frío, dejarlo donde estaba
-#     habría apagado todos los halos de la app a un azul que no se ve sobre el fondo
-#     azul. Cada tema toma el paso del oro que pesa en su fondo: el oro pleno sobre
-#     oscuro, el paso de relleno sobre claro.
+#     el pulgar del deslizador, el latido de la portada—, así que sale del CROMO, que
+#     es la familia que dice "esto responde". No del cian: un halo cuántico alrededor
+#     de un deslizador clínico diría algo que no es.
+#     Coincide con C_PRIMARY en los dos temas, y se deja declarado aparte igualmente:
+#     son roles distintos —uno lleva texto, el otro solo luz— y la próxima paleta puede
+#     necesitar separarlos, como ya pasó con el ámbar.
 C_MID1  = RAMP[2]
-C_MID2  = P_AMBAR if _is_dark else "#BD8500"
+C_MID2  = C_PRIMARY
 
 # ── Colores de ESTADO (reservados: nunca se reutilizan como “serie 4”) ──
 # Única excepción deliberada a la paleta base: bien/atención/grave tienen que leerse
-# como estado de forma inmediata y universal. Con una marca dorada hay un riesgo extra —
-# el “atención” canónico ES dorado y se confundiría con el acento—, así que se desplaza
-# a un naranja quemado claramente más rojo (h 45° frente a los 80° de la marca) y el
-# “grave” a rojo (h 27°). Los tres van SIEMPRE acompañados de su etiqueta de texto.
+# como estado de forma inmediata y universal. Se conservan tal cual venían, y ahora con
+# MÁS margen que antes: la razón por la que el "atención" se había desplazado a un
+# naranja quemado era no confundirlo con una marca dorada, y esa marca ya no existe —el
+# cromo es azul y el acento cian, así que los tres estados quedan a más de 100° de tono
+# de todo lo demás—. Se dejan donde están porque están medidos y funcionan; lo que se ha
+# revisado es que sigan pasando contra los fondos NUEVOS, que no son los de entonces.
 # Los seis pasan 4,5:1 contra los CUATRO fondos de su tema: se usan como TINTA (el
-# rótulo "passed", las cifras de los KPI), no solo como puntos de color. El "grave"
-# oscuro subió a L 0,70 respecto de la revisión anterior por ese cuarto fondo: sobre el
-# grafito —la superficie alterna, el plano más claro del tema oscuro— se quedaba en
-# 4,28:1 mientras pasaba de sobra en los otros tres.
+# rótulo "passed", las cifras de los KPI), no solo como puntos de color. El peor caso de
+# los seis es el "grave" oscuro sobre el plomo —la superficie alterna, el plano más claro
+# del tema oscuro—, y con la escalera nueva se queda en 4,60:1.
 STATUS = {
     "good":     "#3FC98B" if _is_dark else "#196646",
     "warning":  "#F5854B" if _is_dark else "#984012",
@@ -785,14 +828,14 @@ def T(tema=None):
     sobre medir contra el blanco).
     """
     if (tema or st.session_state.theme) == "dark":
-        return dict(bg=P_ABISMO, surface=P_PIZARRA, surface_alt=P_GRAFITO,
-                     text=P_NIEBLA, text_secondary="#B2B7C2", text_muted="#949CAD",
-                     border="#252937", border_strong="#424757",
-                     sidebar_bg="#0A0E19", sidebar_active="#1F2432")
-    return dict(bg=P_NIEBLA, surface="#FFFFFF", surface_alt="#E2E9F0",
-                 text=P_PIZARRA, text_secondary="#414A5E", text_muted="#5A6376",
-                 border="#CDD6DF", border_strong="#A5B1BD",
-                 sidebar_bg="#E2E9F0", sidebar_active="#D5DDE6")
+        return dict(bg=P_NOCHE, surface=P_ACERO, surface_alt=P_PLOMO,
+                     text=P_NIEBLA, text_secondary="#ADB8BD", text_muted="#8E999E",
+                     border="#1C272C", border_strong="#3D484E",
+                     sidebar_bg="#051016", sidebar_active="#13232A")
+    return dict(bg=P_PAPEL, surface="#FFFFFF", surface_alt="#DDE8EE",
+                 text=P_TINTA, text_secondary="#44525A", text_muted="#5A6A71",
+                 border="#C7D1D7", border_strong="#9EACB3",
+                 sidebar_bg="#DDE8EE", sidebar_active="#CFDBE1")
 
 t = T()
 
@@ -850,7 +893,7 @@ CARD_SHEEN = ("linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255
 # NEU_INSET es el mismo relieve del revés (hundido) y marca el estado activo: es el gesto
 # propio de este lenguaje —el control se PULSA— y evita añadir un cerco de color que
 # rompería el monocromo.
-NEU_BG     = "#141824" if _is_dark else "#EAEFF5"
+NEU_BG     = "#08161C" if _is_dark else "#E4EFF4"
 NEU_RAISED = ("5px 5px 11px rgba(0,0,0,0.60), -5px -5px 11px rgba(255,255,255,0.050)" if _is_dark
               else "5px 5px 11px rgba(5,6,10,0.14), -5px -5px 11px rgba(255,255,255,0.95)")
 NEU_INSET  = ("inset 3px 3px 7px rgba(0,0,0,0.68), inset -3px -3px 7px rgba(255,255,255,0.055)"
@@ -875,7 +918,7 @@ NEU_INSET  = ("inset 3px 3px 7px rgba(0,0,0,0.68), inset -3px -3px 7px rgba(255,
 # El margen en claro volvió a estrecharse: el lienzo está en L 0,968, a 1,10:1 del blanco,
 # así que ningún halo claro puede pasar de ahí. Se dejan casi opacos justamente por eso —
 # con tan poco recorrido, bajar la opacidad es apagarlos del todo.
-C_LUZ = "#FFFCF0"   # el ámbar disuelto en blanco. Como él, nunca lleva texto.
+C_LUZ = "#ECFEFF"   # el cian disuelto en blanco. Como él, nunca lleva texto.
 HALOS = (f"radial-gradient(1100px 520px at 12% -8%, {C_PRIMARY}24, transparent 60%),"
          f"radial-gradient(900px 460px at 100% 0%, {t['border_strong']}3D, transparent 62%)"
          if _is_dark else
@@ -941,13 +984,13 @@ SIGNO_MENOS = _flecha_mask("M5 12h14")
 # que más se busca de un vistazo. Son los dos extremos de la paleta —los mismos que T() reparte
 # entre tinta y superficie—, aquí intercambiados; al ser un único par, el contraste entre flecha
 # y disco es el mismo 16,1:1 en los dos temas.
-TOGGLE_DISCO  = P_NIEBLA if _is_dark else P_PIZARRA
-TOGGLE_FLECHA = P_PIZARRA if _is_dark else P_NIEBLA
+TOGGLE_DISCO  = P_NIEBLA if _is_dark else P_TINTA
+TOGGLE_FLECHA = P_ACERO  if _is_dark else P_NIEBLA
 # Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si usáramos
 # un azul fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
 # En claro NO se usa RAMP[0]: ese paso está calibrado para pintar DATO sobre blanco y como
 # carril de control resultaba demasiado saturado. Aquí va un tinte más apagado del mismo tono.
-SLIDER_GROOVE = "#C9CFDD" if st.session_state.theme == "light" else t["surface_alt"]
+SLIDER_GROOVE = "#C3D1E3" if st.session_state.theme == "light" else t["surface_alt"]
 
 # ── Tratamiento de las figuras PNG de fondo blanco (beeswarm SHAP, circuito) según tema ──
 # Esas imágenes tienen fondo blanco intrínseco (figuras científicas del TFM). En tema claro se funden
@@ -1147,7 +1190,7 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
 }}
 /* El realce lo lleva ahora el DISCO, no la flecha. Antes bastaba con teñir la flecha de oro
    porque el disco iba en el tono de la barra; sobre el disco invertido, ese mismo oro quedaba
-   lavado (P_AMBAR sobre la niebla no llega a 1,6:1). Pintando el disco de marca y dejando la flecha
+   lavado (el cian sobre la niebla no llega a 1,3:1). Pintando el disco de marca y dejando la flecha
    en su neutro, el par conserva contraste de sobra en los dos temas y el hover se lee incluso mejor. */
 .st-key-toggle_sidebar button:hover {{
     background-color:{C_PRIMARY} !important; border-color:{C_PRIMARY} !important;
@@ -1456,7 +1499,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     height:52px; height:clamp(28px, 5.2cqw, 52px);
     padding:0 11px; padding:0 clamp(4px, 1.1cqw, 11px);
     box-sizing:border-box;
-    background:{P_NIEBLA if _is_dark else '#F8FAFD'};
+    background:{P_NIEBLA if _is_dark else '#F7FDFF'};
     /* EL MARCO. Hace un trabajo DISTINTO en cada tema, y por eso no es el mismo valor:
          · En CLARO lo sostiene TODO. La placa (#F8FAFD) sobre el lienzo (#F1F5F9) da 1,05:1
            — medido, no estimado: sin marco la pastilla sencillamente no existe, y así estaba
@@ -2058,11 +2101,11 @@ div[class*="st-key-navk_"] {{
    apagados y sin sombra. El estado deshabilitado de Streamlit solo baja la opacidad, y a la
    mitad de opacidad los tres se parecían demasiado como para ver de un vistazo cuál es el
    siguiente paso — que es toda la interacción de esta sección. */
-/* C_DARK y no C_QUANTUM, que es lo que había: el acento cuántico en claro es #BD8500, y ese
-   tono está declarado ARRIBA como relleno de barra —"en claro se baja a L 0,655 (…) como relleno
-   de barra sería invisible"—, no como tinta. De rótulo da 3,22:1 sobre la superficie blanca
-   del botón, por debajo del 4,5:1 de WCAG para texto. C_DARK es el paso oscurecido del MISMO
-   ámbar y sube a 8,60:1. En tema oscuro C_DARK es el paso ALTO del ámbar (#FFCE75) y también
+/* C_DARK y no C_QUANTUM, que es lo que había: el acento cuántico en claro es #0091A6, y ese
+   tono está declarado ARRIBA como relleno de barra —"en claro se baja a L 0,573 (…) como relleno
+   de barra no llegaría al 3:1"—, no como tinta. De rótulo se queda en 3,54:1 sobre la superficie
+   blanca del botón, por debajo del 4,5:1 de WCAG para texto. C_DARK es el paso oscurecido del
+   azul de marca y sube a 9,30:1. En tema oscuro C_DARK es el paso ALTO del azul (#6AB5FF) y también
    gana al acento normal, así que la regla vale igual en los dos temas. */
 {_sel_ent("button:enabled", _ENT_PASO)} {{
     border-color:{C_DARK} !important; color:{C_DARK} !important;
@@ -2620,8 +2663,9 @@ div[role="slider"]:active {{ cursor:grabbing !important; }}
 /* El valor sobre el pulgar sube para no chocar con los ticks.
    Y se le pone COLOR, que es lo único del deslizador que se había quedado sin vestir: el carril,
    el aro del pulgar y la muesca ya van en C_PRIMARY (ver arriba), pero la cifra la seguía
-   pintando el `primaryColor` de config.toml. Ese ajuste es de SERVIDOR, o sea el mismo #BD8500
-   en los dos temas: en oscuro aguanta (5,5:1), pero en claro cae a 2,94:1 sobre el lienzo, y es
+   pintando el `primaryColor` de config.toml. Ese ajuste es de SERVIDOR, o sea el mismo #1565C0
+   en los dos temas: en claro es justo el acento y va perfecto, pero en oscuro cae a 2,44:1
+   sobre la tarjeta —el azul del autor está pensado para papel—, y es
    justo el número que estás leyendo mientras arrastras el mando. C_PRIMARY es el acento que SÍ
    puede llevar texto —es literalmente su definición, "cromo de interfaz: navegación, foco,
    sliders"— y de paso ata la cifra al resto del control.
@@ -3623,8 +3667,8 @@ with st.sidebar:
     /* La fila de la página activa, marcada con el mismo filete de marca que llevaba el ítem
        seleccionado del menú. El icono sube a C_DARK: como los seis van en C_PRIMARY, ese color
        ya no distingue al elegido, y C_DARK se separa en la dirección correcta en cada tema
-       —más brillante en oscuro (#FFCE75), más profundo en claro (#664600)—. Contraste sobre el
-       fondo del ítem activo: 10,57:1 y 6,27:1. */
+       —más brillante en oscuro (#6AB5FF), más profundo en claro (#00479F)—. Contraste sobre el
+       fondo del ítem activo: 7,88:1 y 6,71:1. */
     .st-key-navb_{page} div[class*="st-key-navp_"] button {{
         border-left-color:{C_PRIMARY} !important; background:{t['sidebar_active']} !important;
     }}
@@ -4257,10 +4301,10 @@ def ink_over(hex_color, alpha, surface):
     El fondo real de una celda pintada con alfa es la MEZCLA del color con la
     superficie de debajo, no el color a secas. Con una paleta toda oscura daría igual
     —el blanco valdría siempre—, pero con esta no: en tema oscuro la serie de LightGBM
-    es #F1F5F9 y la de QSVM #FFB703, así que una tinta blanca fija sería blanco sobre
+    es #F1F5F8 y la de QSVM #00ACC1, así que una tinta blanca fija sería blanco sobre
     blanco. Aquí se compone la mezcla y se elige entre el noche y el blanco el que más
     contraste dé, de modo que la regla sigue siendo correcta si mañana se vuelve a
-    cambiar la paleta — y de hecho ya ha sobrevivido a DOS cambios enteros sin tocarse:
+    cambiar la paleta — y de hecho ya ha sobrevivido a TRES cambios enteros sin tocarse:
     lo único que cambió fue el hex de la tinta oscura, que se lee de la paleta.
 
     Devuelve (tinta, tinta_atenuada) para el número y su etiqueta.
@@ -4268,9 +4312,9 @@ def ink_over(hex_color, alpha, surface):
     mix = tuple(f * alpha + b * (1 - alpha)
                 for f, b in zip(_hex_rgb(hex_color), _hex_rgb(surface)))
     lum = _rel_luminance(mix)
-    if (1.05 / (lum + 0.05)) >= ((lum + 0.05) / (_rel_luminance(_hex_rgb(P_ABISMO)) + 0.05)):
+    if (1.05 / (lum + 0.05)) >= ((lum + 0.05) / (_rel_luminance(_hex_rgb(P_NOCHE)) + 0.05)):
         return "#FFFFFF", "rgba(255,255,255,0.78)"
-    return P_ABISMO, hex_to_rgba(P_ABISMO, 0.72)
+    return P_NOCHE, hex_to_rgba(P_NOCHE, 0.72)
 
 # ── Separadores numéricos de cada idioma: (millar, decimal) ──
 # Cuatro de las cinco lenguas escriben la coma como separador DECIMAL, pero NO comparten
@@ -4809,7 +4853,12 @@ def ent_circuito_svg(paso: int, medir: bool) -> str:
         piezas.append(
             f'<rect x="120" y="{YS[0] - 20}" width="40" height="40" rx="7" '
             f'fill="{t["surface_alt"]}" stroke="{C_QUANTUM}" stroke-width="1.8"/>'
-            f'<text x="140" y="{YS[0] + 6}" text-anchor="middle" fill="{C_QUANTUM}" '
+            # El RÓTULO va en C_QUANTUM_TEXTO y el trazo de la caja en C_QUANTUM: son el
+            # mismo cian a dos pasos, y la diferencia importa solo aquí. Un trazo es
+            # elemento gráfico y le basta el 3:1 de WCAG 1.4.11 (el paso de relleno da
+            # 3,01 en claro); una letra de 17 px pide 4,5:1, y con el mismo cian se
+            # quedaba corta sobre la superficie alterna. El paso oscurecido sube a 4,55.
+            f'<text x="140" y="{YS[0] + 6}" text-anchor="middle" fill="{C_QUANTUM_TEXTO}" '
             f'font-family="{FONT_MONO}" font-size="17" font-weight="600">H</text>')
     # Los dos CNOT van escalonados y no en la misma columna: el segundo depende del primero
     # —controla sobre el qubit que el primero acaba de voltear—, y ponerlos alineados los
@@ -5187,7 +5236,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
     display:flex; align-items:flex-start; gap:14px;
 }}
 .ov-hero-titulo::before {{
-    content:""; width:22px; height:2px; border-radius:1px; background:{P_AMBAR};
+    content:""; width:22px; height:2px; border-radius:1px; background:{P_CLINICO_ALTO};
     flex-shrink:0; margin-top:0.62em;
 }}
 .ov-hero-rule {{
@@ -5228,7 +5277,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 .ov-bar {{
     position:absolute; top:0; left:0; right:0; height:2px; z-index:4;
     transform-origin:left center; transform:scaleX(0);
-    background:linear-gradient(90deg, {P_AMBAR}, {P_AMBAR_ALTO});
+    background:linear-gradient(90deg, {P_CLINICO}, {P_CLINICO_ALTO});
     pointer-events:none;
 }}
 
@@ -5259,7 +5308,7 @@ div[data-testid="stElementContainer"]:has(.ov-hero) {{
 .st-key-ov_sheet::before {{
     content:""; position:absolute; top:0; left:0; right:0; height:2px;
     border-radius:{_OV_RADIO}px {_OV_RADIO}px 0 0;
-    background:linear-gradient(90deg, {P_AMBAR}, {P_AMBAR}00 55%);
+    background:linear-gradient(90deg, {P_CLINICO_ALTO}, {P_CLINICO_ALTO}00 55%);
 }}
 /* El script vive en un iframe que no pinta nada; sin esto ocuparía un hueco al final de la
    página. Mismo tratamiento —Y COMPLETO— que el reloj de cabecera y el atributo de idioma:
@@ -7351,10 +7400,13 @@ elif page == "predictor":
                                       line=dict(color=hex_to_rgba(C_PRIMARY, 0.50), width=1.5, dash="dot"),
                                       showlegend=False, hoverinfo="skip"))
             # Halo suave + ANILLO abierto. Con dos discos rellenos superpuestos el foco salía
-            # como una moneda marrón —el oro al 28 % sobre el azul oscuro es barro—; el anillo lo
-            # convierte en una diana nítida y el halo solo aporta la irradiación.
+            # como una moneda opaca —un relleno al 28 % sobre el fondo de la tarjeta es una
+            # mancha—; el anillo lo convierte en una diana nítida y el halo solo aporta la
+            # irradiación. Va en C_MID2, que es la familia del brillo y además SIGUE AL TEMA:
+            # antes era un literal de la paleta oscura y en claro pintaba el halo con el color
+            # del otro tema.
             _fig.add_trace(go.Scatter(x=[_cur_x], y=[risk], mode="markers",
-                                      marker=dict(size=28, color=hex_to_rgba(P_AMBAR, 0.10),
+                                      marker=dict(size=28, color=hex_to_rgba(C_MID2, 0.10),
                                                   line=dict(width=0)),
                                       showlegend=False, hoverinfo="skip"))
             # En los símbolos "-open" el trazo lo pinta marker.COLOR, no marker.line.color: con

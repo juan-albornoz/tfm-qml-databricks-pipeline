@@ -1,6 +1,8 @@
 [theme]
 showSidebarBorder = false
-primaryColor = "#BD8500"
+# El acento del autor, tal cual. Lo usa Streamlit para lo que pinta ÉL y la hoja de
+# estilos no alcanza (el foco de los widgets nativos, la barra de progreso).
+primaryColor = "#1565C0"
 
 # Re-ejecuta el script solo al guardar app.py o i18n.py, en vez de limitarse a avisar de que
 # el fuente ha cambiado y esperar a que alguien pulse «Rerun». Es una comodidad de DESARROLLO
