@@ -937,30 +937,6 @@ VELO_SIDEBAR = (f"linear-gradient(180deg, {C_PRIMARY}14, transparent 42%)" if _i
 narrow = st.session_state.sidebar_narrow
 SIDEBAR_WIDTH = "84px" if narrow else "270px"
 
-# ── Contador de visitas: medidas y chapa ──────────────────────────────────────
-# Las medidas salen del ancho de la barra, no al reves: colapsada mide 84 px, y cinco
-# plaquitas de 17 con sus huecos (101 px) no caben con margenes decentes. En colapsado la
-# pieza baja a 11 px de plaquita — 65 px en total— y el rotulo encoge con ella. Van como
-# variables CSS en vez de repetir el bloque de reglas dos veces: lo que cambia entre los dos
-# anchos son SEIS numeros, no el diseno.
-VC = (dict(w="11px", h="15px", gap="2.5px", fs="9px", cap="8px", pad="6px", radio="2px")
-      if narrow else
-      dict(w="17px", h="21px", gap="4px", fs="12.5px", cap="9px", pad="7px", radio="3px"))
-# La chapa lleva el corte a MEDIA ALTURA con parada dura (49,4% -> 50,6%), que es lo que
-# convierte un rectangulo con un numero en un odometro: la linea es la juntura por donde
-# gira el tambor. Los dos medios no son simetricos a proposito —el de arriba entra mas
-# claro y el de abajo sale mas oscuro—, porque asi es como cae la luz sobre un cilindro.
-VC_CHAPA = ("linear-gradient(180deg,#3B4A53 0%,#161F26 45%,#04080B 49.4%,"
-            "#04080B 50.6%,#1B252C 55%,#2F3C44 100%)" if _is_dark else
-            "linear-gradient(180deg,#FFFFFF 0%,#DAE4EC 45%,#A9BAC7 49.4%,"
-            "#A9BAC7 50.6%,#E7EFF4 55%,#FCFDFE 100%)")
-# La cifra va GRABADA, no impresa: una sombra de 1 px en el sentido contrario a la luz de la
-# chapa. En oscuro la sombra es negra (el digito sobresale); en claro es blanca (se hunde).
-VC_TINTA  = P_NIEBLA if _is_dark else P_TINTA
-VC_GRABADO = "0 1px 0 rgba(0,0,0,.65)" if _is_dark else "0 1px 0 rgba(255,255,255,.75)"
-VC_RELIEVE = ("0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10)" if _is_dark
-              else "0 1px 2px rgba(20,24,38,.18), inset 0 1px 0 rgba(255,255,255,.85)")
-
 
 def _flecha_mask(*trazos: str) -> str:
     """url() de máscara con esos trazos, sobre el lienzo 24×24 de siempre.
@@ -1016,6 +992,53 @@ SIGNO_MENOS = _flecha_mask("M5 12h14")
 # y disco es el mismo 16,1:1 en los dos temas.
 TOGGLE_DISCO  = P_NIEBLA if _is_dark else P_TINTA
 TOGGLE_FLECHA = P_ACERO  if _is_dark else P_NIEBLA
+
+# ── Contador de visitas: la chapa ─────────────────────────────────────────────
+# La pieza es una CÁPSULA PARTIDA: a la izquierda un ojo sobre neutro, a la derecha la cifra
+# sobre el azul de marca. Sustituye al odómetro de cinco plaquitas, que era una pieza de museo
+# —tambor, junturas a media altura, muescas del eje— con seis medidas propias y dos degradados
+# que no usaba nadie más. En una barra de 84 px lo que se lee no es el mecanismo: es el número.
+#
+# EL RÓTULO SE VA Y ENTRA UN OJO. La palabra ("visitas", "Besuche", "visites"…) medía entre 6 y
+# 8 caracteres según el idioma y era lo único de la pieza cuyo ancho no controlábamos; el ojo
+# mide igual en los cinco. El texto no se pierde: viaja en el title y en el aria-label, que es
+# donde lo lee quien lo necesita.
+#
+# EL RADIO ES DE PÍLDORA (999px) y no los 4-5 px de una chapa al uso, y es lo que la hermana con
+# su vecina de fila: el interruptor de tema es una cápsula de 30×15, así que las dos piezas del
+# zócalo son ahora la MISMA forma —una entera y otra partida en dos—. Con esquinas de 4 px se
+# leían como dos controles de bibliotecas distintas puestos en la misma línea.
+#
+# El cuerpo IZQUIERDO va en el neutro oscuro de la paleta, y resulta ser casi el mismo color en
+# los dos temas —#243239 en oscuro (el plano alterno de la escalera de T()) y el #263238 del
+# autor en claro— porque lo que tiene que hacer es lo CONTRARIO en cada uno: subir sobre la
+# barra oscura (#051016) y bajar sobre la clara (#DDE8EE). Un solo paso de gris frío resuelve
+# los dos casos, y el ojo va en niebla encima: 10,9:1 en oscuro y 13,1:1 en claro.
+VC_NEUTRO = t["surface_alt"] if _is_dark else P_TINTA
+VC_OJO    = P_NIEBLA
+# El cuerpo DERECHO va en C_PRIMARY —el mismo azul del halo del interruptor que tiene al lado,
+# que es de donde sale la coherencia entre las dos piezas—, y por eso la TINTA de la cifra
+# cambia de tema aunque el fondo no cambie de papel: sobre el azul alto del tema oscuro
+# (#4D98F8) la niebla se queda en 2,3:1 y hay que escribir con el fondo de la paleta (8,9:1);
+# sobre el #1565C0 del claro, al revés (5,4:1 en niebla). El acento es el mismo en los dos; lo
+# que se elige aquí es qué se lee encima de él.
+VC_CIFRA = P_NOCHE if _is_dark else P_NIEBLA
+# El ojo de Feather, con el trazo de 2 px del resto del cromo (ver _flecha_mask). La pupila va
+# como ARCO y no como <circle> porque la máscara solo monta <path>: dos semicírculos encadenados
+# dan exactamente el mismo círculo de r=3 centrado en el lienzo de 24×24.
+VC_OJO_MASK = _flecha_mask("M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z",
+                           "M15 12a3 3 0 1 1-6 0 3 3 0 1 1 6 0")
+# UNA SOLA MEDIDA gobierna la chapa entera: relleno, ojo, alto y radio van en em sobre esta, así
+# que la pieza crece y encoge de una pieza en vez de descuadrarse por partes.
+# Va en clamp(rem) y no en píxeles pelados por el zoom de SOLO TEXTO de Firefox, que escala la
+# raíz pero NO el ancho de la barra: con píxeles la chapa se quedaría clavada mientras el texto
+# de alrededor crece, y con rem a secas se saldría de una
+# barra que no se mueve. El clamp la deja seguir al zoom entre dos topes que sí caben.
+# Los topes salen del ancho útil de cada barra. Colapsada son 84 − 12 de relleno = 72 px, y la
+# chapa mide 6,8 em (2,4 el cuerpo del ojo y 4,35 el de cinco cifras en monoespaciada): 67 px
+# en el tope alto, medidos con la barra colapsada y el contador puesto a 99999. En la ancha
+# sobran 190 px, así que ahí el tope lo pone la legibilidad y no el hueco.
+VC_FS = "clamp(8px, 0.55rem, 9.8px)" if narrow else "clamp(9.5px, 0.72rem, 12.5px)"
 # Color del carril vacío de los sliders: claro en tema claro, hundido en tema oscuro (si usáramos
 # un azul fijo, en oscuro el carril quedaría un surco brillante sobre fondo oscuro).
 # En claro NO se usa RAMP[0]: ese paso está calibrado para pintar DATO sobre blanco y como
@@ -1252,22 +1275,56 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     overflow:hidden !important; clip-path:inset(50%) !important;
     white-space:nowrap !important;
 }}
-/* Cápsula-interruptor de tema: fija al fondo del viewport (ancho = ancho actual de la sidebar),
-   así queda siempre visible sin depender del scroll interno, colapsada o no. */
-/* La cápsula va anclada abajo, justo encima del pie, y con FONDO PROPIO. El fondo no se ve
-   nunca —es el mismo de la barra— y sin embargo hace falta: desde que el árbol de secciones
-   puede desplazarse por detrás, sus filas asomaban alrededor de la cápsula, y la franja que
-   ocupa se comía el clic de la que le tocara debajo. Con la banda opaca, lo que pasa por ahí
-   queda tapado en vez de medio visible y medio pulsable.
-   El anclaje baja de 64 a 54 px y los 10 que faltan los pone el relleno: la cápsula se queda
-   exactamente donde estaba —54 + 10 = 64— y la banda, en cambio, cubre también el hueco que
-   quedaba entre ella y el pie. */
-.st-key-theme_toggle {{
+/* ── Zócalo de la barra: interruptor de tema y contador, en la MISMA fila ──────
+   UNA PIEZA Y NO DOS BANDAS APILADAS. Antes el contador iba anclado en bottom:89px y la
+   cápsula de tema en bottom:54px, cada una con su fondo opaco y su z-index, y las dos se
+   tocaban sin costura para FINGIR que eran un solo zócalo. Ahora lo son de verdad: los dos
+   cuelgan del mismo st.container(key="pie_barra"), que es quien lleva el position:fixed, el
+   fondo y la transición de ancho. Una sola caja que colocar, y las dos piezas alineadas por
+   el mismo align-items en vez de por dos anclajes que había que cuadrar a mano.
+   REPARTO. El interruptor se arrima a la esquina izquierda y la chapa al canto derecho, las
+   dos centradas en la misma línea. Se consigue con flex-direction:row-reverse, y no dando la
+   vuelta al orden del código, porque el contador tiene que seguir siendo el PRIMERO del DOM:
+   en la barra colapsada y en el teléfono esta misma fila se apila, y allí el orden que manda
+   es el del documento — al revés, el contador saldría debajo del interruptor.
+   COLAPSADA SE APILA porque no cabe: 84 px menos el relleno son 72 útiles, y la chapa sola se
+   come 67 en su tope alto (medido a cinco cifras). Centrados y en columna, con el contador
+   arriba, que es donde estaba.
+   El FONDO OPACO hace aquí lo que hacía en las dos bandas anteriores: el árbol de secciones se
+   desplaza por detrás y, sin banda, sus filas asomarían alrededor de las piezas y se comerían
+   el clic de la que tocara debajo. El z-index queda entre el pie (997) y el toggle de la barra
+   (1000), igual que antes.
+   El envoltorio que Streamlit 1.55 mete alrededor de todo contenedor con clave (stLayoutWrapper)
+   NO lleva la clase st-key-, así que se alcanza por :has(); sin disolverlo seguiría siendo ítem
+   del flex raíz y cobraría su hueco de gap al final de la barra aunque midiera cero. */
+div[data-testid="stLayoutWrapper"]:has(> .st-key-pie_barra) {{ display:contents !important; }}
+.st-key-pie_barra {{
     position:fixed !important; bottom:54px; left:0; width:{SIDEBAR_WIDTH};
-    padding:10px 0 !important; background-color:{t['sidebar_bg']};
-    display:flex !important; justify-content:center; z-index:999;
+    box-sizing:border-box; padding:{'9px 6px' if narrow else '8px 10px'} !important;
+    display:flex !important; flex-direction:{'column' if narrow else 'row-reverse'} !important;
+    align-items:center !important; justify-content:{'center' if narrow else 'space-between'};
+    gap:{'7px' if narrow else '8px'} !important;
+    background-color:{t['sidebar_bg']}; z-index:999;
     transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
 }}
+/* Streamlit sirve sus elementos a ancho completo: en una fila, el primero se quedaría con
+   todo el hueco y empujaría al otro contra el canto. Se les devuelve su ancho propio. */
+.st-key-pie_barra > div[data-testid="stElementContainer"] {{
+    width:auto !important; flex:0 0 auto !important; margin:0 !important;
+}}
+.st-key-pie_barra div[data-testid="stMarkdownContainer"],
+.st-key-pie_barra div[data-testid="stButton"] {{ width:auto !important; }}
+/* El interruptor conserva su cápsula y su halo tal cual estaban: es la pieza que ya funcionaba,
+   y además la que FIJA el color con el que se hermana el contador —el halo va en C_MID2, que es
+   el mismo azul del cuerpo derecho de la chapa—. Lo que cambia es el andamiaje: la colocación
+   pasa a ser del zócalo, y el renglón sobrante se lo quita la regla de aquí debajo. */
+/* El contenedor del botón hereda el renglón de Streamlit (25,6 px) y le sobran 10 por debajo de
+   la cápsula, que mide 15. En escritorio el sobrante quedaba repartido y no se veía, pero en el
+   teléfono Streamlit sirve OTRO botón —de un mismo st.button con help= cuelgan dos, y en pantalla
+   táctil se pinta el de la variante sin tooltip—, y en esa la cápsula caía al fondo de su caja,
+   5 px por debajo de la chapa. Sin renglón, la caja mide lo que mide la cápsula y quien centra
+   las dos piezas es el align-items del zócalo, igual en los dos casos. */
+.st-key-theme_toggle {{ line-height:0 !important; }}
 .st-key-theme_toggle button {{
     width:30px !important; height:15px !important; min-height:15px !important; padding:0 !important;
     border-radius:999px !important; border:none !important;
@@ -1280,53 +1337,48 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     transform: scale(1.05);
 }}
 .st-key-theme_toggle button p {{ font-size:0 !important; }}
-/* ── Contador de visitas ───────────────────────────────────────────────────────
-   COLOCACION. Va apilado sobre la capsula de tema, y por eso repite su mecanica al pie de
-   la letra en vez de inventar otra: position:fixed anclado al ancho de la barra, banda
-   opaca con el fondo de la sidebar y z-index intermedio. La capsula ocupa de 54 a 89 px
-   (54 de anclaje + 10 + 15 de boton + 10), asi que este arranca en 89 y las dos bandas se
-   tocan sin costura — se leen como un solo zocalo, que es lo que son.
-   El z-index cae entre el pie (997) y la capsula (999) para respetar el orden de arriba
-   abajo, y el fondo opaco cumple aqui lo mismo que alli: el arbol de secciones se desplaza
-   por detras, y sin banda sus filas asomarian entre las plaquitas y se comerian el clic.
-   La transicion del ancho es la misma de sus dos vecinas, asi el zocalo entero se estrecha
-   de una pieza al colapsar la barra en vez de por partes. */
-.vc-wrap {{
-    position:fixed; bottom:89px; left:0; width:{SIDEBAR_WIDTH};
-    padding:{VC['pad']} 6px; box-sizing:border-box;
-    display:flex; flex-direction:column; align-items:center; gap:{VC['gap']};
-    background-color:{t['sidebar_bg']}; z-index:998;
-    transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
+/* ── Contador de visitas: la chapa ─────────────────────────────────────────────
+   Ojo a la izquierda sobre neutro, cifra a la derecha sobre el azul de marca. El porqué de
+   cada color —y de que la tinta de la cifra cambie de tema mientras el fondo no— está donde
+   se declaran, en VC_NEUTRO y VC_CIFRA.
+   TODO va en em sobre VC_FS: la chapa es UN número. Pasar de barra ancha a colapsada, o que
+   Firefox agrande solo el texto, mueve ese número y la pieza entera lo sigue. */
+.vc-badge {{
+    /* flex y NO inline-flex, que es lo que parecía natural: en línea, la chapa se apoya en la
+       BASE del renglón que Streamlit le pone alrededor (un <p> con line-height de 25,6 px) y
+       se quedaba 1,4 px por encima del centro de la fila — justo lo que rompía la alineación
+       con el interruptor, que sí está centrado. Fuera del flujo en línea no hay renglón, y las
+       dos piezas las centra el mismo align-items del zócalo. */
+    display:flex; align-items:stretch; flex:0 0 auto;
+    font-size:{VC_FS}; line-height:1;
+    border-radius:999px; overflow:hidden;
+    /* El halo es el MISMO de la cápsula de tema, un punto más flojo: es el gesto por el que las
+       dos piezas se leen como una pareja y no como dos cosas que coinciden en la misma línea.
+       Va más flojo porque aquí la caja ya está pintada de ese azul —en la cápsula el halo es
+       todo lo que hay— y a plena intensidad la chapa quedaría emborronada por su propia luz. */
+    box-shadow: 0 0 0 1px {C_MID2}44, 0 0 6px 1px {C_MID2}55,
+                0 1px 2px rgba(5,6,10,{'0.55' if _is_dark else '0.18'});
+    /* No es un mando: no se pulsa ni recibe foco. El cursor de ayuda es lo que anuncia que sí
+       lleva title — el rótulo que se le ha quitado a la vista vive ahí. */
+    cursor:help; user-select:none;
 }}
-.vc-plates {{ display:flex; gap:{VC['gap']}; }}
-/* Cada plaquita es una caja flex y no una linea de texto: centrar la cifra con line-height
-   la deja bailando medio pixel arriba o abajo segun el digito, y aqui el desajuste se ve
-   porque la juntura del tambor pasa justo por el centro del numero. */
-.vc-d {{
-    position:relative; width:{VC['w']}; height:{VC['h']};
-    display:flex; align-items:center; justify-content:center;
-    font-family:{FONT_MONO}; font-size:{VC['fs']}; font-weight:600; line-height:1;
-    color:{VC_TINTA}; text-shadow:{VC_GRABADO};
-    background:{VC_CHAPA}; border-radius:{VC['radio']}; box-shadow:{VC_RELIEVE};
+.vc-ojo, .vc-num {{ display:flex; align-items:center; height:1.85em; }}
+/* Los rellenos son ASIMÉTRICOS a propósito: en una píldora los dos extremos son curvos y se
+   comen aire óptico, así que el lado redondo de cada cuerpo pide algo más que el lado recto. */
+.vc-ojo {{ background:{VC_NEUTRO}; color:{VC_OJO}; padding:0 0.55em 0 0.72em; }}
+.vc-num {{
+    background:{C_PRIMARY}; color:{VC_CIFRA}; padding:0 0.75em 0 0.6em;
+    font-family:{FONT_MONO}; font-size:1em; font-weight:600; letter-spacing:0.02em;
+    font-variant-numeric:tabular-nums;
 }}
-/* Las dos muescas laterales. No son adorno: son el hueco por el que asoma el eje del tambor,
-   y van del color de la BARRA —no de un gris cualquiera— para que se lean como un mordisco
-   en la chapa y no como una pegatina encima. Alto relativo (30% de la plaquita) para que
-   sigan a escala cuando la barra se colapsa. */
-.vc-d::before, .vc-d::after {{
-    content:""; position:absolute; top:50%; transform:translateY(-50%);
-    width:1.5px; height:30%; border-radius:1px; background:{t['sidebar_bg']};
-}}
-.vc-d::before {{ left:-0.5px; }}
-.vc-d::after  {{ right:-0.5px; }}
-/* El rotulo se aparta del numero: versalita ancha y tinta apagada. Si compitiera en peso
-   con las cifras, la pieza dejaria de leerse de un vistazo como «un numero» y pasaria a
-   leerse como una etiqueta con un dato, que es justo al reves de lo que se quiere. */
-.vc-cap {{
-    font-family:{FONT_MONO}; font-size:{VC['cap']}; font-weight:400;
-    letter-spacing:0.14em; text-transform:uppercase; line-height:1;
-    color:{t['text_muted']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    max-width:100%;
+/* El ojo va como MÁSCARA sobre background-color y no como <img>, por lo mismo que las flechas
+   del cromo (ver _flecha_mask): es currentColor, hereda el color del cuerpo y no hay que servir
+   una versión por tema. */
+.vc-ojo::before {{
+    content:""; display:block; width:1.15em; height:1.15em;
+    background-color:currentColor;
+    -webkit-mask:{VC_OJO_MASK} center / contain no-repeat;
+    mask:{VC_OJO_MASK} center / contain no-repeat;
 }}
 /* ── Selector de idioma: desplegable de banderas en la esquina superior derecha ──
    Va en el lienzo principal y no en la sidebar a propósito: el idioma afecta a TODA la
@@ -1646,7 +1698,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
     position:fixed !important; width:0 !important; height:0 !important;
     border:0 !important; opacity:0 !important; pointer-events:none !important;
 }}
-/* Footer fijo al fondo de la sidebar (por debajo de la cápsula de tema) */
+/* Footer fijo al fondo de la sidebar (por debajo del zócalo) */
 .sidebar-footer {{
     position:fixed; bottom:0; left:0; width:{SIDEBAR_WIDTH};
     padding:8px 6px 10px; text-align:center; box-sizing:border-box;
@@ -1667,22 +1719,24 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
 .sidebar-footer .footer-uni {{ font-family:{FONT_MONO}; font-size:12px; font-weight:400; letter-spacing:0.06em;
     color:{t['text_secondary']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
 /* ── Suelo de la barra lateral ─────────────────────────────────────────────────
-   Abajo del todo hay TRES piezas ancladas con position:fixed —el contador de visitas
-   (bottom:89px), la cápsula de tema (bottom:54px) y el pie (bottom:0)— que entre las tres
-   cubren los ~137 px inferiores y FLOTAN sobre lo que
-   pase por debajo. Mientras el contenido de la barra terminaba muy por encima no se notaba;
-   con el árbol de secciones sí, y no como un defecto visual sino como uno de comportamiento:
-   sus últimas filas se metían debajo del pie y dejaban de poder pulsarse —elementFromPoint
-   sobre ellas devolvía el pie—, aunque a la vista estuvieran ahí. Un control que se ve y no
-   responde es peor que uno que no se ve.
-   El relleno inferior le da al contenido sitio donde acabar por encima de las dos. Va en los
-   dos anchos de escritorio, no solo en el ancho: una barra que puede desplazarse nunca debería
-   terminar debajo de su propio pie.
+   Abajo del todo hay DOS piezas ancladas con position:fixed —el zócalo con el interruptor y
+   el contador (bottom:54px) y el pie (bottom:0)— que FLOTAN sobre lo que pase por debajo.
+   Mientras el contenido de la barra terminaba muy por encima no se notaba; con el árbol de
+   secciones sí, y no como un defecto visual sino como uno de comportamiento: sus últimas filas
+   se metían debajo del pie y dejaban de poder pulsarse —elementFromPoint sobre ellas devolvía
+   el pie—, aunque a la vista estuvieran ahí. Un control que se ve y no responde es peor que
+   uno que no se ve.
+   El relleno inferior le da al contenido sitio donde acabar por encima de las dos. Sale de
+   medirlas, no a ojo: el pie son 54 px y el zócalo llega a ~40 en la barra ancha y a ~56 en la
+   colapsada (donde la fila se apila y suma el alto de las dos piezas), más un respiro de ~24.
+   Eran 166 px cuando el contador y el interruptor iban en dos bandas separadas; hoy la fila
+   única deja ese suelo en 118 y 134. Va en los dos anchos de escritorio, no solo en el ancho:
+   una barra que puede desplazarse nunca debería terminar debajo de su propio pie.
    En el teléfono NO, y por eso lo deshace la media query de ≤768: allí las dos piezas vuelven
-   al flujo del panel y ya no flotan sobre nada, así que estos 166 px serían una franja muerta
-   al final de la lista. */
+   al flujo del panel y ya no flotan sobre nada, así que este suelo sería una franja muerta al
+   final de la lista. */
 section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {{
-    padding-bottom:166px !important;
+    padding-bottom:{134 if narrow else 118}px !important;
 }}
 /* ── Ancho del contenido de la barra colapsada ────────────────────────────────
    Se le devuelve el ancho completo: su relleno lateral de 20 px se reparte ya en cada
@@ -2861,15 +2915,18 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
     }}
     /* Nuestro toggle circular va anclado a left:270px — en móvil flotaría sobre el contenido */
     .st-key-toggle_sidebar {{ display:none !important; }}
-    /* La cápsula de tema y el footer son position:fixed anclados al ancho de la sidebar: si siguen
-       fijos, quedan flotando sobre el contenido cuando la sidebar está cerrada. Los devolvemos al
-       flujo de la sidebar, así solo se ven cuando el panel está abierto. */
-    .vc-wrap {{
-        position:static !important; width:100% !important; padding-left:0; padding-right:0;
-        margin-top:14px;
-    }}
-    .st-key-theme_toggle {{
-        position:static !important; width:100% !important; margin:18px 0 8px !important;
+    /* El zócalo y el pie son position:fixed anclados al ancho de la sidebar: si siguen fijos,
+       quedan flotando sobre el contenido cuando la sidebar está cerrada. Los devolvemos al
+       flujo del panel, así solo se ven cuando está abierto.
+       La FILA se mantiene aquí aunque se venga del modo colapsado: en el teléfono el panel se
+       abre a ancho casi completo, así que el motivo por el que en 84 px se apila —que no cabe—
+       no existe. Por eso el row-reverse se repite en vez de heredarse: `narrow` es estado de
+       escritorio y puede llegar en cualquiera de sus dos valores. */
+    .st-key-pie_barra {{
+        position:static !important; width:100% !important;
+        flex-direction:row-reverse !important;
+        justify-content:space-between !important;
+        padding:14px 6px 6px !important; margin:0 !important;
     }}
     .sidebar-footer {{
         position:static !important; width:100% !important; margin-top:10px; border-top:none;
@@ -3656,18 +3713,29 @@ def contar_visita():
 
 
 def html_contador(n):
-    """Odometro de cinco plaquitas. Solo markup: la forma entera la pone el CSS.
+    """Chapa de dos cuerpos: un ojo y la cifra. Solo markup; la forma la pone el CSS.
 
-    Cinco digitos, como el contador del que sale el diseno. Al pasar de 99.999 se queda con
-    los cinco ultimos en vez de crecer, que es literalmente lo que hace un odometro mecanico
-    cuando da la vuelta — y ademas mantiene la pieza del mismo ancho, que es lo que aqui
-    importa: esta anclada en una barra de 84 px cuando esta colapsada.
+    Al pasar de 99.999 se queda con los cinco ultimos digitos en vez de crecer, que es lo que
+    hacia el odometro del que viene la pieza y lo que acota su ancho: vive en una barra de
+    84 px cuando esta colapsada.
+
+    SIN separador de millar y sin ceros a la izquierda. Lo primero no es una eleccion de
+    estilo: MILLAR se define con el resto del formato numerico mucho mas abajo, y cuando esta
+    funcion se llama —al pintar la barra lateral— todavia no existe. A cinco digitos en
+    monoespaciada tampoco aporta legibilidad. Lo segundo si es eleccion: un "00042" era el
+    gesto del odometro, y esta pieza ya no lo es.
+
+    El rotulo retirado de la vista viaja en los DOS canales: title para el raton y aria-label
+    para el lector de pantalla, que ignora el title cuando hay aria-label. Por eso el
+    aria-label repite el rotulo corto con la cifra ("visitas: 22149") en vez de la frase larga
+    de la ayuda: es lo que se quiere oir, no lo que se quiere leer al pasar por encima.
     """
-    plaquitas = "".join(f'<span class="vc-d">{d}</span>' for d in f"{max(0, int(n)):05d}"[-5:])
-    return (f'<div class="vc-wrap" title="{html.escape(S("visits_help"))}">'
-            f'<div class="vc-plates">{plaquitas}</div>'
-            f'<div class="vc-cap">{html.escape(S("visits_label"))}</div>'
-            f'</div>')
+    cifra = f"{max(0, int(n))}"[-5:]
+    return (f'<span class="vc-badge" title="{html.escape(S("visits_help"))}" role="img" '
+            f'aria-label="{html.escape(S("visits_label"))}: {cifra}">'
+            f'<span class="vc-ojo" aria-hidden="true"></span>'
+            f'<span class="vc-num">{cifra}</span>'
+            f'</span>')
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -4031,16 +4099,21 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 
-    # El contador va ANTES que el interruptor en el codigo, no solo en el CSS. En escritorio
-    # daria igual —las dos piezas son position:fixed y las coloca su anclaje—, pero la media
-    # query de movil las devuelve a las dos al flujo del panel, y alli el orden que manda es
-    # este. Escrito al reves, en el telefono el contador saldria DEBAJO del interruptor.
-    st.markdown(html_contador(contar_visita()), unsafe_allow_html=True)
+    # El contador y el interruptor van en el MISMO contenedor porque son UNA FILA: quien la
+    # reparte —interruptor arrimado a la esquina izquierda, chapa al canto derecho, las dos a
+    # la misma altura— es .st-key-pie_barra en la hoja de estilos.
+    # El contador va ANTES que el interruptor en el codigo, y eso sigue importando aunque en
+    # la barra ancha no se note: alli la fila es row-reverse y el contador sale a la derecha
+    # de todas formas, pero en la barra colapsada y en el telefono la fila se APILA, y alli el
+    # orden que manda es este. Escrito al reves, en el telefono el contador saldria DEBAJO del
+    # interruptor.
+    with st.container(key="pie_barra"):
+        st.markdown(html_contador(contar_visita()), unsafe_allow_html=True)
 
-    if st.button(" ", key="theme_toggle",
-                 help=S("theme_to_dark") if st.session_state.theme == "light" else S("theme_to_light")):
-        st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-        st.rerun()
+        if st.button(" ", key="theme_toggle",
+                     help=S("theme_to_dark") if st.session_state.theme == "light" else S("theme_to_light")):
+            st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+            st.rerun()
 
     if narrow:
         _footer_html = (f'<div class="footer-name">{S("footer_name_narrow")}</div>'
