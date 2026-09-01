@@ -18,6 +18,7 @@ import io
 import json
 import re
 import textwrap
+import threading
 from pathlib import Path
 from typing import TypedDict
 from urllib.parse import quote_plus
@@ -33,6 +34,11 @@ import numpy as np
 # quien la dispara, y precargarla cuesta lo que cuesta importar pandas una vez.
 import pandas  # noqa: F401
 import plotly.graph_objects as go
+# requests NO se anade a requirements.txt a proposito: es dependencia directa de Streamlit
+# (que lo usa para su telemetria y para st.connection), asi que ya viaja en el entorno y
+# fijarlo aparte solo abriria la puerta a un conflicto de versiones con el propio Streamlit.
+# Lo usa unicamente el contador de visitas, contra la API de Gists de GitHub.
+import requests
 import streamlit as st
 import streamlit.components.v1 as components   # solo para fijar <html lang>; ver más abajo
 from PIL import Image
@@ -931,6 +937,30 @@ VELO_SIDEBAR = (f"linear-gradient(180deg, {C_PRIMARY}14, transparent 42%)" if _i
 narrow = st.session_state.sidebar_narrow
 SIDEBAR_WIDTH = "84px" if narrow else "270px"
 
+# ── Contador de visitas: medidas y chapa ──────────────────────────────────────
+# Las medidas salen del ancho de la barra, no al reves: colapsada mide 84 px, y cinco
+# plaquitas de 17 con sus huecos (101 px) no caben con margenes decentes. En colapsado la
+# pieza baja a 11 px de plaquita — 65 px en total— y el rotulo encoge con ella. Van como
+# variables CSS en vez de repetir el bloque de reglas dos veces: lo que cambia entre los dos
+# anchos son SEIS numeros, no el diseno.
+VC = (dict(w="11px", h="15px", gap="2.5px", fs="9px", cap="8px", pad="6px", radio="2px")
+      if narrow else
+      dict(w="17px", h="21px", gap="4px", fs="12.5px", cap="9px", pad="7px", radio="3px"))
+# La chapa lleva el corte a MEDIA ALTURA con parada dura (49,4% -> 50,6%), que es lo que
+# convierte un rectangulo con un numero en un odometro: la linea es la juntura por donde
+# gira el tambor. Los dos medios no son simetricos a proposito —el de arriba entra mas
+# claro y el de abajo sale mas oscuro—, porque asi es como cae la luz sobre un cilindro.
+VC_CHAPA = ("linear-gradient(180deg,#3B4A53 0%,#161F26 45%,#04080B 49.4%,"
+            "#04080B 50.6%,#1B252C 55%,#2F3C44 100%)" if _is_dark else
+            "linear-gradient(180deg,#FFFFFF 0%,#DAE4EC 45%,#A9BAC7 49.4%,"
+            "#A9BAC7 50.6%,#E7EFF4 55%,#FCFDFE 100%)")
+# La cifra va GRABADA, no impresa: una sombra de 1 px en el sentido contrario a la luz de la
+# chapa. En oscuro la sombra es negra (el digito sobresale); en claro es blanca (se hunde).
+VC_TINTA  = P_NIEBLA if _is_dark else P_TINTA
+VC_GRABADO = "0 1px 0 rgba(0,0,0,.65)" if _is_dark else "0 1px 0 rgba(255,255,255,.75)"
+VC_RELIEVE = ("0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.10)" if _is_dark
+              else "0 1px 2px rgba(20,24,38,.18), inset 0 1px 0 rgba(255,255,255,.85)")
+
 
 def _flecha_mask(*trazos: str) -> str:
     """url() de máscara con esos trazos, sobre el lienzo 24×24 de siempre.
@@ -1250,6 +1280,54 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] {{ display:flex; ju
     transform: scale(1.05);
 }}
 .st-key-theme_toggle button p {{ font-size:0 !important; }}
+/* ── Contador de visitas ───────────────────────────────────────────────────────
+   COLOCACION. Va apilado sobre la capsula de tema, y por eso repite su mecanica al pie de
+   la letra en vez de inventar otra: position:fixed anclado al ancho de la barra, banda
+   opaca con el fondo de la sidebar y z-index intermedio. La capsula ocupa de 54 a 89 px
+   (54 de anclaje + 10 + 15 de boton + 10), asi que este arranca en 89 y las dos bandas se
+   tocan sin costura — se leen como un solo zocalo, que es lo que son.
+   El z-index cae entre el pie (997) y la capsula (999) para respetar el orden de arriba
+   abajo, y el fondo opaco cumple aqui lo mismo que alli: el arbol de secciones se desplaza
+   por detras, y sin banda sus filas asomarian entre las plaquitas y se comerian el clic.
+   La transicion del ancho es la misma de sus dos vecinas, asi el zocalo entero se estrecha
+   de una pieza al colapsar la barra en vez de por partes. */
+.vc-wrap {{
+    position:fixed; bottom:89px; left:0; width:{SIDEBAR_WIDTH};
+    padding:{VC['pad']} 6px; box-sizing:border-box;
+    display:flex; flex-direction:column; align-items:center; gap:{VC['gap']};
+    background-color:{t['sidebar_bg']}; z-index:998;
+    transition: width 0.32s cubic-bezier(0.4,0,0.2,1);
+}}
+.vc-plates {{ display:flex; gap:{VC['gap']}; }}
+/* Cada plaquita es una caja flex y no una linea de texto: centrar la cifra con line-height
+   la deja bailando medio pixel arriba o abajo segun el digito, y aqui el desajuste se ve
+   porque la juntura del tambor pasa justo por el centro del numero. */
+.vc-d {{
+    position:relative; width:{VC['w']}; height:{VC['h']};
+    display:flex; align-items:center; justify-content:center;
+    font-family:{FONT_MONO}; font-size:{VC['fs']}; font-weight:600; line-height:1;
+    color:{VC_TINTA}; text-shadow:{VC_GRABADO};
+    background:{VC_CHAPA}; border-radius:{VC['radio']}; box-shadow:{VC_RELIEVE};
+}}
+/* Las dos muescas laterales. No son adorno: son el hueco por el que asoma el eje del tambor,
+   y van del color de la BARRA —no de un gris cualquiera— para que se lean como un mordisco
+   en la chapa y no como una pegatina encima. Alto relativo (30% de la plaquita) para que
+   sigan a escala cuando la barra se colapsa. */
+.vc-d::before, .vc-d::after {{
+    content:""; position:absolute; top:50%; transform:translateY(-50%);
+    width:1.5px; height:30%; border-radius:1px; background:{t['sidebar_bg']};
+}}
+.vc-d::before {{ left:-0.5px; }}
+.vc-d::after  {{ right:-0.5px; }}
+/* El rotulo se aparta del numero: versalita ancha y tinta apagada. Si compitiera en peso
+   con las cifras, la pieza dejaria de leerse de un vistazo como «un numero» y pasaria a
+   leerse como una etiqueta con un dato, que es justo al reves de lo que se quiere. */
+.vc-cap {{
+    font-family:{FONT_MONO}; font-size:{VC['cap']}; font-weight:400;
+    letter-spacing:0.14em; text-transform:uppercase; line-height:1;
+    color:{t['text_muted']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:100%;
+}}
 /* ── Selector de idioma: desplegable de banderas en la esquina superior derecha ──
    Va en el lienzo principal y no en la sidebar a propósito: el idioma afecta a TODA la
    aplicación, no solo a la navegación, y colapsar la sidebar no debe esconderlo. Como el
@@ -1589,8 +1667,9 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
 .sidebar-footer .footer-uni {{ font-family:{FONT_MONO}; font-size:12px; font-weight:400; letter-spacing:0.06em;
     color:{t['text_secondary']}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }}
 /* ── Suelo de la barra lateral ─────────────────────────────────────────────────
-   Abajo del todo hay DOS piezas ancladas con position:fixed —la cápsula de tema (bottom:64px)
-   y el pie (bottom:0)— que entre las dos cubren los ~112 px inferiores y FLOTAN sobre lo que
+   Abajo del todo hay TRES piezas ancladas con position:fixed —el contador de visitas
+   (bottom:89px), la cápsula de tema (bottom:54px) y el pie (bottom:0)— que entre las tres
+   cubren los ~137 px inferiores y FLOTAN sobre lo que
    pase por debajo. Mientras el contenido de la barra terminaba muy por encima no se notaba;
    con el árbol de secciones sí, y no como un defecto visual sino como uno de comportamiento:
    sus últimas filas se metían debajo del pie y dejaban de poder pulsarse —elementFromPoint
@@ -1600,10 +1679,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
    dos anchos de escritorio, no solo en el ancho: una barra que puede desplazarse nunca debería
    terminar debajo de su propio pie.
    En el teléfono NO, y por eso lo deshace la media query de ≤768: allí las dos piezas vuelven
-   al flujo del panel y ya no flotan sobre nada, así que estos 118 px serían una franja muerta
+   al flujo del panel y ya no flotan sobre nada, así que estos 166 px serían una franja muerta
    al final de la lista. */
 section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {{
-    padding-bottom:118px !important;
+    padding-bottom:166px !important;
 }}
 /* ── Ancho del contenido de la barra colapsada ────────────────────────────────
    Se le devuelve el ancho completo: su relleno lateral de 20 px se reparte ya en cada
@@ -2785,13 +2864,17 @@ button[data-testid="stExpandSidebarButton"] {{ visibility:visible !important; }}
     /* La cápsula de tema y el footer son position:fixed anclados al ancho de la sidebar: si siguen
        fijos, quedan flotando sobre el contenido cuando la sidebar está cerrada. Los devolvemos al
        flujo de la sidebar, así solo se ven cuando el panel está abierto. */
+    .vc-wrap {{
+        position:static !important; width:100% !important; padding-left:0; padding-right:0;
+        margin-top:14px;
+    }}
     .st-key-theme_toggle {{
         position:static !important; width:100% !important; margin:18px 0 8px !important;
     }}
     .sidebar-footer {{
         position:static !important; width:100% !important; margin-top:10px; border-top:none;
     }}
-    /* Y con ellas de vuelta en el flujo, el suelo de 118 px que la barra reserva en escritorio
+    /* Y con ellas de vuelta en el flujo, el suelo de 166 px que la barra reserva en escritorio
        deja de tener a quién esquivar: sobre el final de la lista ya no flota nada. Se queda en
        un respiro corto, el mismo que separa cualquier bloque del canto. */
     section[data-testid="stSidebar"] div[data-testid="stSidebarContent"] {{
@@ -3463,6 +3546,131 @@ def _wrap_hover(text, width=54):
     return "<br>".join(textwrap.wrap(text, width=width))
 
 # ─────────────────────────────────────────────────────────────────────────
+# CONTADOR DE VISITAS
+# ─────────────────────────────────────────────────────────────────────────
+# DONDE VIVE EL NUMERO, y por que no vive aqui. Esta app se despliega en Streamlit
+# Community Cloud (ver README, «Despliegue»), y alli el sistema de ficheros del contenedor
+# es EFIMERO: lo que se escriba en disco desaparece en cada redespliegue y cada vez que la
+# app se duerme por inactividad y vuelve a levantarse. Un contador en un .json local, que es
+# la primera solucion que uno escribe, marcaria un numero que se reinicia solo cada pocos
+# dias — y en una defensa, un contador que pone 3 es peor que no tener contador.
+#
+# Por eso la cuenta se guarda FUERA, en un Gist de GitHub. Es la opcion que menos deuda deja:
+# duradero, gratis, sin cuenta nueva que abrir (el repo ya esta en GitHub) y sin dependencia
+# nueva que fijar en requirements.txt, porque requests ya viene con Streamlit. El Gist guarda
+# un unico fichero, visitas.json, con la forma {"visitas": N}.
+#
+# QUE CUENTA COMO VISITA. Una SESION de navegador, no una re-ejecucion: Streamlit vuelve a
+# correr el script entero en cada clic, asi que contar por pasada daria el numero de clics.
+# El guardarraill es st.session_state, que sobrevive a los reruns dentro de una sesion y no
+# entre sesiones — exactamente la definicion que se busca. Una recarga de pagina es una
+# visita nueva, que es lo que hace cualquier contador de los de toda la vida.
+#
+# QUE PASA SI FALLA. Nada visible. Un contador es decoracion; que se caiga la red, caduque el
+# token o falte el secreto no puede tumbar el panel, asi que TODO va envuelto y el fallo cae
+# al contador en memoria. Si no hay secretos configurados —el caso de cualquiera que clone el
+# repo y lo levante en local— la app funciona igual y el contador cuenta las visitas de esa
+# sesion del servidor. Ver README para dar de alta el Gist y el token.
+VISITS_GIST_FICHERO = "visitas.json"
+# Cuatro segundos y no el timeout por defecto de requests, que es ninguno: esta llamada esta
+# en el camino critico del primer render de cada sesion, y una API que no responde no puede
+# dejar el panel en blanco esperandola. Si no contesta en cuatro, se cuenta en memoria.
+VISITS_TIMEOUT = 4
+
+
+def _secreto(clave):
+    """Lee st.secrets[clave] sin reventar cuando no hay secrets.toml.
+
+    En local no existe el fichero, y Streamlit no devuelve vacio en ese caso: lanza al
+    TOCAR st.secrets, asi que ni siquiera un .get() bastaria. El try va aqui, una vez, y
+    no en cada sitio que necesite un secreto.
+    """
+    try:
+        return str(st.secrets[clave]).strip()
+    except Exception:
+        return ""
+
+
+@st.cache_resource(show_spinner=False)
+def _visitas_estado():
+    """Cuenta compartida por TODAS las sesiones vivas del proceso.
+
+    cache_resource y no session_state porque el objeto tiene que ser el MISMO para todo el
+    que entre: es lo que evita una llamada HTTP por rerun y lo que hace que, cuando el Gist
+    no esta disponible, las visitas se sigan sumando entre si en vez de empezar de cero cada
+    pestana.
+
+    El Lock no es decorativo. Streamlit atiende cada sesion en su propio hilo, asi que dos
+    visitas simultaneas pueden leer el mismo N y escribir el mismo N+1, perdiendo una. Como
+    Community Cloud corre un solo contenedor, cerrar el ciclo leer-sumar-escribir bajo el
+    lock deja la cuenta EXACTA, no aproximada.
+    """
+    return {"n": 0, "remoto": False, "lock": threading.Lock()}
+
+
+def _gist_cabeceras(token):
+    return {"Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"}
+
+
+def _gist_leer(gist_id, token):
+    r = requests.get(f"https://api.github.com/gists/{gist_id}",
+                     headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT)
+    r.raise_for_status()
+    return int(json.loads(r.json()["files"][VISITS_GIST_FICHERO]["content"])["visitas"])
+
+
+def _gist_escribir(gist_id, token, n):
+    r = requests.patch(
+        f"https://api.github.com/gists/{gist_id}",
+        headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT,
+        json={"files": {VISITS_GIST_FICHERO: {"content": json.dumps({"visitas": n})}}})
+    r.raise_for_status()
+
+
+def contar_visita():
+    """Suma UNA visita la primera vez que se llama en cada sesion y devuelve el total."""
+    estado = _visitas_estado()
+    # La bandera se pone ANTES de tocar la red: si la llamada al Gist falla y el usuario
+    # sigue pulsando, cada rerun reintentaria la peticion y le colgaria cuatro segundos de
+    # timeout en cada clic. Una visita se cuenta una vez, salga bien o salga mal.
+    if st.session_state.get("_visita_contada"):
+        return estado["n"]
+    st.session_state["_visita_contada"] = True
+
+    gist_id, token = _secreto("gist_visitas_id"), _secreto("gist_visitas_token")
+    with estado["lock"]:
+        if gist_id and token:
+            try:
+                n = _gist_leer(gist_id, token) + 1
+                _gist_escribir(gist_id, token, n)
+                estado["n"], estado["remoto"] = n, True
+                return n
+            except Exception:
+                # Se degrada, no se propaga: a partir de aqui la cuenta sigue en memoria
+                # desde el ultimo total conocido, que es lo mas cerca de la verdad que hay.
+                estado["remoto"] = False
+        estado["n"] += 1
+        return estado["n"]
+
+
+def html_contador(n):
+    """Odometro de cinco plaquitas. Solo markup: la forma entera la pone el CSS.
+
+    Cinco digitos, como el contador del que sale el diseno. Al pasar de 99.999 se queda con
+    los cinco ultimos en vez de crecer, que es literalmente lo que hace un odometro mecanico
+    cuando da la vuelta — y ademas mantiene la pieza del mismo ancho, que es lo que aqui
+    importa: esta anclada en una barra de 84 px cuando esta colapsada.
+    """
+    plaquitas = "".join(f'<span class="vc-d">{d}</span>' for d in f"{max(0, int(n)):05d}"[-5:])
+    return (f'<div class="vc-wrap" title="{html.escape(S("visits_help"))}">'
+            f'<div class="vc-plates">{plaquitas}</div>'
+            f'<div class="vc-cap">{html.escape(S("visits_label"))}</div>'
+            f'</div>')
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -3822,6 +4030,12 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
+
+    # El contador va ANTES que el interruptor en el codigo, no solo en el CSS. En escritorio
+    # daria igual —las dos piezas son position:fixed y las coloca su anclaje—, pero la media
+    # query de movil las devuelve a las dos al flujo del panel, y alli el orden que manda es
+    # este. Escrito al reves, en el telefono el contador saldria DEBAJO del interruptor.
+    st.markdown(html_contador(contar_visita()), unsafe_allow_html=True)
 
     if st.button(" ", key="theme_toggle",
                  help=S("theme_to_dark") if st.session_state.theme == "light" else S("theme_to_light")):

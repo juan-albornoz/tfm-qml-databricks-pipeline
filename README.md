@@ -261,6 +261,43 @@ Streamlit Community Cloud solo accede al contenido del repositorio, no a Unity C
 
 Detalle completo en [TECHNICAL\_NOTES.md](TECHNICAL_NOTES.md), sección 6.
 
+### Contador de visitas (opcional)
+
+La barra lateral lleva un contador de visitas. **Es opcional**: sin configurar nada la app funciona igual y el contador cuenta las visitas desde el último arranque del servidor.
+
+Para que la cuenta sea **persistente** hace falta almacenamiento fuera del contenedor, porque el sistema de ficheros de Streamlit Community Cloud es efímero: lo que se escriba en disco se pierde en cada redespliegue y cada vez que la app despierta tras dormirse por inactividad. El respaldo es un **Gist de GitHub**, que no exige cuenta nueva ni dependencia nueva (`requests` ya viaja con Streamlit).
+
+1. Crear un Gist **secreto** en <https://gist.github.com>. La pantalla tiene tres campos y hay que acertar en cuál va cada cosa:
+
+   |Campo|Qué poner|
+   |-|-|
+   |*Gist description*|Libre, p. ej. `Contador de visitas del dashboard`|
+   |*Filename including extension*|`visitas.json` — **aquí**, no en la descripción|
+   |Cuerpo del fichero|Exactamente `{"visitas": 0}`, catorce caracteres y nada más|
+
+   Terminar con el botón **Create secret gist**, no con «Create public gist».
+
+   > El cuerpo es JSON, así que no admite adornos: si se copia con las comillas invertidas de un bloque de código, o con la palabra `json` delante, el fichero deja de ser JSON válido y el contador no lo puede leer.
+
+2. Anotar el identificador del Gist. Es **solo la parte final de su URL**, no el enlace entero: en `https://gist.github.com/<usuario>/a1b2c3d4e5f67890abcdef1234567890` el identificador es `a1b2c3d4e5f67890abcdef1234567890`. No se pega en ningún sitio de GitHub — su destino es el paso 4.
+
+3. Crear un token de acceso personal **clásico** en <https://github.com/settings/tokens/new> (*Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)*), y marcar la **única** casilla `gist`. Un token de alcance mínimo: si se filtra, no da acceso al repositorio.
+
+   > Ojo con la página: la de tokens *fine-grained* pide «Add permission» en vez de una lista de casillas. Es otra pantalla — la de arriba es la clásica, que es la que aquí hace falta.
+
+   El identificador del Gist **no se introduce en esta pantalla**: `Name` y `Description` son etiquetas libres, y a qué Gist se apunta lo dice el código con el identificador del paso 2. GitHub enseña el token (`ghp_…`) **una sola vez**; si se cierra la página hay que regenerarlo.
+
+4. En Streamlit Cloud, *Settings → Secrets*, pegar:
+
+   ```toml
+   gist_visitas_id    = "ID_DEL_GIST"
+   gist_visitas_token = "ghp_TOKEN"
+   ```
+
+   En local, lo mismo en `streamlit/.streamlit/secrets.toml` (ese fichero **no** debe subirse al repositorio).
+
+El contador nunca tumba la app: si falta un secreto, caduca el token o la red no responde en 4 s, el fallo se traga y la cuenta sigue en memoria. Una visita es una **sesión de navegador**, no una re-ejecución del script.
+
 \---
 
 ## Verificación automática del dashboard

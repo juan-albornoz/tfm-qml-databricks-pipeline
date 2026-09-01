@@ -201,6 +201,12 @@ STR = {
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
         "footer_uni_narrow": "UEV",
+        # ── Contador de visitas ──
+        # El rotulo va en minuscula y en singular/plural NEUTRO: acompana a un numero que
+        # cambia, y "1 visitas" chirriaria menos que rehacer la cadena en cada idioma con
+        # reglas de plural distintas. La cifra manda; esto solo la nombra.
+        "visits_label": "visitas",
+        "visits_help": "Visitas totales al panel",
 
         # ── Página 1 · Resumen ──
         "ov_eyebrow": "Framework DataOps + QML",
@@ -1037,6 +1043,9 @@ STR = {
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
         "footer_uni_narrow": "UEV",
+        # ── Visit counter ──
+        "visits_label": "visits",
+        "visits_help": "Total dashboard visits",
 
         # ── Page 1 · Overview ──
         "ov_eyebrow": "DataOps + QML Framework",
@@ -1824,6 +1833,9 @@ STR = {
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
         "footer_uni_narrow": "UEV",
+        # ── Besuchszähler ──
+        "visits_label": "Besuche",
+        "visits_help": "Besuche des Dashboards insgesamt",
 
         # ── Seite 1 · Übersicht ──
         "ov_eyebrow": "DataOps- und QML-Framework",
@@ -2649,6 +2661,9 @@ STR = {
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
         "footer_uni_narrow": "UEV",
+        # ── Compteur de visites ──
+        "visits_label": "visites",
+        "visits_help": "Visites totales du tableau de bord",
 
         # ── Page 1 · Aperçu ──
         "ov_eyebrow": "Framework DataOps + QML",
@@ -3471,6 +3486,9 @@ STR = {
         "footer_uni": "Universidad Europea de Valencia",
         "footer_name_narrow": "JAC",
         "footer_uni_narrow": "UEV",
+        # ── Contatore di visite ──
+        "visits_label": "visite",
+        "visits_help": "Visite totali della dashboard",
 
         # ── Pagina 1 · Panoramica ──
         "ov_eyebrow": "Framework DataOps + QML",
