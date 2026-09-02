@@ -292,11 +292,25 @@ Para que la cuenta sea **persistente** hace falta almacenamiento fuera del conte
    ```toml
    gist_visitas_id    = "ID_DEL_GIST"
    gist_visitas_token = "ghp_TOKEN"
+   gist_redes_sal     = "64_HEX"      # opcional; ver «Auditoría de redes»
    ```
 
    En local, lo mismo en `streamlit/.streamlit/secrets.toml` (ese fichero **no** debe subirse al repositorio).
 
-El contador nunca tumba la app: si falta un secreto, caduca el token o la red no responde en 4 s, el fallo se traga y la cuenta sigue en memoria. Una visita es una **sesión de navegador**, no una re-ejecución del script.
+El contador nunca tumba la app: si falta un secreto, caduca el token o la red no responde en 4 s, el fallo se traga y la cuenta sigue en memoria.
+
+**Qué cuenta como visita.** Un **visitante único**, no una carga de página. Una sesión suma solo si el `User-Agent` es de un navegador real, no trae ya la cookie `tfm_visitante` (un año) y su IP no contó en las últimas 6 horas. Las tres capas salieron de una auditoría del 2026-09-02: la primera versión contaba toda sesión de websocket y el 81,5 % de la cifra resultó ser un sondeo automático cada cinco minutos. Una sesión descartada por `User-Agent` **no hace ninguna llamada de red**.
+
+### Auditoría de redes (consulta interna)
+
+Además del contador, la app mantiene en el **mismo Gist** un segundo fichero, `redes.json`, que responde a lo que el contador no puede responder: de cuántas redes distintas se conecta la gente y cada cuánto vuelve cada una. **No se muestra en ninguna parte de la app**; es para consultarlo uno mismo:
+
+```
+python audit_scripts/audit_redes.py            # tabla por pantalla
+python audit_scripts/audit_redes.py --json     # el registro crudo
+```
+
+Las direcciones **nunca se guardan en claro**: cada una entra como HMAC-SHA256 truncado a 12 hex, con la clave `gist_redes_sal` de `secrets.toml` —que no está ni en el repositorio ni en el Gist—. Sin esa clave los seudónimos no se pueden revertir, así que el fichero dice *cuántas* redes hay y no *cuáles*. Si el secreto falta se usa el token del Gist, que funciona igual pero ata el registro a él: al rotarlo cambiarían todos los seudónimos. La retención está acotada a 500 redes, y al llenarse se van las menos recientes.
 
 \---
 

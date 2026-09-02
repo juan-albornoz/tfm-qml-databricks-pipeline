@@ -13,12 +13,15 @@ en la pagina Results.
 """
 
 import base64
+import hashlib
+import hmac
 import html
 import io
 import json
 import re
 import textwrap
 import threading
+import time
 from pathlib import Path
 from typing import TypedDict
 from urllib.parse import quote_plus
@@ -1692,9 +1695,11 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-lang_switch) > div,
 .st-key-contador_js, .st-key-contador_js div[data-testid="stIFrame"],
 .st-key-contador_js div[data-testid="stElementContainer"],
 .st-key-nav_js, .st-key-nav_js div[data-testid="stIFrame"],
-.st-key-nav_js div[data-testid="stElementContainer"] {{ display:contents !important; }}
+.st-key-nav_js div[data-testid="stElementContainer"],
+.st-key-cookie_visita, .st-key-cookie_visita div[data-testid="stIFrame"],
+.st-key-cookie_visita div[data-testid="stElementContainer"] {{ display:contents !important; }}
 .st-key-lang_attr iframe, .st-key-reloj iframe, .st-key-contador_js iframe,
-.st-key-nav_js iframe {{
+.st-key-nav_js iframe, .st-key-cookie_visita iframe {{
     position:fixed !important; width:0 !important; height:0 !important;
     border:0 !important; opacity:0 !important; pointer-events:none !important;
 }}
@@ -3634,6 +3639,120 @@ VISITS_GIST_FICHERO = "visitas.json"
 # dejar el panel en blanco esperandola. Si no contesta en cuatro, se cuenta en memoria.
 VISITS_TIMEOUT = 4
 
+# QUIEN CUENTA Y QUIEN NO, y por que hizo falta anadir esto. La primera version contaba TODA
+# sesion de websocket, y auditando el historial del Gist el 2026-09-02 salio que el 81,5 % de
+# la cifra —234 de 287 escrituras en 21 h— era un sondeo automatico que abre sesion cada 300
+# segundos clavados, dia y noche. Re-fasea cuando la app se reinicia, asi que va atado al ciclo
+# de vida del contenedor: es la sonda de salud de Community Cloud, y son 288 falsas visitas al
+# dia. Las 53 restantes caian todas en horas de vigilia, ninguna entre las 21:00 y las 09:00.
+#
+# El filtro va en TRES capas porque ninguna basta sola:
+#   1. El User-Agent, que descarta lo que se presenta como maquina.
+#   2. La cookie, que descarta a quien ya conto —y de paso mata el F5, que antes sumaba uno
+#      cada vez: mirar el contador para comprobarlo lo hacia subir—.
+#   3. La IP con ventana de gracia, que es la RED DE SEGURIDAD: si manana la sonda se disfraza
+#      de navegador y no guarda cookies, la capa 3 la deja en cuatro al dia en vez de 288.
+#
+# Con esto la cifra pasa a ser VISITANTES UNICOS y no visitas. Es lo que se quiere en un panel
+# de TFM y es lo que puede defenderse; el rotulo de i18n sigue diciendo "visitas".
+VISITS_COOKIE = "tfm_visitante"
+# Un ano. Pasado ese plazo quien vuelve cuenta como visitante nuevo, que es lo que hace
+# cualquier panel de analitica en vez de fingir memoria eterna.
+VISITS_COOKIE_MAXAGE = 31536000
+# Seis horas: por debajo, la sonda de cinco minutos seguiria colando dos por hora; por encima,
+# dos personas distintas detras del mismo NAT —una sala de defensa, una facultad— se pisarian
+# durante toda una jornada. Seis deja la sonda en cuatro al dia y no castiga a nadie real.
+VISITS_IP_VENTANA = 6 * 3600
+# El diccionario de IPs vive en memoria del proceso y nadie lo vacia, asi que se poda solo.
+VISITS_IP_MAX = 512
+# REGISTRO DE REDES. Segundo fichero del mismo Gist, y de consulta INTERNA: no se pinta en
+# ningun sitio de la app, no lo lee html_contador y ninguna pagina lo menciona. Responde a la
+# pregunta que el contador no puede responder —"de cuantas redes distintas me visitan"—, que
+# quedo sin respuesta en la auditoria del 2026-09-02 porque la primera version no guardaba
+# nada mas que un numero. Se lee con audit_scripts/audit_redes.py.
+#
+# LA IP NUNCA SE GUARDA EN CLARO. Va como HMAC-SHA256 truncado a 12 hex, que para 500 redes
+# deja la colision en terreno anecdotico. HMAC y no un sha256 pelado porque el espacio de IPv4
+# son 4.000 millones de valores: un hash sin clave se revierte por fuerza bruta en minutos, y
+# entonces no seria un seudonimo sino la IP con pasos de mas. La clave sale de secrets.toml
+# —que no esta en el repo ni en el Gist— y por eso el fichero puede vivir donde vive.
+VISITS_REDES_FICHERO = "redes.json"
+# Quinientas redes, y al llenarse se van las menos recientes. Es retencion acotada por diseno:
+# un registro que crece sin tope acaba siendo un fichero de datos personales sin fecha de
+# caducidad, y eso en un TFM que se defiende hay que poder explicarlo.
+VISITS_REDES_MAX = 500
+# Lo que se presenta como maquina. La lista es de SUBCADENAS en minusculas y peca de amplia a
+# proposito: colar una visita de mas no cuesta nada y perder un visitante real tampoco arregla
+# nada, pero un falso positivo aqui solo descarta a un bot mal llamado.
+VISITS_MAQUINAS = (
+    "bot", "crawl", "spider", "slurp", "scrapy", "headless", "phantom", "puppeteer",
+    "playwright", "selenium", "lighthouse", "curl", "wget", "python-requests", "httpx",
+    "aiohttp", "okhttp", "go-http", "java/", "libwww", "monitor", "uptime", "pingdom",
+    "statuscake", "probe", "healthcheck", "preview", "embedly", "facebookexternalhit",
+    "whatsapp", "telegram", "slack", "discord", "twitter", "linkedin", "applebot",
+    "yandex", "baiduspider", "duckduckbot", "ahrefs", "semrush", "petalbot", "dataprovider",
+)
+
+
+def _sesion_actual():
+    """Devuelve (user_agent, ya_traia_cookie, ip) de la sesion, o None si no hay que mirar.
+
+    None significa "no se puede saber", y quien lo recibe CUENTA en vez de descartar. Esa
+    asimetria es deliberada: descartar de mas congela el contador en silencio, que es peor
+    fallo que contar de mas. Pasa al correr la app de cabeza con AppTest —que es como se
+    validan los textos, ver README— y pasaria si una version de Streamlit dejara de exponer
+    las cabeceras.
+    """
+    try:
+        ctx = st.context
+        cabeceras = ctx.headers or {}
+        if not cabeceras:
+            return None
+        return (str(cabeceras.get("User-Agent") or "").lower(),
+                bool((ctx.cookies or {}).get(VISITS_COOKIE)),
+                str(ctx.ip_address or ""))
+    except Exception:
+        return None
+
+
+def _es_maquina(ua):
+    """True si el User-Agent delata que no hay una persona detras.
+
+    NINGUN navegador se presenta sin User-Agent, y todos —Firefox incluido— arrastran el
+    "Mozilla/5.0" heredado de los noventa. Su ausencia es la senal mas barata que hay.
+
+    Baja a minusculas por su cuenta aunque _sesion_actual ya se lo de bajado. Dar por hecho el
+    caso convertia esto en una trampa: llamarlo con el User-Agent crudo devolvia "maquina"
+    para CUALQUIER navegador —la M de "Mozilla" va en mayuscula— y el contador se habria
+    quedado clavado sin que nada fallara. Lo destapo el banco de pruebas del filtro.
+    """
+    ua = str(ua or "").lower()
+    if not ua or "mozilla/" not in ua:
+        return True
+    return any(m in ua for m in VISITS_MAQUINAS)
+
+
+def _ip_en_ventana(estado, ip):
+    """True si esa IP ya conto hace menos de VISITS_IP_VENTANA. Anota el paso, ademas.
+
+    El lock cubre el mirar-y-anotar entero: dos sesiones simultaneas de la misma IP pasarian
+    las dos si se hiciera suelto. Y va FUERA del lock de quien llama, que threading.Lock no es
+    reentrante y anidarlos colgaria la sesion en seco.
+    """
+    if not ip:
+        return False
+    ahora = time.time()
+    with estado["lock"]:
+        visto = estado["ips"].get(ip)
+        estado["ips"][ip] = ahora
+        if len(estado["ips"]) > VISITS_IP_MAX:
+            # Se tira la mitad mas vieja de golpe y no la mas vieja cada vez: podar de una en
+            # una en el camino critico de cada sesion sale caro para lo que resuelve.
+            viejas = sorted(estado["ips"], key=estado["ips"].get)[: len(estado["ips"]) // 2]
+            for k in viejas:
+                del estado["ips"][k]
+        return visto is not None and ahora - visto < VISITS_IP_VENTANA
+
 
 def _secreto(clave):
     """Lee st.secrets[clave] sin reventar cuando no hay secrets.toml.
@@ -3661,8 +3780,15 @@ def _visitas_estado():
     visitas simultaneas pueden leer el mismo N y escribir el mismo N+1, perdiendo una. Como
     Community Cloud corre un solo contenedor, cerrar el ciclo leer-sumar-escribir bajo el
     lock deja la cuenta EXACTA, no aproximada.
+
+    Los dos campos nuevos son del filtro de [_es_visitante]: "ips" es la ventana de gracia
+    por direccion —tiene que ser del PROCESO y no de la sesion, porque justo lo que persigue
+    es a quien abre una sesion nueva cada vez— y "cargado" recuerda si el total ya se ha leido
+    del Gist alguna vez, para que una sesion descartada pueda ensenar la cifra buena sin
+    escribir nada.
     """
-    return {"n": 0, "remoto": False, "lock": threading.Lock()}
+    return {"n": 0, "remoto": False, "cargado": False,
+            "ips": {}, "lock": threading.Lock()}
 
 
 def _gist_cabeceras(token):
@@ -3672,22 +3798,126 @@ def _gist_cabeceras(token):
 
 
 def _gist_leer(gist_id, token):
+    """Devuelve (total, redes) de UNA sola peticion.
+
+    Los dos ficheros vienen en la misma respuesta del Gist, asi que anadir el registro de
+    redes no cuesta ni un viaje mas: la alternativa —un GET por fichero— doblaria la latencia
+    en el camino critico del primer render para leer 40 KB que ya venian de todas formas.
+
+    El registro se lee con red: si redes.json todavia no existe —el caso del primer arranque
+    despues de anadir esto— o si alguna vez queda a medias, se devuelve vacio y se reconstruye.
+    Un registro ilegible no puede tumbar el contador, que es lo unico que se ve.
+    """
     r = requests.get(f"https://api.github.com/gists/{gist_id}",
                      headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT)
     r.raise_for_status()
-    return int(json.loads(r.json()["files"][VISITS_GIST_FICHERO]["content"])["visitas"])
+    ficheros = r.json()["files"]
+    n = int(json.loads(ficheros[VISITS_GIST_FICHERO]["content"])["visitas"])
+    redes = {}
+    crudo = ficheros.get(VISITS_REDES_FICHERO)
+    if crudo:
+        try:
+            redes = json.loads(crudo["content"]).get("redes") or {}
+        except Exception:
+            redes = {}
+    return n, redes
 
 
-def _gist_escribir(gist_id, token, n):
-    r = requests.patch(
-        f"https://api.github.com/gists/{gist_id}",
-        headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT,
-        json={"files": {VISITS_GIST_FICHERO: {"content": json.dumps({"visitas": n})}}})
+def _gist_escribir(gist_id, token, n, redes=None):
+    """Escribe el total y, si se le pasa, el registro de redes. Un PATCH para los dos."""
+    ficheros = {VISITS_GIST_FICHERO: {"content": json.dumps({"visitas": n})}}
+    if redes is not None:
+        # sort_keys e indent para que el fichero se pueda leer de un vistazo en gist.github.com
+        # sin herramienta ninguna, que es la mitad de para que sirve tenerlo ahi.
+        ficheros[VISITS_REDES_FICHERO] = {"content": json.dumps(
+            {"actualizado": _ahora_utc(), "total_redes": len(redes), "redes": redes},
+            indent=1, sort_keys=True)}
+    r = requests.patch(f"https://api.github.com/gists/{gist_id}",
+                       headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT,
+                       json={"files": ficheros})
     r.raise_for_status()
 
 
+def _ahora_utc():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _clave_red(token):
+    """Clave del HMAC con el que se seudonimiza la IP.
+
+    La sal dedicada si esta configurada y, si no, el propio token del Gist. El respaldo no es
+    dejadez: lo que hace falta es una clave SECRETA y que no viaje junto a los hashes, y el
+    token cumple las dos. Lo que cuesta es rotarla —al cambiar la clave cambian todos los
+    hashes y las redes viejas dejan de reconocerse—, y por eso conviene la sal aparte: permite
+    rotar el token sin perder el registro. Ver README.
+    """
+    return (_secreto("gist_redes_sal") or token).encode("utf-8")
+
+
+def _anotar_red(redes, ip, clave):
+    """Apunta el paso de una red en el registro. Muta y devuelve el diccionario.
+
+    Se anota SIEMPRE que hay un navegador de verdad detras, cuente o no cuente como visitante
+    nuevo: el registro sirve para saber de cuantas redes se conectan y cada cuanto vuelven, y
+    eso se pierde si solo se apunta la primera vez de cada una.
+    """
+    h = hmac.new(clave, ip.encode("utf-8"), hashlib.sha256).hexdigest()[:12]
+    ahora = _ahora_utc()
+    ficha = redes.get(h)
+    if not isinstance(ficha, dict):
+        redes[h] = {"n": 1, "primera": ahora, "ultima": ahora}
+    else:
+        ficha["n"] = int(ficha.get("n") or 0) + 1
+        ficha["ultima"] = ahora
+    if len(redes) > VISITS_REDES_MAX:
+        sobran = len(redes) - VISITS_REDES_MAX
+        for k in sorted(redes, key=lambda x: str(redes[x].get("ultima", "")))[:sobran]:
+            del redes[k]
+    return redes
+
+
+def _cerrar_ciclo(estado, gist_id, token, ip, cuenta):
+    """Leer-sumar-escribir bajo el lock, y devolver el total que hay que ensenar.
+
+    `cuenta` dice si esta sesion suma al contador; `ip` si ademas hay que anotarla en el
+    registro de redes. Son independientes: quien vuelve con la cookie puesta NO suma pero SI
+    se anota, que es justo lo que convierte el registro en un historial de vueltas y no en una
+    lista de altas.
+    """
+    with estado["lock"]:
+        if gist_id and token:
+            try:
+                n, redes = _gist_leer(gist_id, token)
+                if cuenta:
+                    n += 1
+                if ip:
+                    _gist_escribir(gist_id, token, n,
+                                   _anotar_red(redes, ip, _clave_red(token)))
+                elif cuenta:
+                    _gist_escribir(gist_id, token, n)
+                estado["n"], estado["remoto"], estado["cargado"] = n, True, True
+                return n
+            except Exception:
+                # Se degrada, no se propaga: a partir de aqui la cuenta sigue en memoria
+                # desde el ultimo total conocido, que es lo mas cerca de la verdad que hay.
+                estado["remoto"] = False
+        if cuenta:
+            estado["n"] += 1
+        return estado["n"]
+
+
 def contar_visita():
-    """Suma UNA visita la primera vez que se llama en cada sesion y devuelve el total."""
+    """Suma UN visitante la primera vez que se llama en cada sesion y devuelve el total.
+
+    Aqui esta solo el reparto de caminos; quien juzga la sesion son [_es_maquina] y
+    [_ip_en_ventana], y quien toca la red es [_cerrar_ciclo]. Tres caminos:
+
+      - Sin contexto: se cuenta y no se anota nada. No hay IP que anotar ni de que fiarse.
+      - Maquina: NO toca la red, ni lee ni escribe. Son 288 pasadas de sonda al dia que antes
+        dejaban 288 revisiones en el Gist.
+      - Navegador: se anota en el registro de redes SIEMPRE, y suma al contador solo si no
+        traia cookie y su IP no conto hace poco.
+    """
     estado = _visitas_estado()
     # La bandera se pone ANTES de tocar la red: si la llamada al Gist falla y el usuario
     # sigue pulsando, cada rerun reintentaria la peticion y le colgaria cuatro segundos de
@@ -3697,19 +3927,33 @@ def contar_visita():
     st.session_state["_visita_contada"] = True
 
     gist_id, token = _secreto("gist_visitas_id"), _secreto("gist_visitas_token")
-    with estado["lock"]:
-        if gist_id and token:
-            try:
-                n = _gist_leer(gist_id, token) + 1
-                _gist_escribir(gist_id, token, n)
-                estado["n"], estado["remoto"] = n, True
-                return n
-            except Exception:
-                # Se degrada, no se propaga: a partir de aqui la cuenta sigue en memoria
-                # desde el ultimo total conocido, que es lo mas cerca de la verdad que hay.
-                estado["remoto"] = False
-        estado["n"] += 1
-        return estado["n"]
+    sesion = _sesion_actual()
+    if sesion is None:
+        return _cerrar_ciclo(estado, gist_id, token, None, True)
+
+    ua, ya_contado, ip = sesion
+    if _es_maquina(ua):
+        with estado["lock"]:
+            # Una sola lectura por vida del proceso, y solo para que la chapa ensene la cifra
+            # de verdad: si la primera sesion tras un reinicio es la sonda, sin esto el
+            # contador arrancaria en cero para todos los que vinieran detras.
+            if gist_id and token and not estado["cargado"]:
+                try:
+                    estado["n"], estado["remoto"] = _gist_leer(gist_id, token)[0], True
+                except Exception:
+                    estado["remoto"] = False
+                estado["cargado"] = True
+            return estado["n"]
+
+    # El cortocircuito importa: si ya trae cookie no hace falta consultar la ventana de IPs,
+    # que para eso es la red de seguridad de quien no las guarda.
+    cuenta = not ya_contado and not _ip_en_ventana(estado, ip)
+    if cuenta:
+        # Hay que dejarle la marca al navegador. El sello viaja por session_state y no se pone
+        # aqui porque escribir la cookie es cosa del NAVEGADOR: lo hace el componente de mas
+        # abajo, que corre despues en la misma pasada.
+        st.session_state["_sellar_cookie"] = True
+    return _cerrar_ciclo(estado, gist_id, token, ip, cuenta)
 
 
 def html_contador(n):
@@ -3790,13 +4034,22 @@ with st.sidebar:
             st.session_state.page = (_page_url if _page_url in i18n.PAGE_KEYS
                                      else i18n.PAGE_KEYS[0])
 
-    # Qué rama del árbol está desplegada. Arranca en la página activa —el índice tiene que decir
-    # dónde estás desde el primer dibujo, y esa rama es además la única cuyas secciones están de
-    # verdad a un scroll de distancia— y a partir de ahí la mueve el clic. Es estado PROPIO y no
-    # se deduce de `page` porque puede no haber ninguna abierta: plegar la de la página en la que
-    # estás es un estado legítimo.
+    # Qué rama del árbol está desplegada. ARRANCA CERRADA, y esto cambió el 2026-09-02: antes
+    # nacía en la página activa, con el argumento de que el índice tiene que decir dónde estás
+    # desde el primer dibujo. En la práctica no se leía así: cada recarga y cada reboot abrían
+    # una rama que nadie había pedido —y como F5 abre sesión nueva, pasaba SIEMPRE—, y al
+    # recargar sobre otra página la que aparecía abierta era la suya, que es el "a veces de otros
+    # tabs". Dónde estás ya lo dice el filete de marca de la fila activa, que no necesita
+    # desplegar nada. El despliegue queda entonces donde tiene que estar: en el gesto del que
+    # pulsa el signo.
+    #
+    # Solo cambia el PUNTO DE PARTIDA. Navegar sigue abriendo la rama de destino (ver _navegar) y
+    # el clic repetido sobre la raíz sigue plegándola: eso es el usuario pidiéndolo, que es
+    # justo lo que aquí no había. None ya era un estado soportado —plegar la rama de la página
+    # en la que estás siempre lo fue—, así que no hace falta nada más: sin rama abierta, la
+    # regla de despliegue no se emite y todas se quedan en el max-height:0 de la hoja general.
     if "nav_open" not in st.session_state:
-        st.session_state.nav_open = st.session_state.page
+        st.session_state.nav_open = None
 
     # Sin tooltip, pero con nombre accesible. El globito con "Expandir"/"Colapsar" repetía en
     # palabras lo que la flecha ya dice —apunta siempre al lado al que se moverá la barra—,
@@ -4296,6 +4549,39 @@ with st.container(key="reloj"):
 </script>""",
         height=0, width=0,
     )
+
+# ── SELLO DEL VISITANTE YA CONTADO ─────────────────────────────────────────
+# La cookie que hace que una recarga NO cuente como visitante nuevo. Solo se monta cuando
+# contar_visita() ha decidido sumar, y la bandera la deja ella; el porqué de las tres capas
+# del filtro está en su bloque, arriba.
+#
+# Se escribe desde el navegador porque Python no puede: Streamlit LEE las cookies del apretón
+# de manos del websocket (st.context.cookies) pero no tiene por dónde devolverlas. Misma vía
+# que el reloj y que el atributo lang —el iframe de components.html se sirve por srcdoc y
+# comparte origen—, así que el document del padre es escribible desde aquí.
+#
+# La cookie NO se lee en esta misma pasada: llega al servidor en el apretón de manos de la
+# sesión SIGUIENTE, que es justo cuando hace falta. Por eso no hay nada que invalidar aquí.
+#
+# El try es por el modo estricto de cookies de Firefox y por quien navegue con todo bloqueado:
+# si document.cookie no deja escribir se pierde la deduplicación por cookie y queda la de IP,
+# que para eso es la red de seguridad. Nunca puede tirar la página.
+_SELLO_COOKIE = """<script>
+(function () {
+  try {
+    window.parent.document.cookie =
+      "__COOKIE__=1; max-age=__MAXAGE__; path=/; SameSite=Lax";
+  } catch (e) {}
+})();
+</script>"""
+
+if st.session_state.get("_sellar_cookie"):
+    with st.container(key="cookie_visita"):
+        components.html(
+            _SELLO_COOKIE.replace("__COOKIE__", VISITS_COOKIE)
+                         .replace("__MAXAGE__", str(VISITS_COOKIE_MAXAGE)),
+            height=0, width=0)
+
 
 # ── NAVEGACIÓN DENTRO DE LA PÁGINA ───────────────────────────────────────────
 # Las dos piezas que mueven el scroll sin recargar nada: el disco de «volver arriba» y el salto
@@ -5345,7 +5631,11 @@ def arquitectura_svg() -> str:
 # NO se usa GSAP ni ninguna librería: lo que hace el script son cuatro interpolaciones lineales
 # sobre un único evento de scroll, ya amortiguado con requestAnimationFrame, más un
 # IntersectionObserver para la entrada de los bloques.
-_OV_RADIO = 30                      # radio del canto superior de la hoja (px)
+# CANTO RECTO. El radio gobierna las DOS esquinas superiores de la hoja y, por la regla
+# gemela, las de su filete azul. A 30 px la hoja entraba sobre la lámina como una tarjeta
+# redondeada y en los extremos asomaba una cuña de imagen bajo la curva; a 0 el canto cruza
+# recto de lado a lado. Es el único sitio donde tocarlo: subirlo devuelve la curva entera.
+_OV_RADIO = 0                       # radio del canto superior de la hoja (px)
 _OV_SOMBRA = "0 -30px 70px -26px rgba(0,0,0,0.62)"
 # Padding lateral del bloque principal en modo wide, que esta página le quita y la hoja devuelve.
 # No es un número inventado: es sizes.wideSidePadding del tema de Streamlit, el que se aplica a
