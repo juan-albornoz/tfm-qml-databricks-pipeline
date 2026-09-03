@@ -32,7 +32,23 @@ import re
 import unicodedata
 
 LANGS = ("es", "en", "de", "fr", "it")
+
+# DOS constantes porque son DOS cosas distintas, y confundirlas es lo que hacía que no se
+# pudiera cambiar una sin mover la otra:
+#
+# DEFAULT_LANG es el CATÁLOGO DE CAÍDA — el idioma al que se recurre cuando a otro le falta
+# una clave. Es el español porque STR["es"] es el catálogo completo, el que se revisa primero
+# y del que salen las traducciones; es lo que sostiene la regla 2 de la cabecera y lo que
+# permite traducir página a página. No es una preferencia: cambiarlo a un catálogo con huecos
+# convertiría cada hueco en un KeyError.
+#
+# INITIAL_LANG es el idioma con el que ABRE la página quien llega sin ?lang= — la primera
+# visita, desde cualquier dispositivo. Es el INGLÉS porque el destinatario del trabajo es
+# internacional y el inglés es la lengua franca del ámbito; el español sigue a un clic en la
+# bandera, y una vez elegido cualquier idioma la URL lo recuerda (ver el bloque de ?lang= en
+# app.py). Sigue SIN negociarse con el navegador: es un valor fijo, no Accept-Language.
 DEFAULT_LANG = "es"
+INITIAL_LANG = "en"
 
 # ─────────────────────────────────────────────────────────────────────────
 # PÁGINAS
@@ -174,7 +190,7 @@ STR = {
     # ═══════════════════════════════ ESPAÑOL ═══════════════════════════════
     "es": {
         # ── Navegación y barra lateral ──
-        "nav": ["Resumen", "Gobernanza", "Resultados", "Análisis SHAP",
+        "nav": ["Resumen", "Gobernanza", "Resultados ML y QML", "Análisis SHAP",
                 "Circuito Cuántico", "Predictor en Vivo"],
         # Nombre accesible del botón de colapso, no un tooltip: viaja dentro del rótulo y se
         # recorta por CSS (ver .st-key-toggle_sidebar en app.py). No se ve en pantalla.
@@ -1021,7 +1037,7 @@ STR = {
     #     sobra: "...QSVM decision_function > 0, which is not a probability."
     "en": {
         # ── Navigation and sidebar ──
-        "nav": ["Overview", "Governance", "Results", "SHAP Analysis",
+        "nav": ["Overview", "Governance", "Results ML & QML", "SHAP Analysis",
                 "Quantum Circuit", "Live Predictor"],
         "sidebar_expand": "Expand the sidebar",
         "sidebar_collapse": "Collapse the sidebar",
@@ -1811,7 +1827,7 @@ STR = {
     # ilegibles justo en los rótulos cortos, que es donde más se nota.
     "de": {
         # ── Navigation und Seitenleiste ──
-        "nav": ["Übersicht", "Governance", "Ergebnisse", "SHAP-Analyse",
+        "nav": ["Übersicht", "Governance", "Ergebnisse ML & QML", "SHAP-Analyse",
                 "Quantenschaltkreis", "Live-Prädiktor"],
         "sidebar_expand": "Seitenleiste ausklappen",
         "sidebar_collapse": "Seitenleiste einklappen",
@@ -2639,7 +2655,7 @@ STR = {
     # COMILLAS: las angulares francesas (« … »), con su espacio interior.
     "fr": {
         # ── Navigation et barre latérale ──
-        "nav": ["Aperçu", "Gouvernance", "Résultats", "Analyse SHAP",
+        "nav": ["Aperçu", "Gouvernance", "Résultats ML et QML", "Analyse SHAP",
                 "Circuit quantique", "Prédicteur en direct"],
         "sidebar_expand": "Déplier la barre latérale",
         "sidebar_collapse": "Replier la barre latérale",
@@ -3464,7 +3480,7 @@ STR = {
     # italiano —"dell'informazione", no "dell'informazione" con la comilla de máquina—.
     "it": {
         # ── Navigazione e barra laterale ──
-        "nav": ["Panoramica", "Governance", "Risultati", "Analisi SHAP",
+        "nav": ["Panoramica", "Governance", "Risultati ML e QML", "Analisi SHAP",
                 "Circuito quantistico", "Predittore in diretta"],
         "sidebar_expand": "Espandi la barra laterale",
         "sidebar_collapse": "Comprimi la barra laterale",

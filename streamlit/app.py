@@ -17,11 +17,13 @@ import hashlib
 import hmac
 import html
 import io
+import ipaddress
 import json
 import re
 import textwrap
 import threading
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TypedDict
 from urllib.parse import quote_plus
@@ -304,21 +306,28 @@ if "theme" not in st.session_state:
 if "sidebar_narrow" not in st.session_state:
     st.session_state.sidebar_narrow = False
 # El idioma SOBREVIVE A LA RECARGA, y por eso no puede vivir solo en session_state: F5 abre
-# una sesión nueva de Streamlit y el estado nace vacío, así que la app volvía al español
-# aunque la bandera elegida fuera la italiana. La memoria es la query string —?lang=it—, que
-# el navegador conserva al recargar y que viaja además dentro del enlace que se comparte.
+# una sesión nueva de Streamlit y el estado nace vacío, así que la app volvía al idioma de
+# arranque aunque la bandera elegida fuera la italiana. La memoria es la query string
+# —?lang=it—, que el navegador conserva al recargar y que viaja además dentro del enlace que
+# se comparte.
 #
 # Se VALIDA contra i18n.LANGS antes de aceptarla. El parámetro lo escribe el usuario en la
 # barra de direcciones con la misma facilidad que la app, y un ?lang=xx sin catálogo tumbaría
 # S() con un KeyError en la primera clave que pidiera; lo que no se reconoce cae al idioma
-# por defecto en vez de propagarse.
+# de arranque en vez de propagarse.
 #
-# NO se negocia el idioma con el navegador (ni Accept-Language ni navigator.language): la
-# única forma de cambiarlo es la bandera, y adivinarlo en la primera visita rompería justo
-# eso —abriría en italiano a quien tenga Firefox en italiano sin haber elegido nada—.
+# Quien llega SIN ?lang= abre en INGLÉS, en cualquier dispositivo: i18n.INITIAL_LANG. Es una
+# constante distinta de i18n.DEFAULT_LANG a propósito —aquella es el catálogo de caída de S(),
+# que sigue siendo el español porque es el completo—; el razonamiento de las dos está junto a
+# su declaración en i18n.py.
+#
+# NO se negocia el idioma con el navegador (ni Accept-Language ni navigator.language): el
+# arranque es ese valor fijo y la única forma de cambiarlo es la bandera. Adivinarlo en la
+# primera visita rompería justo eso —abriría en italiano a quien tenga Firefox en italiano sin
+# haber elegido nada—, y además haría que el mismo enlace se viera distinto según quién lo abra.
 if "lang" not in st.session_state:
     _lang_url = st.query_params.get("lang")
-    st.session_state.lang = _lang_url if _lang_url in i18n.LANGS else i18n.DEFAULT_LANG
+    st.session_state.lang = _lang_url if _lang_url in i18n.LANGS else i18n.INITIAL_LANG
 # El desplegable de banderas se abre y se cierra con un CLIC, y su estado vive aquí y no en
 # la hoja de estilos: ver el bloque de _ABIERTO más abajo. La clave es NUESTRA y no el id de
 # un widget, así que sobrevive al st.rerun() del selector — el mismo motivo que _POS_TAB.
@@ -336,11 +345,14 @@ MENU_ABIERTO = st.session_state.lang_open
 # en session_state y no hay nada que pueda interrumpir. Un único sitio, además, en vez de uno
 # por cada camino que cambie el idioma.
 #
-# La condición evita estampar ?lang=es en la primera visita de quien no ha tocado nada: hasta
+# La condición evita estampar ?lang=en en la primera visita de quien no ha tocado nada: hasta
 # que se elige bandera la URL se queda limpia. Una vez que el parámetro existe se mantiene
-# siempre —volver al español lo deja en ?lang=es y no lo borra—, porque una URL sin parámetro
-# significa "lo que diga el idioma por defecto" y eso desharía la elección en la recarga.
-if LANG != i18n.DEFAULT_LANG or "lang" in st.query_params:
+# siempre —volver al inglés lo deja en ?lang=en y no lo borra—, porque una URL sin parámetro
+# significa "lo que diga el idioma de arranque" y eso desharía la elección en la recarga.
+#
+# Se compara contra INITIAL_LANG y no contra DEFAULT_LANG porque lo que se pregunta es "¿sigue
+# esto como abrió?", no "¿de qué catálogo caería S()?".
+if LANG != i18n.INITIAL_LANG or "lang" in st.query_params:
     if st.query_params.get("lang") != LANG:
         st.query_params["lang"] = LANG
 
@@ -3681,6 +3693,26 @@ VISITS_REDES_FICHERO = "redes.json"
 # un registro que crece sin tope acaba siendo un fichero de datos personales sin fecha de
 # caducidad, y eso en un TFM que se defiende hay que poder explicarlo.
 VISITS_REDES_MAX = 500
+# HISTORIAL DIARIO. Tercer fichero del mismo Gist, y la respuesta a "¿cuantas visitas tuve el
+# mes pasado?", que ni el contador ni el registro de redes pueden dar: el contador es un total
+# acumulado y las redes solo guardan primera y ultima vez.
+#
+# POR QUE NO BASTA EL HISTORIAL DE REVISIONES. Cada escritura deja una revision fechada, y eso
+# es lo que permitio auditar el metronomo, pero NO sirve como archivo: GitHub no promete
+# guardarlas para siempre y a doscientas escrituras diarias un mes son miles de revisiones que
+# habria que paginar de cien en cien cada vez que se abre el panel. El agregado por dia ocupa
+# unas decenas de bytes, se lee de una vez y no depende de que GitHub conserve nada.
+#
+# QUE GUARDA CADA DIA. `visitas` son los visitantes que sumaron al contador y `sesiones` las
+# sesiones de navegador real; las escribe la APP en el mismo PATCH que ya hace, sin un viaje
+# mas —igual que redes.json—. `escrituras` y `sonda` los rellena el panel de local a partir de
+# las revisiones que todavia se ven, y sirven para separar audiencia de sonda mientras la nube
+# siga con el codigo viejo. Los cuatro campos son independientes: cada fuente escribe el suyo.
+VISITS_HISTORIAL_FICHERO = "historial.json"
+# Algo mas de un ano. Es retencion acotada por el mismo motivo que la de redes: un registro que
+# crece sin tope acaba siendo un fichero sin fecha de caducidad que hay que justificar. A un
+# dia por linea, 400 dias son unos 20 KB.
+VISITS_HISTORIAL_DIAS = 400
 # Lo que se presenta como maquina. La lista es de SUBCADENAS en minusculas y peca de amplia a
 # proposito: colar una visita de mas no cuesta nada y perder un visitante real tampoco arregla
 # nada, pero un falso positivo aqui solo descarta a un bot mal llamado.
@@ -3797,40 +3829,58 @@ def _gist_cabeceras(token):
             "X-GitHub-Api-Version": "2022-11-28"}
 
 
+def _leer_seccion(ficheros, nombre, clave):
+    """Saca ficheros[nombre] -> json -> [clave], y devuelve {} ante cualquier problema.
+
+    Los dos registros —redes e historial— se leen con red: si el fichero todavia no existe
+    (primer arranque despues de anadirlo) o si alguna vez queda a medias, se devuelve vacio y
+    se reconstruye solo. Un registro ilegible no puede tumbar el contador, que es lo unico que
+    el visitante ve.
+    """
+    crudo = ficheros.get(nombre)
+    if not crudo:
+        return {}
+    try:
+        return json.loads(crudo["content"]).get(clave) or {}
+    except Exception:
+        return {}
+
+
 def _gist_leer(gist_id, token):
-    """Devuelve (total, redes) de UNA sola peticion.
+    """Devuelve (total, redes, historial) de UNA sola peticion.
 
-    Los dos ficheros vienen en la misma respuesta del Gist, asi que anadir el registro de
-    redes no cuesta ni un viaje mas: la alternativa —un GET por fichero— doblaria la latencia
-    en el camino critico del primer render para leer 40 KB que ya venian de todas formas.
-
-    El registro se lee con red: si redes.json todavia no existe —el caso del primer arranque
-    despues de anadir esto— o si alguna vez queda a medias, se devuelve vacio y se reconstruye.
-    Un registro ilegible no puede tumbar el contador, que es lo unico que se ve.
+    Los TRES ficheros vienen en la misma respuesta del Gist, asi que ni el registro de redes
+    ni el historial diario cuestan un viaje mas: la alternativa —un GET por fichero— triplicaria
+    la latencia en el camino critico del primer render para leer unos KB que ya venian de todas
+    formas.
     """
     r = requests.get(f"https://api.github.com/gists/{gist_id}",
                      headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT)
     r.raise_for_status()
     ficheros = r.json()["files"]
     n = int(json.loads(ficheros[VISITS_GIST_FICHERO]["content"])["visitas"])
-    redes = {}
-    crudo = ficheros.get(VISITS_REDES_FICHERO)
-    if crudo:
-        try:
-            redes = json.loads(crudo["content"]).get("redes") or {}
-        except Exception:
-            redes = {}
-    return n, redes
+    return (n,
+            _leer_seccion(ficheros, VISITS_REDES_FICHERO, "redes"),
+            _leer_seccion(ficheros, VISITS_HISTORIAL_FICHERO, "dias"))
 
 
-def _gist_escribir(gist_id, token, n, redes=None):
-    """Escribe el total y, si se le pasa, el registro de redes. Un PATCH para los dos."""
+def _gist_escribir(gist_id, token, n, redes=None, historial=None):
+    """Escribe el total y, si se le pasan, el registro de redes y el historial. UN solo PATCH.
+
+    El PATCH de la API de Gists toca UNICAMENTE los ficheros que se le mandan y deja intactos
+    los demas. Por eso los tres pueden convivir y por eso la nube, mientras siga con el codigo
+    viejo, puede seguir escribiendo visitas.json sin borrar el historial que escribe el panel.
+    """
     ficheros = {VISITS_GIST_FICHERO: {"content": json.dumps({"visitas": n})}}
     if redes is not None:
         # sort_keys e indent para que el fichero se pueda leer de un vistazo en gist.github.com
         # sin herramienta ninguna, que es la mitad de para que sirve tenerlo ahi.
         ficheros[VISITS_REDES_FICHERO] = {"content": json.dumps(
             {"actualizado": _ahora_utc(), "total_redes": len(redes), "redes": redes},
+            indent=1, sort_keys=True)}
+    if historial is not None:
+        ficheros[VISITS_HISTORIAL_FICHERO] = {"content": json.dumps(
+            {"actualizado": _ahora_utc(), "total_dias": len(historial), "dias": historial},
             indent=1, sort_keys=True)}
     r = requests.patch(f"https://api.github.com/gists/{gist_id}",
                        headers=_gist_cabeceras(token), timeout=VISITS_TIMEOUT,
@@ -3876,6 +3926,66 @@ def _anotar_red(redes, ip, clave):
     return redes
 
 
+def _anotar_dia(historial, dia, **sumas):
+    """Suma al dia indicado los campos que se le pasen. Muta y devuelve el diccionario.
+
+    Cada campo se suma por separado porque cada uno tiene su propia fuente: `visitas` y
+    `sesiones` los escribe la app segun pasa, mientras que `escrituras` y `sonda` los calcula
+    el panel a posteriori desde las revisiones. Sumar el dict entero de golpe haria que una
+    fuente pisara los campos de la otra con ceros.
+
+    La poda deja los VISITS_HISTORIAL_DIAS mas recientes. Las claves son fechas ISO, asi que
+    el orden alfabetico ES el cronologico y no hace falta parsear nada para ordenar.
+    """
+    ficha = historial.get(dia)
+    if not isinstance(ficha, dict):
+        ficha = {}
+        historial[dia] = ficha
+    for campo, cuanto in sumas.items():
+        ficha[campo] = int(ficha.get(campo) or 0) + int(cuanto)
+    if len(historial) > VISITS_HISTORIAL_DIAS:
+        for k in sorted(historial)[: len(historial) - VISITS_HISTORIAL_DIAS]:
+            del historial[k]
+    return historial
+
+
+def _hoy_utc():
+    """El dia en UTC, que es el huso en el que fecha la API de Gists sus revisiones.
+
+    En UTC y no en hora local a proposito: el historial se cruza con las marcas de las
+    revisiones, y mezclar husos partiria los dias por sitios distintos segun quien mire.
+    """
+    return time.strftime("%Y-%m-%d", time.gmtime())
+
+
+def _solo_lectura():
+    """True cuando esta ejecucion NO debe escribir en el contador publico.
+
+    EL PROBLEMA QUE RESUELVE, medido el 2026-09-03: arrancando el servidor con `streamlit/`
+    como directorio de trabajo, Python encuentra `.streamlit/secrets.toml` —el de PRODUCCION,
+    porque es el unico que hay— y a partir de ahi cada recarga en el portatil sumaba una
+    visita al contador publico y dejaba una revision en el Gist. Lo mismo con AppTest, que
+    corre la app entera en cada validacion de textos. El contador acababa contando el
+    desarrollo del propio panel, y el archivo diario habria heredado esa basura.
+    Estaba anotado como riesgo latente en la auditoria del 2026-09-02; dejo de ser latente.
+
+    La condicion es la MISMA que la primera capa de la puerta del panel —¿corre bajo
+    /mount/src?— y eso no es casualidad: las dos preguntas son la misma, "¿esto es el
+    despliegue publico o mi maquina?", y tenerla escrita una sola vez evita que una se
+    actualice y la otra no.
+
+    SE SIGUE LEYENDO. Solo se corta la ESCRITURA, asi que la chapa de la barra lateral marca
+    en local la cifra de verdad; lo que no hace es moverla. Y ante la duda ESCRIBE, que es la
+    direccion segura para un contador: _es_ruta_de_nube devuelve True cuando no puede saber la
+    ruta, de modo que un fallo raro deja el comportamiento de siempre en vez de congelar la
+    cuenta en silencio.
+    """
+    try:
+        return not _es_ruta_de_nube(str(Path(__file__).resolve()))
+    except Exception:
+        return False
+
+
 def _cerrar_ciclo(estado, gist_id, token, ip, cuenta):
     """Leer-sumar-escribir bajo el lock, y devolver el total que hay que ensenar.
 
@@ -3887,14 +3997,24 @@ def _cerrar_ciclo(estado, gist_id, token, ip, cuenta):
     with estado["lock"]:
         if gist_id and token:
             try:
-                n, redes = _gist_leer(gist_id, token)
+                n, redes, historial = _gist_leer(gist_id, token)
+                if _solo_lectura():
+                    # Fuera de la nube se lee y se sale: la chapa ensena la cifra real y no
+                    # se toca ni el contador ni el historial ni el registro de redes.
+                    estado["n"], estado["remoto"], estado["cargado"] = n, True, True
+                    return n
                 if cuenta:
                     n += 1
-                if ip:
+                # El dia se anota SIEMPRE que hay navegador real, cuente o no como visitante
+                # nuevo, por el mismo motivo que el registro de redes: `visitas` responde a
+                # "cuantos vinieron por primera vez" y `sesiones` a "cuanto trafico hubo", y
+                # con un solo campo no se puede distinguir una cosa de la otra.
+                if ip or cuenta:
+                    _anotar_dia(historial, _hoy_utc(),
+                                visitas=1 if cuenta else 0, sesiones=1 if ip else 0)
                     _gist_escribir(gist_id, token, n,
-                                   _anotar_red(redes, ip, _clave_red(token)))
-                elif cuenta:
-                    _gist_escribir(gist_id, token, n)
+                                   _anotar_red(redes, ip, _clave_red(token)) if ip else None,
+                                   historial)
                 estado["n"], estado["remoto"], estado["cargado"] = n, True, True
                 return n
             except Exception:
@@ -3939,7 +4059,7 @@ def contar_visita():
             # contador arrancaria en cero para todos los que vinieran detras.
             if gist_id and token and not estado["cargado"]:
                 try:
-                    estado["n"], estado["remoto"] = _gist_leer(gist_id, token)[0], True
+                    estado["n"], estado["remoto"] = _gist_leer(gist_id, token)[0], True  # solo el total
                 except Exception:
                     estado["remoto"] = False
                 estado["cargado"] = True
@@ -3980,6 +4100,339 @@ def html_contador(n):
             f'<span class="vc-ojo" aria-hidden="true"></span>'
             f'<span class="vc-num">{cifra}</span>'
             f'</span>')
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# PANEL DE VISITAS — PÁGINA OCULTA, SOLO EN LOCAL
+# ─────────────────────────────────────────────────────────────────────────
+# POR QUE EXISTE. El contador de la barra lateral da UN numero y nada mas, y un numero solo
+# no se puede auditar: el 2026-09-02 hicieron falta un script aparte y el historial del Gist
+# para descubrir que el 81,5 % de la cifra era una sonda de salud. Esta pagina mete esa misma
+# auditoria dentro de la app, para que la pregunta "de donde salen estas visitas" se responda
+# mirando, y no reconstruyendo el analisis desde cero cada vez que la cifra chirrie.
+#
+# NO ES UNA PAGINA MAS. No esta en i18n.PAGES, no tiene rotulo traducido, no la indexa el
+# buscador y no cuelga del arbol de secciones. Se anade al menu en tiempo de dibujado y solo
+# cuando la puerta de aqui abajo se abre; para el resto de la app no existe.
+#
+# POR QUE NO ESTA TRADUCIDA. Las seis publicas viven en cinco idiomas porque las lee un
+# tribunal. Esta la lee una sola persona en su portatil, asi que el rotulo va fijo en
+# castellano: meter claves nuevas en los cinco catalogos por una herramienta interna seria
+# trabajo de traduccion que nadie va a leer, y ensuciaria search() y nav_tree(), que recorren
+# los catalogos enteros.
+PANEL_VISITAS = "visits_panel"
+PANEL_VISITAS_ROTULO = "Visitas (local)"
+
+# Rutas desde las que Streamlit Community Cloud sirve el repo. /mount/src/<repo> es la que
+# aparece en cualquier traza de la nube y la que ya delata el entorno en los fallos de
+# despliegue; las otras dos las ha usado la plataforma en versiones anteriores.
+NUBE_RUTAS = ("/mount/src", "/app", "/home/appuser")
+
+# Cabeceras que solo existen cuando hay un PROXY delante. Community Cloud sirve la app detras
+# del suyo —es lo que rellena st.context.ip_address alli y lo deja a None en local— y ningun
+# servidor de desarrollo las anade. Se comparan en minusculas porque HTTP no distingue caja.
+CABECERAS_DE_PROXY = ("x-forwarded-for", "x-forwarded-host", "x-forwarded-proto",
+                      "x-forwarded-port", "x-real-ip", "forwarded", "cf-connecting-ip")
+
+
+# ── LAS TRES CAPAS, COMO FUNCIONES PURAS ──────────────────────────────────────
+# Reciben el dato en vez de ir a buscarlo, y esa es la diferencia entre "creo que en la nube
+# no se vera" y "esta comprobado": una funcion que lee st.context solo se puede probar con un
+# navegador delante, y en Community Cloud no hay manera de poner uno desde aqui. Asi, en
+# cambio, el caso de la nube se prueba pasandole la ruta y las cabeceras que la nube tiene.
+
+def _es_ruta_de_nube(ruta):
+    """True si esa ruta es una de las que usa Community Cloud para servir el repo."""
+    ruta = str(ruta or "").replace("\\", "/")
+    if not ruta:
+        return True                 # sin ruta no se sabe donde corremos: cierra
+    return any(ruta.startswith(pre) for pre in NUBE_RUTAS)
+
+
+def _es_host_local(host):
+    """True si ese Host es loopback: 127.0.0.0/8, ::1 o el nombre localhost.
+
+    El Host trae el puerto pegado y el IPv6 va entre corchetes ("[::1]:8501"), asi que hay
+    que quedarse con la maquina antes de preguntar por ella. ipaddress.is_loopback y no
+    comparar contra "127.0.0.1" porque loopback es TODO el 127.0.0.0/8, y asi una direccion
+    malformada cae al lado seguro en vez de colarse por un fallo de comparacion de cadenas.
+    """
+    host = str(host or "")
+    if not host:
+        return False
+    if host.startswith("["):
+        maquina = host[1:host.index("]")] if "]" in host else ""
+    elif host.count(":") == 1:
+        maquina = host.rsplit(":", 1)[0]
+    else:
+        maquina = host
+    if maquina.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(maquina).is_loopback
+    except ValueError:
+        return False
+
+
+def _hay_proxy_delante(cabeceras):
+    """True si alguna cabecera delata un proxy intermedio.
+
+    Es la capa que se anadio al preguntar "¿seguro que al publicar no se ve?", y responde a
+    una via que las otras dos no cubren: un Host falseado. Un visitante de Community Cloud no
+    puede quitar estas cabeceras —las pone la infraestructura DESPUES de el, y no viajan en su
+    peticion—, mientras que el servidor de desarrollo no anade ninguna. Se comprobo leyendo la
+    lista real de cabeceras en local: Host, Origin, Cookie, User-Agent y las de websocket, sin
+    una sola X-Forwarded.
+    """
+    try:
+        claves = {str(k).lower() for k in (cabeceras or {})}
+    except Exception:
+        return True                 # cabeceras ilegibles: cierra
+    return any(c in claves for c in CABECERAS_DE_PROXY)
+
+
+def panel_visitas_visible():
+    """La puerta del panel de visitas: TRES capas, y tienen que pasar las tres.
+
+    | capa | pregunta | quien la controla |
+    |-|-|-|
+    | ruta | ¿corre bajo /mount/src? | el servidor: nadie desde fuera |
+    | proxy | ¿hay X-Forwarded-*? | la infraestructura, no el visitante |
+    | host | ¿entro por loopback? | el cliente |
+
+    Solo la tercera depende del cliente, y por eso no va sola. Las dos primeras bastan por si
+    mismas para cerrar la pagina en Community Cloud: la ruta porque alli el repo se monta en
+    /mount/src, y el proxy porque toda peticion llega por el suyo. La del Host esta para el
+    caso de casa —sin ella, cualquiera del wifi abriria la Network URL (172.20.10.2:8501) y
+    veria el panel—.
+
+    CIERRA ANTE LA DUDA, siempre. Sin contexto, sin cabeceras, sin ruta o con cualquiera de
+    las tres ilegible, devuelve False. Es la asimetria CONTRARIA a la del contador de visitas
+    —alli no saber significa contar— y es deliberada: alli el peor caso es un numero algo
+    alto, aqui seria publicar en internet lo que se pidio que no saliera del portatil.
+
+    SE MIRA EL Host Y NO st.context.ip_address, y esto se MIDIO: en Streamlit 1.55 servido en
+    local `ip_address` vale None —no hay proxy que lo rellene—, asi que una puerta apoyada en
+    el se quedaba cerrada SIEMPRE y el panel no llegaba a pintarse nunca, sin error ni aviso.
+    Es ademas lo que pide la documentacion de Streamlit, que desaconseja usarlo para accesos.
+    """
+    try:
+        ruta = str(Path(__file__).resolve())
+    except Exception:
+        return False
+    if _es_ruta_de_nube(ruta):
+        return False
+    try:
+        cabeceras = st.context.headers or {}
+    except Exception:
+        return False
+    if not cabeceras or _hay_proxy_delante(cabeceras):
+        return False
+    return _es_host_local(cabeceras.get("Host") or cabeceras.get("host") or "")
+
+
+@st.cache_data(ttl=90, show_spinner=False)
+def _revisiones_gist(_gist_id, _token, sello):
+    """Marcas de tiempo de TODAS las revisiones del Gist, de la mas antigua a la mas nueva.
+
+    ESTA ES LA FUENTE. Cada escritura del contador deja una revision fechada, asi que el
+    historial del Gist no es un registro auxiliar: ES el registro de visitas, y el unico que
+    permite preguntarle a la cifra de donde sale. visitas.json solo guarda el total.
+
+    Se pagina contra /gists/{id}/commits porque la respuesta principal del Gist trae solo las
+    30 ultimas revisiones: a doce escrituras por hora eso son dos horas y media, que no llega
+    ni para ver un dia.
+
+    Los dos secretos llevan guion bajo delante para que cache_data NO los meta en la clave del
+    cache. El `sello` si forma clave, y es lo que permite refrescar a mano desde el boton.
+    """
+    if not (_gist_id and _token):
+        return []
+    cab = _gist_cabeceras(_token)
+    marcas, pagina = [], 1
+    while pagina <= 12:                          # 12 x 100 = 1200 revisiones, de sobra
+        r = requests.get(f"https://api.github.com/gists/{_gist_id}/commits",
+                         headers=cab, params={"per_page": 100, "page": pagina}, timeout=15)
+        r.raise_for_status()
+        lote = r.json()
+        if not lote:
+            break
+        marcas += [x["committed_at"] for x in lote if x.get("committed_at")]
+        pagina += 1
+    return sorted(marcas)
+
+
+# Un hueco de CINCO MINUTOS clavados entre dos escrituras es la firma de la sonda de salud de
+# Community Cloud, que abre websocket cada 300 s exactos y por tanto ejecuta el script. La
+# holgura de +-5 s absorbe la latencia de red y de la API sin llegar a tocar ningun ritmo
+# humano: nadie recarga una pagina cada cinco minutos clavados durante toda la noche.
+SONDA_PERIODO = 300
+SONDA_HOLGURA = 5
+
+
+def _clasificar_escrituras(marcas):
+    """Reparte las escrituras en sonda y resto. Devuelve (fechas, huecos, es_sonda).
+
+    El criterio es el hueco CON LA ANTERIOR: si son 300 s +-5, esa escritura es un tic del
+    metronomo. Es el mismo con el que se midio el 81,5 % en la auditoria del 2026-09-02, y la
+    pagina lo deja escrito para que la cifra se pueda discutir en vez de creer.
+
+    La PRIMERA escritura no tiene anterior, asi que no se puede clasificar y cae en el resto.
+    Con cientos de tics eso mueve el reparto en una unidad; darle categoria propia costaria
+    mas de explicar de lo que corrige.
+    """
+    ts = [datetime.fromisoformat(m.replace("Z", "+00:00")) for m in marcas]
+    huecos = [round((b - a).total_seconds()) for a, b in zip(ts, ts[1:])]
+    sonda = [False] + [abs(h - SONDA_PERIODO) <= SONDA_HOLGURA for h in huecos]
+    return ts, huecos, sonda
+
+
+def _fusiona_historial(guardado, marcas_ts, marcas_sonda):
+    """Cruza el historial del Gist con lo que se deduce de las revisiones. Devuelve {dia: {..}}.
+
+    DOS FUENTES, CAMPOS DISTINTOS, y por eso no compiten:
+      · del Gist salen `visitas` y `sesiones`, que escribe la app segun ocurren y son el
+        archivo de verdad —sobreviven a que GitHub pode revisiones—;
+      · de las revisiones salen `escrituras` y `sonda`, que solo se pueden calcular mirando los
+        huecos y solo alcanzan hasta donde llegue el historial que GitHub conserve.
+
+    Se toma el MAXIMO de cada campo, nunca el ultimo visto. El numero de escrituras de un dia
+    pasado solo puede crecer conforme se ven mas revisiones, jamas encoger; si un dia deja de
+    verse porque se poda, el maximo conserva lo que ya se sabia en vez de degradarlo a cero.
+    """
+    derivado = {}
+    for t, es_sonda in zip(marcas_ts, marcas_sonda):
+        ficha = derivado.setdefault(t.strftime("%Y-%m-%d"), {"escrituras": 0, "sonda": 0})
+        ficha["escrituras"] += 1
+        ficha["sonda"] += 1 if es_sonda else 0
+
+    dias = {}
+    for clave in set(guardado) | set(derivado):
+        g, d = guardado.get(clave) or {}, derivado.get(clave) or {}
+        fila = {
+            "visitas":    int(g.get("visitas") or 0),
+            "sesiones":   int(g.get("sesiones") or 0),
+            "escrituras": max(int(g.get("escrituras") or 0), int(d.get("escrituras") or 0)),
+            "sonda":      max(int(g.get("sonda") or 0), int(d.get("sonda") or 0)),
+        }
+        # Lo que queda al descontar la sonda. Mientras la nube corra sin filtro es la mejor
+        # estimacion de audiencia que hay; con el filtro puesto la sonda no escribe y este
+        # numero converge con `escrituras`.
+        fila["reales"] = max(0, fila["escrituras"] - fila["sonda"])
+        dias[clave] = fila
+    return dict(sorted(dias.items()))
+
+
+def _pdf_visitas(dias, resumen, png_grafica=None):
+    """Informe PDF del historial. Devuelve los bytes, o None si falta reportlab.
+
+    reportlab NO esta en requirements.txt y no debe estarlo: la nube no ejecuta este panel, y
+    una dependencia mas en el fichero es una version mas que puede chocar con las fijadas. Por
+    eso se importa AQUI DENTRO y no arriba — un import de nivel superior que falte tumba la app
+    entera al arrancar, que es exactamente lo que no puede pasar en el despliegue publico.
+    """
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_LEFT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import (Image, PageBreak, Paragraph, SimpleDocTemplate,
+                                        Spacer, Table, TableStyle)
+    except Exception:
+        return None
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, title="Visitas — informe interno",
+                            author="QML DataOps", leftMargin=18 * mm, rightMargin=18 * mm,
+                            topMargin=16 * mm, bottomMargin=16 * mm)
+    hojas = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=hojas["Title"], fontName="Helvetica-Bold",
+                        fontSize=17, alignment=TA_LEFT, spaceAfter=2)
+    ante = ParagraphStyle("ante", parent=hojas["Normal"], fontName="Helvetica-Bold",
+                          fontSize=8, textColor=colors.HexColor("#1565C0"), spaceAfter=6)
+    cuerpo = ParagraphStyle("cuerpo", parent=hojas["Normal"], fontSize=9, leading=13,
+                            textColor=colors.HexColor("#33383D"))
+    seccion = ParagraphStyle("seccion", parent=hojas["Heading2"], fontSize=11,
+                             spaceBefore=12, spaceAfter=5,
+                             textColor=colors.HexColor("#22262A"))
+    pie = ParagraphStyle("pie", parent=hojas["Normal"], fontSize=7.5, leading=10.5,
+                         textColor=colors.HexColor("#6B7278"))
+
+    hist = []
+    hist.append(Paragraph("CONSULTA INTERNA · QML DATAOPS", ante))
+    hist.append(Paragraph("Visitas del dashboard", h1))
+    hist.append(Paragraph(
+        f"Generado el {_ahora_utc()} · Ventana: {resumen['desde']} a {resumen['hasta']} "
+        f"({resumen['n_dias']} días)", cuerpo))
+    hist.append(Spacer(1, 8))
+
+    # ── Resumen ──
+    hist.append(Paragraph("Resumen del periodo", seccion))
+    tabla_kpi = Table([
+        ["Contador público (acumulado)", str(resumen["total"])],
+        ["Escrituras registradas", str(resumen["escrituras"])],
+        ["Atribuibles a la sonda de salud", f"{resumen['sonda']}  ({resumen['pct_sonda']:.0f} %)"],
+        ["Visitas reales estimadas", str(resumen["reales"])],
+        ["Visitantes nuevos contados por la app", str(resumen["visitas"])],
+    ], colWidths=[110 * mm, 60 * mm])
+    tabla_kpi.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#5A6068")),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#F4F6F8"), colors.white]),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor("#E1E5E9")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    hist.append(tabla_kpi)
+
+    if png_grafica:
+        hist.append(Paragraph("Visitas por día", seccion))
+        try:
+            hist.append(Image(io.BytesIO(png_grafica), width=174 * mm, height=52 * mm))
+        except Exception:
+            pass
+
+    # ── El detalle, un dia por fila ──
+    hist.append(Paragraph("Detalle diario", seccion))
+    filas = [["Día", "Escrituras", "Sonda", "Reales", "Visitantes", "Sesiones"]]
+    for d, f in sorted(dias.items(), reverse=True):
+        filas.append([d, str(f["escrituras"]), str(f["sonda"]), str(f["reales"]),
+                      str(f["visitas"]), str(f["sesiones"])])
+    tabla = Table(filas, colWidths=[34 * mm, 28 * mm, 24 * mm, 24 * mm, 32 * mm, 28 * mm],
+                  repeatRows=1)
+    tabla.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#22262A")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F4F6F8")]),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.HexColor("#E1E5E9")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    hist.append(tabla)
+
+    hist.append(Spacer(1, 10))
+    hist.append(Paragraph(
+        "<b>Cómo se obtiene.</b> La fuente es un Gist secreto de GitHub. «Visitantes» y "
+        "«Sesiones» los escribe la propia aplicación día a día en <i>historial.json</i>; "
+        "«Escrituras» y «Sonda» se calculan a posteriori sobre el historial de revisiones del "
+        "Gist, donde cada revisión es una escritura fechada. Se clasifica como sonda toda "
+        "escritura separada de la anterior por 300 s ± 5, que es la firma del sondeo de salud "
+        "de Streamlit Community Cloud: abre una sesión de websocket cada cinco minutos "
+        "exactos, día y noche, y por tanto ejecuta el script. «Reales» es la diferencia. Las "
+        "direcciones IP nunca se almacenan en claro.", pie))
+    hist.append(Paragraph(
+        "Documento de consulta interna. Generado desde el panel local del dashboard, que no "
+        "se publica.", pie))
+
+    doc.build(hist)
+    return buf.getvalue()
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -4031,7 +4484,14 @@ with st.sidebar:
             st.session_state.page = _destino
             st.session_state[_POS_TAB.format(_grupo)] = _pos
         else:
-            st.session_state.page = (_page_url if _page_url in i18n.PAGE_KEYS
+            # La pagina oculta entra en el juego de claves validas SOLO si la puerta esta
+            # abierta (ver panel_visitas_visible). Asi ?page=visits_panel es un enlace directo
+            # utilizable en local, y en la nube es una clave desconocida cualquiera: cae al
+            # Resumen por el mismo camino que ?page=xx, sin mensaje y sin pista de que exista.
+            _validas = list(i18n.PAGE_KEYS)
+            if panel_visitas_visible():
+                _validas.append(PANEL_VISITAS)
+            st.session_state.page = (_page_url if _page_url in _validas
                                      else i18n.PAGE_KEYS[0])
 
     # Qué rama del árbol está desplegada. ARRANCA CERRADA, y esto cambió el 2026-09-02: antes
@@ -4168,6 +4628,12 @@ with st.sidebar:
     # cuando esto se ejecuta el estado ya es el de la página de destino. Esa es también la razón
     # de que la lista pueda marcar su fila activa sin preguntarle nada a nadie.
     page = st.session_state.page
+    # La puerta se comprueba en CADA pasada, no solo al entrar. Una sesion que quedara sobre la
+    # pagina oculta con la puerta ya cerrada —el caso de manual es estrecho, pero el coste de
+    # cubrirlo es esta linea— seguiria pintandola pasada tras pasada, porque `page` vive en
+    # session_state y nadie mas la revisa. Cerrada la puerta, la sesion vuelve al Resumen.
+    if page == PANEL_VISITAS and not panel_visitas_visible():
+        page = st.session_state.page = i18n.PAGE_KEYS[0]
 
     # Las reglas que dependen del ESTADO de la barra —cuál es la página activa y cuál es la rama
     # desplegada—. Van en un <style> propio, aquí, y no en la hoja de arriba, porque aquella se
@@ -4223,8 +4689,21 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
+    # El arbol que se pinta es el de i18n MAS, si la puerta esta abierta, la fila del panel
+    # de visitas. Se anade AQUI y no en i18n.nav_tree() a proposito: nav_tree recorre los
+    # catalogos y lo alimenta todo —el buscador, el arbol, el saneo de claves—, asi que meter
+    # ahi una pagina sin rotulos en cinco idiomas obligaria a poner excepciones en cada uno de
+    # esos sitios. Aqui es una linea y no toca a nadie.
+    #
+    # Va la ULTIMA, debajo de Live Predictor, que es donde se pidio. Y va SIN ramas: no tiene
+    # secciones que ofrecer y una rama vacia dibujaria un signo de desplegar que no despliega.
+    _arbol = list(i18n.nav_tree(LANG))
+    if panel_visitas_visible():
+        _arbol.append({"page": PANEL_VISITAS, "icon": "visibility",
+                       "label": PANEL_VISITAS_ROTULO, "ramas": []})
+
     with st.container(key="nav_tree"):
-        for _pag in i18n.nav_tree(LANG):
+        for _pag in _arbol:
             _pk = _pag["page"]
             # El icono es un Material Symbol y se declara en i18n.PAGES junto a la clave de la
             # página. Es la misma familia que ya usa el buscador colapsado, que es su vecino de
@@ -4286,7 +4765,12 @@ with st.sidebar:
     # Índice de la página, que viaja DENTRO del nombre de los keyframes de la entrada
     # escalonada (ver el bloque más abajo): al cambiar de página cambia el nombre y las
     # animaciones reinician; dentro de la misma página el nombre no cambia y no se repiten.
-    _page_idx_anim = i18n.PAGE_KEYS.index(page)
+    # .index() reventaria con la pagina oculta, que por definicion no esta en PAGE_KEYS. Se le
+    # da el indice siguiente al ultimo: lo unico que se le pide a este numero es ser distinto
+    # del de las demas paginas, porque viaja dentro del nombre de los keyframes y es lo que
+    # hace que la animacion reinicie al cambiar de pagina.
+    _page_idx_anim = (i18n.PAGE_KEYS.index(page) if page in i18n.PAGE_KEYS
+                      else len(i18n.PAGE_KEYS))
     st.markdown(f"""
     <style>
     /* ═══════════════ ENTRADA ESCALONADA DEL CONTENIDO ═══════════════
@@ -8213,3 +8697,411 @@ elif page == "predictor":
     {S("lp_read_note")}
     </div>
     """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PAGINA OCULTA — VISITAS (SOLO EN LOCAL)
+# ═══════════════════════════════════════════════════════════════════════
+# Solo se llega aqui con la puerta abierta: el enrutado no acepta la clave sin ella y el saneo
+# de cada pasada devuelve al Resumen si se cierra. La condicion se repite igualmente, porque
+# esta es la linea que de verdad decide que se dibuja y no debe depender de que las otras dos
+# sigan estando ahi dentro de seis meses.
+#
+# NO ESTA TRADUCIDA, y por eso los textos van en crudo y no por S(). El razonamiento esta
+# junto a PANEL_VISITAS, arriba.
+elif page == PANEL_VISITAS and panel_visitas_visible():
+    header("Consulta interna",
+           "Visitas: de donde sale el numero",
+           "Auditoria del contador contra el historial del Gist. Esta pagina solo existe "
+           "cuando la app se abre desde la propia maquina que la sirve.")
+
+    _gid, _tok = _secreto("gist_visitas_id"), _secreto("gist_visitas_token")
+
+    # El sello ES la clave del cache (ver _revisiones_gist): cambiarlo es lo que fuerza una
+    # lectura nueva. Vive en session_state porque tiene que sobrevivir al rerun del boton.
+    if "_visitas_sello" not in st.session_state:
+        st.session_state["_visitas_sello"] = 0
+
+    if not (_gid and _tok):
+        st.markdown(
+            '<div class="clinical-note">No hay <code>gist_visitas_id</code> ni '
+            '<code>gist_visitas_token</code> en <code>.streamlit/secrets.toml</code>, asi que '
+            'no hay historial que auditar. Ver README, seccion «Contador de visitas».</div>',
+            unsafe_allow_html=True)
+    else:
+        _c1, _c2 = st.columns([3, 1])
+        with _c2:
+            if st.button("Releer el Gist", key="visitas_refrescar", width="stretch",
+                         icon=":material/refresh:"):
+                st.session_state["_visitas_sello"] += 1
+                st.rerun()
+
+        _error = None
+        try:
+            _marcas = _revisiones_gist(_gid, _tok, st.session_state["_visitas_sello"])
+            _total, _redes, _historial = _gist_leer(_gid, _tok)
+        except Exception as _e:
+            _error, _marcas, _total, _redes, _historial = _e, [], None, {}, {}
+
+        if _error is not None:
+            # Igual que el contador, un fallo de red no puede tumbar la pagina. La diferencia es
+            # que aqui SI se ensena: esto es la herramienta de diagnostico, y un panel de
+            # auditoria que se calla cuando falla no sirve para auditar nada.
+            st.markdown(
+                f'<div class="clinical-note">No se pudo leer el Gist: '
+                f'<code>{html.escape(str(_error))}</code></div>', unsafe_allow_html=True)
+        elif not _marcas:
+            st.markdown('<div class="clinical-note">El Gist no tiene revisiones todavia.</div>',
+                        unsafe_allow_html=True)
+        else:
+            _ts, _huecos, _sonda = _clasificar_escrituras(_marcas)
+            _corte = _ts[-1] - timedelta(hours=24)
+            _idx24 = [i for i, t in enumerate(_ts) if t >= _corte]
+            _n24 = len(_idx24)
+            _sonda24 = sum(1 for i in _idx24 if _sonda[i])
+            _resto24 = _n24 - _sonda24
+            _pct_sonda = 100 * _sonda24 / _n24 if _n24 else 0
+            _hay_filtro = bool(_redes)
+
+            # ── Lo primero, la respuesta ──────────────────────────────────────
+            # Un panel de diagnostico empieza por el veredicto y deja el detalle debajo: si hay
+            # que reconstruirlo leyendo cuatro graficas, es el mismo trabajo que se venia a
+            # ahorrar. El umbral del 50 % no es fino a proposito — la sonda o esta o no esta, y
+            # cuando esta se lleva el 80 o el 90 %.
+            if _pct_sonda >= 50:
+                _color = STATUS["critical"]
+                _titular = "El contador esta inflado"
+                _detalle = (f"De las {_n24} escrituras de las ultimas 24 h, <b>{_sonda24} "
+                            f"({_pct_sonda:.0f} %)</b> llegan separadas por 300 s clavados. Eso "
+                            f"es la sonda de salud de Community Cloud, no audiencia. Visitas "
+                            f"reales del periodo: <b>{_resto24}</b>.")
+            elif _pct_sonda > 0:
+                _color = STATUS["warning"]
+                _titular = "Queda algo de metronomo"
+                _detalle = (f"{_sonda24} de {_n24} escrituras ({_pct_sonda:.0f} %) van a 300 s "
+                            f"clavados. Visitas reales del periodo: <b>{_resto24}</b>.")
+            else:
+                _color = STATUS["good"]
+                _titular = "El contador mide visitas reales"
+                _detalle = (f"Ninguna de las {_n24} escrituras de las ultimas 24 h sigue el "
+                            f"patron de 300 s. No hay rastro del metronomo.")
+            if not _hay_filtro:
+                _detalle += (" <br><br><b>El Gist no tiene <code>redes.json</code></b>, que es el "
+                             "fichero que escribe el codigo con filtro. Significa que lo "
+                             "desplegado es la version ANTERIOR al filtro de tres capas: el "
+                             "arreglo esta en el repositorio, pero no en la nube.")
+            st.markdown(
+                f'<div class="info-card" style="border-left:3px solid {_color};">'
+                f'<div class="kpi-model"><span class="kpi-dot" style="background:{_color};">'
+                f'</span>{_titular}</div>'
+                f'<div class="gov-prose" style="margin-top:6px;">{_detalle}</div></div>',
+                unsafe_allow_html=True)
+
+            # ── Las cifras ────────────────────────────────────────────────────
+            st.markdown('<div class="section-title">Estado del contador</div>',
+                        unsafe_allow_html=True)
+            _fichas = [
+                ("Contador publico", f"{_total}", "lo que marca la chapa de la barra"),
+                ("Escrituras / 24 h", f"{_n24}", "cada una es una visita contada"),
+                ("De ellas, sonda", f"{_sonda24}", f"{_pct_sonda:.0f} % del total"),
+                ("Visitas reales / 24 h", f"{_resto24}", "lo que queda al descontarla"),
+            ]
+            for _col, (_lab, _val, _pie) in zip(st.columns(4), _fichas):
+                with _col:
+                    st.markdown(
+                        f'<div class="info-card"><div class="kpi-label">{_lab}</div>'
+                        f'<div class="kpi-value" style="font-size:26px;">{_val}</div>'
+                        f'<div class="kpi-label" style="opacity:0.75;">{_pie}</div></div>',
+                        unsafe_allow_html=True)
+
+            # ── HISTORIAL DIARIO ──────────────────────────────────────────────
+            # Es la parte que se CONSULTA, frente a la de arriba que se diagnostica. Vive en
+            # historial.json dentro del mismo Gist y no depende de que GitHub conserve las
+            # revisiones: son unas decenas de bytes por dia, con retencion de 400.
+            _dias_todo = _fusiona_historial(_historial, _ts, _sonda)
+            st.markdown('<div class="section-title">Historial diario</div>',
+                        unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-sub">Archivo por dias. <b>Visitantes</b> y '
+                '<b>sesiones</b> los escribe la app segun ocurren, asi que sobreviven aunque '
+                'GitHub pode revisiones; <b>escrituras</b> y <b>sonda</b> se calculan sobre '
+                'las revisiones que todavia se ven.</div>', unsafe_allow_html=True)
+
+            _v1, _v2 = st.columns([2, 3])
+            with _v1:
+                _ventana = st.radio("Ventana", ["7 dias", "30 dias", "90 dias", "Todo"],
+                                    index=1, horizontal=True, key="visitas_ventana",
+                                    label_visibility="collapsed")
+            _n_ventana = {"7 dias": 7, "30 dias": 30, "90 dias": 90}.get(_ventana, 100000)
+            _claves = sorted(_dias_todo)[-_n_ventana:]
+            _dias_v = {k: _dias_todo[k] for k in _claves}
+
+            if not _dias_v:
+                st.markdown(
+                    '<div class="clinical-note">Todavia no hay dias archivados. El fichero '
+                    '<code>historial.json</code> se crea en cuanto la app registra la primera '
+                    'sesion con este codigo, y el boton de archivar de aqui abajo guarda '
+                    'ademas lo que se pueda deducir de las revisiones actuales.</div>',
+                    unsafe_allow_html=True)
+            else:
+                _sum = {c: sum(f[c] for f in _dias_v.values())
+                        for c in ("escrituras", "sonda", "reales", "visitas", "sesiones")}
+                # Barras apiladas por dia, MISMA codificacion que la grafica por horas: la
+                # sonda en gris recesivo y lo real en el azul de marca. Repetir el par de
+                # colores es lo que permite leer las dos graficas sin volver a la leyenda.
+                _figd = go.Figure()
+                _figd.add_trace(go.Bar(
+                    x=_claves, y=[_dias_v[k]["sonda"] for k in _claves], name="Sonda (300 s)",
+                    marker=dict(color=RAMP[1], line=dict(color=t["surface"], width=2)),
+                    hovertemplate="<b>%{x}</b><br>%{y} de la sonda<extra></extra>"))
+                _figd.add_trace(go.Bar(
+                    x=_claves, y=[_dias_v[k]["reales"] for k in _claves], name="Visitas reales",
+                    marker=dict(color=C_PRIMARY, line=dict(color=t["surface"], width=2)),
+                    hovertemplate="<b>%{x}</b><br>%{y} reales<extra></extra>"))
+                _figd.update_layout(barmode="stack", showlegend=True,
+                                    legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                                xanchor="left", x=0,
+                                                font=dict(family=PLOTLY_FONT, size=12,
+                                                          color=t["text_secondary"])))
+                _pasod = max(1, len(_claves) // 14)
+                _figd.update_xaxes(tickmode="array", tickvals=_claves[::_pasod],
+                                   ticktext=_claves[::_pasod], tickangle=-45,
+                                   tickfont=dict(family=PLOTLY_MONO, size=10))
+                _figd.update_yaxes(title_text="por dia", gridcolor=GRID)
+                plotly_layout(_figd, height=300, margin=dict(l=44, r=16, t=44, b=70))
+                st.plotly_chart(_figd, width="stretch", key="visitas_por_dia",
+                                config={"displayModeBar": False})
+
+                _resumen_filas = "".join([
+                    f'<div class="kpi-row"><span class="kpi-label">Dias con registro</span>'
+                    f'<span class="kpi-value">{len(_dias_v)}</span></div>',
+                    f'<div class="kpi-row"><span class="kpi-label">Escrituras</span>'
+                    f'<span class="kpi-value">{_sum["escrituras"]}</span></div>',
+                    f'<div class="kpi-row"><span class="kpi-label">De la sonda</span>'
+                    f'<span class="kpi-value">{_sum["sonda"]}</span></div>',
+                    f'<div class="kpi-row"><span class="kpi-label">Visitas reales estimadas'
+                    f'</span><span class="kpi-value">{_sum["reales"]}</span></div>',
+                    f'<div class="kpi-row"><span class="kpi-label">Visitantes contados por la '
+                    f'app</span><span class="kpi-value">{_sum["visitas"]}</span></div>',
+                ])
+                st.markdown(f'<div class="info-card">{_resumen_filas}</div>',
+                            unsafe_allow_html=True)
+
+                with st.expander(f"Ver los {len(_dias_v)} dias en detalle"):
+                    _cab = ('<div class="kpi-row"><span class="kpi-label"><b>Dia</b></span>'
+                            '<span class="kpi-value"><b>escr. / sonda / reales / visit.</b>'
+                            '</span></div>')
+                    _det = "".join(
+                        f'<div class="kpi-row"><span class="kpi-label">{_d}</span>'
+                        f'<span class="kpi-value">{_f["escrituras"]} / {_f["sonda"]} / '
+                        f'{_f["reales"]} / {_f["visitas"]}</span></div>'
+                        for _d, _f in sorted(_dias_v.items(), reverse=True))
+                    st.markdown(f'<div class="info-card">{_cab}{_det}</div>',
+                                unsafe_allow_html=True)
+
+                # ── Archivar y exportar ──────────────────────────────────────────
+                _a1, _a2 = st.columns(2)
+                with _a1:
+                    # ARCHIVAR ES MANUAL Y NO AUTOMATICO, a proposito: escribir en el Gist crea
+                    # una revision, y una revision de mas es una escritura de mas en el propio
+                    # registro que se esta auditando. Hacerlo en cada carga del panel contaminaria
+                    # la medida; a golpe de boton se hace una vez y se sabe cuando.
+                    if st.button("Archivar los dias visibles", key="visitas_archivar",
+                                 width="stretch", icon=":material/save:",
+                                 help="Guarda en el Gist lo que hoy se deduce de las revisiones, "
+                                      "para que no se pierda cuando GitHub las pode. Anade una "
+                                      "revision al Gist."):
+                        try:
+                            _fusion = {}
+                            for _d, _f in _dias_todo.items():
+                                _prev = _historial.get(_d) or {}
+                                _fusion[_d] = {**_prev,
+                                               "escrituras": _f["escrituras"], "sonda": _f["sonda"]}
+                            _gist_escribir(_gid, _tok, _total, None, _fusion)
+                            st.session_state["_visitas_sello"] += 1
+                            st.success(f"Archivados {len(_fusion)} dias en historial.json")
+                            st.rerun()
+                        except Exception as _e2:
+                            st.error(f"No se pudo archivar: {_e2}")
+                with _a2:
+                    if st.button("Generar informe PDF", key="visitas_pdf", width="stretch",
+                                 icon=":material/picture_as_pdf:"):
+                        # La grafica se exporta a PNG con kaleido, que tampoco esta en
+                        # requirements.txt: si falta, el informe sale igual pero sin imagen. Un
+                        # PDF sin grafica sigue sirviendo; un panel que revienta por una imagen, no.
+                        _png = None
+                        try:
+                            _png = _figd.to_image(format="png", width=1500, height=450, scale=2)
+                        except Exception:
+                            pass
+                        _res = {
+                            "desde": _claves[0] if _claves else "—",
+                            "hasta": _claves[-1] if _claves else "—",
+                            "n_dias": len(_dias_v), "total": _total,
+                            "escrituras": _sum["escrituras"], "sonda": _sum["sonda"],
+                            "reales": _sum["reales"], "visitas": _sum["visitas"],
+                            "pct_sonda": (100 * _sum["sonda"] / _sum["escrituras"]
+                                          if _sum["escrituras"] else 0),
+                        }
+                        _bytes = _pdf_visitas(_dias_v, _res, _png)
+                        if _bytes is None:
+                            st.error("Falta reportlab en este entorno: pip install reportlab")
+                        else:
+                            st.session_state["_visitas_pdf"] = _bytes
+                            st.session_state["_visitas_pdf_nombre"] = (
+                                f"visitas_{_res['desde']}_a_{_res['hasta']}.pdf")
+
+                if st.session_state.get("_visitas_pdf"):
+                    st.download_button(
+                        "Descargar el informe", data=st.session_state["_visitas_pdf"],
+                        file_name=st.session_state.get("_visitas_pdf_nombre", "visitas.pdf"),
+                        mime="application/pdf", key="visitas_pdf_bajar", width="stretch",
+                        icon=":material/download:")
+
+            # ── La grafica: escrituras por hora, sonda contra resto ───────────
+            # ES LA PIEZA QUE CONVENCE. En una tabla, "12 escrituras a las 03:00" es un numero
+            # mas; en la barra se ve la banda plana que no se interrumpe de madrugada, y esa
+            # regularidad es justo lo que ninguna audiencia humana produce.
+            #
+            # Dos series apiladas: la sonda en gris de la rampa —es ruido, y el ruido va
+            # recesivo— y las reales en el azul de marca, que es la senal y se lleva el acento.
+            # Con dos series la leyenda es obligatoria, asi que va puesta. El filete de 2 px en
+            # color de superficie es el separador entre segmentos apilados.
+            st.markdown('<div class="section-title">Escrituras por hora (UTC)</div>',
+                        unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Ultimas 48 h. Una audiencia real deja huecos y '
+                        'se concentra en horas de vigilia; el metronomo dibuja una banda plana '
+                        'que no se interrumpe de madrugada.</div>', unsafe_allow_html=True)
+
+            _corte48 = _ts[-1] - timedelta(hours=48)
+            _horas, _h_sonda, _h_resto = [], {}, {}
+            for _i, _t in enumerate(_ts):
+                if _t < _corte48:
+                    continue
+                _k = _t.strftime("%m-%d %H:00")
+                if _k not in _h_sonda:
+                    _horas.append(_k)
+                    _h_sonda[_k] = 0
+                    _h_resto[_k] = 0
+                if _sonda[_i]:
+                    _h_sonda[_k] += 1
+                else:
+                    _h_resto[_k] += 1
+
+            _fig = go.Figure()
+            _fig.add_trace(go.Bar(
+                x=_horas, y=[_h_sonda[_k] for _k in _horas], name="Sonda (300 s)",
+                marker=dict(color=RAMP[1], line=dict(color=t["surface"], width=2)),
+                hovertemplate="<b>%{x} UTC</b><br>%{y} de la sonda<extra></extra>"))
+            _fig.add_trace(go.Bar(
+                x=_horas, y=[_h_resto[_k] for _k in _horas], name="Resto (visitas)",
+                marker=dict(color=C_PRIMARY, line=dict(color=t["surface"], width=2)),
+                hovertemplate="<b>%{x} UTC</b><br>%{y} no atribuibles a la sonda<extra></extra>"))
+            # La leyenda lleva su PROPIO color de tinta. El `font` que pone plotly_layout es el
+            # global y la leyenda lo heredaba a medias: sobre el lienzo oscuro los dos rotulos
+            # quedaban casi ilegibles, y con dos series la leyenda es justo lo que no puede
+            # perderse —es lo unico que dice cual de los dos colores es la sonda—.
+            _fig.update_layout(barmode="stack", showlegend=True,
+                               legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                           xanchor="left", x=0,
+                                           font=dict(family=PLOTLY_FONT, size=12,
+                                                     color=t["text_secondary"])))
+            # UNA ETIQUETA DE CADA N, no las 48. Con una por hora los rotulos se solapan hasta
+            # volverse una mancha, y lo que hay que leer en este eje no es la hora exacta de
+            # cada barra sino el CICLO de dia y noche. Se apunta a unas dieciseis marcas, que
+            # es lo que cabe legible en el ancho de la pagina.
+            _paso = max(1, len(_horas) // 16)
+            _marcas = _horas[::_paso]
+            _fig.update_xaxes(tickmode="array", tickvals=_marcas, ticktext=_marcas,
+                              tickangle=-45, tickfont=dict(family=PLOTLY_MONO, size=10))
+            _fig.update_yaxes(title_text="escrituras", gridcolor=GRID)
+            plotly_layout(_fig, height=340, margin=dict(l=44, r=16, t=44, b=76))
+            st.plotly_chart(_fig, width="stretch", key="visitas_por_hora",
+                            config={"displayModeBar": False})
+
+            # ── Los huecos, que es donde se ve la firma ───────────────────────
+            st.markdown('<div class="section-title">Huecos entre escrituras</div>',
+                        unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Reparto de los intervalos de las ultimas 300 '
+                        'escrituras. Un pico limpio en 300 s es la firma del metronomo: ningun '
+                        'ritmo humano se repite con esa precision durante horas.</div>',
+                        unsafe_allow_html=True)
+            _cuenta = {}
+            for _h in _huecos[-300:]:
+                _cuenta[_h] = _cuenta.get(_h, 0) + 1
+            _top = sorted(_cuenta.items(), key=lambda _kv: _kv[1], reverse=True)[:8]
+            _filas = ""
+            for _seg, _n in _top:
+                _marca = ""
+                if abs(_seg - SONDA_PERIODO) <= SONDA_HOLGURA:
+                    _marca = f' <b style="color:{STATUS["critical"]};">— metronomo</b>'
+                _filas += (f'<div class="kpi-row"><span class="kpi-label">{_seg} s{_marca}</span>'
+                           f'<span class="kpi-value">{_n}</span></div>')
+            st.markdown(f'<div class="info-card">{_filas}</div>', unsafe_allow_html=True)
+
+            # ── El registro de redes, si la nube lo escribe ───────────────────
+            st.markdown('<div class="section-title">Registro de redes</div>',
+                        unsafe_allow_html=True)
+            if not _redes:
+                st.markdown(
+                    '<div class="clinical-note">Vacio. <code>redes.json</code> lo escribe el '
+                    'codigo con el filtro de tres capas, asi que su ausencia dice que la nube '
+                    'sigue con la version anterior. Es el mismo dato del veredicto de arriba, y '
+                    'la comprobacion mas directa de si un despliegue ha llegado o no.</div>',
+                    unsafe_allow_html=True)
+            else:
+                _ses = sum(int(_v.get("n") or 0) for _v in _redes.values())
+                st.markdown(
+                    f'<div class="info-card">'
+                    f'<div class="kpi-row"><span class="kpi-label">Redes distintas</span>'
+                    f'<span class="kpi-value">{len(_redes)}</span></div>'
+                    f'<div class="kpi-row"><span class="kpi-label">Sesiones de navegador real'
+                    f'</span><span class="kpi-value">{_ses}</span></div></div>',
+                    unsafe_allow_html=True)
+                _orden = sorted(_redes.items(), key=lambda _kv: int(_kv[1].get("n") or 0),
+                                reverse=True)[:12]
+                _filas = ""
+                for _h, _v in _orden:
+                    _desde = html.escape(str(_v.get("primera", "?"))[:16])
+                    _filas += (f'<div class="kpi-row"><span class="kpi-label">'
+                               f'<code>{html.escape(str(_h))}</code> · desde {_desde}</span>'
+                               f'<span class="kpi-value">{int(_v.get("n") or 0)}</span></div>')
+                st.markdown(f'<div class="info-card">{_filas}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-sub">La IP va como HMAC truncado: dice CUANTAS '
+                            'redes hay y cada cuanto vuelven, no cuales son.</div>',
+                            unsafe_allow_html=True)
+
+    # ── Esta sesion, tal como la ve el filtro ────────────────────────────────
+    # Sirve para depurar el filtro de tres capas SIN inventarse una sesion de prueba: es lo que
+    # el servidor ve ahora mismo, leido con las mismas funciones que deciden en produccion.
+    st.markdown('<div class="section-title">Esta sesion</div>', unsafe_allow_html=True)
+    _ses_actual = _sesion_actual()
+    if _ses_actual is None:
+        _ctx = ('<div class="kpi-row"><span class="kpi-label">Sin contexto de sesion</span>'
+                '<span class="kpi-value">contaria</span></div>')
+    else:
+        _ua, _ya, _ip = _ses_actual
+        _ctx = "".join([
+            # La IP sale vacia en local y NO es un fallo: Streamlit solo rellena
+            # st.context.ip_address cuando hay un proxy delante, asi que servida desde el
+            # portatil vale None. Se dice aqui porque este panel es justo donde alguien la
+            # mirara para comprobar el filtro, y un guion sin explicacion se lee como averia.
+            f'<div class="kpi-row"><span class="kpi-label">IP'
+            f'{"" if _ip else " <i>(Streamlit no la expone en local)</i>"}</span>'
+            f'<span class="kpi-value">{html.escape(_ip or "—")}</span></div>',
+            f'<div class="kpi-row"><span class="kpi-label">Cookie <code>{VISITS_COOKIE}</code>'
+            f'</span><span class="kpi-value">{"puesta" if _ya else "no"}</span></div>',
+            f'<div class="kpi-row"><span class="kpi-label">Se lee como maquina</span>'
+            f'<span class="kpi-value">{"si" if _es_maquina(_ua) else "no"}</span></div>',
+            f'<div class="kpi-row" style="align-items:flex-start;">'
+            f'<span class="kpi-label" style="max-width:38%;">User-Agent</span>'
+            f'<span class="kpi-value" style="font-size:11px;text-align:right;">'
+            f'{html.escape((_ua or "—")[:90])}</span></div>',
+        ])
+    st.markdown(f'<div class="info-card">{_ctx}</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="clinical-note" style="margin-top:16px;">Esta pagina no se publica. Se '
+        'dibuja solo cuando el navegador entra por loopback <b>y</b> el proceso no corre bajo '
+        '<code>/mount/src</code>, que es de donde Community Cloud sirve el repo. En la nube la '
+        'clave <code>?page=visits_panel</code> no se reconoce y cae al Resumen, igual que '
+        'cualquier otra clave desconocida.</div>', unsafe_allow_html=True)
