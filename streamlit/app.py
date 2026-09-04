@@ -203,7 +203,12 @@ def tech_strip():
 
 # initial_sidebar_state="auto": expandida en escritorio, COLAPSADA en móvil. Con "expanded" se quedaba
 # abierta también en el teléfono, comiéndose 270 de los ~390 px de pantalla.
-st.set_page_config(page_title="QML DataOps", page_icon="◆", layout="wide", initial_sidebar_state="auto")
+# El icono de la pestaña: la marca QML de la sidebar recortada a la esfera. El wordmark
+# se cae a 16 px, así que el favicon lleva solo el símbolo. Ojo: page_icon solo acepta
+# emoji, ":material/...:" o imagen; un carácter Unicode suelto como "◆" NO es emoji para
+# Streamlit, se cuela como si fuera una URL, falla al cargar y deja la corona por defecto.
+st.set_page_config(page_title="QML DataOps", page_icon=str(ASSETS_DIR / "favicon-qml.png"),
+                   layout="wide", initial_sidebar_state="auto")
 
 # ═════════════════════════════════════════════════════════════════════════
 # SISTEMA DE DISEÑO
