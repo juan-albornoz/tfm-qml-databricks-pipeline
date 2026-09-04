@@ -46,6 +46,13 @@ aws_credentials
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
+# Caches de herramientas de analisis estatico. Ahora mismo no aparecen porque
+# mypy y ruff escriben su propio .gitignore dentro de su carpeta; depender de eso
+# es fragil (cambia con la version de la herramienta), asi que se declaran aqui.
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
 # IDEs
 .vscode/
 .idea/
